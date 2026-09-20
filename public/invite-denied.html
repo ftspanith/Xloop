@@ -46,7 +46,8 @@
   function submitCode() {
     const code = document.getElementById('codeInput').value.trim();
     if (!code) return;
-    window.location.href = '/?invite=' + encodeURIComponent(code);
+    document.cookie = `xloop_invite=${encodeURIComponent(code)}; max-age=2592000; path=/`;
+    window.location.href = '/';
   }
   document.getElementById('codeInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') submitCode();
