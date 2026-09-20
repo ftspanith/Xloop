@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — XLOOP Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    /* ── Page-level entrance animations ── */
+    @keyframes fadeUpIn {
+      from { opacity: 0; transform: translateY(22px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes logLineIn {
+      from { opacity: 0; transform: translateX(-6px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes statCountUp {
+      from { opacity: 0; transform: translateY(14px) scale(0.9); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    /* Title */
+    .admin-page-title { animation: fadeUpIn 0.45s cubic-bezier(0.2,0.8,0.2,1) both; }
+    /* Stat cards with stagger */
+    .dash-stat:nth-child(1) { animation: fadeUpIn 0.5s cubic-bezier(0.2,0.8,0.2,1) 0.05s both; }
+    .dash-stat:nth-child(2) { animation: fadeUpIn 0.5s cubic-bezier(0.2,0.8,0.2,1) 0.12s both; }
+    .dash-stat:nth-child(3) { animation: fadeUpIn 0.5s cubic-bezier(0.2,0.8,0.2,1) 0.19s both; }
+    .dash-stat:nth-child(4) { animation: fadeUpIn 0.5s cubic-bezier(0.2,0.8,0.2,1) 0.26s both; }
+    /* Section headers */
+    .dash-section-header { animation: fadeUpIn 0.5s cubic-bezier(0.2,0.8,0.2,1) 0.3s both; }
+    /* Orch card */
+    .orch-card { animation: fadeUpIn 0.55s cubic-bezier(0.2,0.8,0.2,1) 0.35s both; }
+    /* Table card */
+    .dash-table-card { animation: fadeUpIn 0.55s cubic-bezier(0.2,0.8,0.2,1) 0.45s both; }
+    /* ── Dashboard Page ── */
+
+    /* Stats grid */
+    .dash-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .dash-stat {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+      cursor: default;
+    }
+    .dash-stat::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--accent);
+      transform: scaleX(0);
+      transition: transform 0.3s ease;
+      transform-origin: left;
+    }
+    .dash-stat:hover {
+      border-color: rgba(229,9,20,0.3);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.4);
+    }
+    .dash-stat:hover::before { transform: scaleX(1); }
+    .dash-stat-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+    .dash-stat-value {
+      font-size: 2rem;
+      font-weight: 900;
+      color: var(--accent);
+      letter-spacing: -1px;
+      line-height: 1;
+      transition: all 0.3s;
+    }
+    .dash-stat-sub {
+      font-size: 0.72rem;
+      color: var(--text3);
+      margin-top: 6px;
+    }
+
+    /* Animated number count-up effect */
+    @keyframes numSlideIn {
+      from { opacity: 0; transform: translateY(10px) scale(0.85); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .num-updated { animation: numSlideIn 0.4s cubic-bezier(0.2,0.8,0.2,1) both; }
+
+    /* ── Section header ── */
+    .dash-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .dash-section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dash-section-title::before {
+      content: '';
+      display: inline-block;
+      width: 3px;
+      height: 14px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    /* ── Orchestrator quick-action card ── */
+    .orch-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 28px;
+      transition: border-color 0.2s;
+    }
+    .orch-card-top {
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--border);
+    }
+    .orch-card-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .orch-card-icon {
+      width: 40px; height: 40px;
+      background: rgba(229,9,20,0.1);
+      border: 1px solid rgba(229,9,20,0.2);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .orch-card-icon svg { color: var(--accent); }
+    .orch-card-title { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+    .orch-card-desc  { font-size: 0.75rem; color: var(--text2); margin-top: 2px; }
+
+    .orch-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.06);
+      color: var(--text2);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      transition: all 0.3s;
+    }
+    .orch-status-badge .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--text3);
+      transition: all 0.3s;
+    }
+    .orch-status-badge.live {
+      background: rgba(34,197,94,0.12);
+      color: #4ade80;
+      border: 1px solid rgba(34,197,94,0.2);
+    }
+    .orch-status-badge.live .dot {
+      background: #4ade80;
+      animation: pulse-live 1.2s infinite;
+    }
+    @keyframes pulse-live {
+      0%,100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.5); opacity: 0.6; }
+    }
+
+    .orch-card-actions {
+      display: flex;
+      gap: 10px;
+      padding: 16px 22px;
+      align-items: center;
+    }
+    .orch-action-btn {
+      padding: 11px 20px;
+      border-radius: 8px;
+      font-size: 0.83rem;
+      font-weight: 700;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.22s cubic-bezier(0.2,0.8,0.2,1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+    .orch-action-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+    /* Full Pipeline stretches, others are fixed */
+    .orch-btn-primary  { flex: 1; }
+    .orch-btn-outline  { flex: 1; }
+    .orch-btn-stop     { flex: 0; }
+    .orch-btn-wipe-sm  { flex: 0; min-width: 110px; }
+
+    .orch-btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .orch-btn-primary:hover:not(:disabled) {
+      background: #ff1a26;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(229,9,20,0.35);
+    }
+    .orch-btn-outline {
+      background: transparent;
+      color: var(--text2);
+      border-color: var(--border);
+    }
+    .orch-btn-outline:hover:not(:disabled) {
+      background: var(--bg3);
+      color: var(--text);
+      border-color: rgba(255,255,255,0.2);
+      transform: translateY(-1px);
+    }
+    .orch-btn-danger {
+      background: transparent;
+      color: var(--red);
+      border-color: rgba(239,68,68,0.3);
+    }
+    .orch-btn-danger:hover:not(:disabled) {
+      background: rgba(239,68,68,0.12);
+      transform: translateY(-1px);
+    }
+
+    /* ── Mini terminal inside dashboard ── */
+    .dash-terminal {
+      background: #080808;
+      border-top: 1px solid var(--border);
+    }
+    .dash-terminal-header {
+      background: var(--bg3);
+      padding: 9px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+    }
+    .term-dots { display: flex; gap: 5px; }
+    .term-dots span { width: 10px; height: 10px; border-radius: 50%; }
+    .term-dots span:nth-child(1) { background: #ff5f57; }
+    .term-dots span:nth-child(2) { background: #febc2e; }
+    .term-dots span:nth-child(3) { background: #28c840; }
+    .term-title {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      font-size: 0.72rem; color: rgba(255,255,255,0.3);
+      font-family: 'Fira Mono', monospace;
+    }
+    .term-clear-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.3);
+      padding: 2px 10px;
+      border-radius: 5px;
+      font-size: 0.68rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .term-clear-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.3); }
+
+    #orchTerminalBody {
+      padding: 14px 18px;
+      height: 200px;
+      overflow-y: auto;
+      font-family: 'Fira Mono', 'Courier New', monospace;
+      font-size: 0.75rem;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    #orchTerminalBody::-webkit-scrollbar { width: 4px; }
+    #orchTerminalBody::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+    @keyframes logLineIn {
+      from { opacity: 0; transform: translateX(-8px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes blink-cursor {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+
+    .orch-log         { display: block; color: #7a8098; animation: logLineIn 0.18s ease both; }
+    .orch-log.sys     { color: #44485e; }
+    .orch-log.err     { color: #f87171; font-weight: 600; }
+    .orch-log.success { color: #4ade80; font-weight: 600; }
+    .orch-log.highlight { color: #60a5fa; font-weight: 700; }
+    .orch-log.add     { color: #a78bfa; }
+    .orch-log.merge   { color: #f59e0b; }
+    .orch-log.warn    { color: #fbbf24; }
+
+    /* ── Recent Content Table ── */
+    .dash-table-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .dash-table-card .admin-table th {
+      background: rgba(255,255,255,0.03);
+    }
+    .dash-table-card .admin-table tr:hover td {
+      background: rgba(255,255,255,0.025);
+    }
+    .type-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 20px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .type-badge.movie  { background: rgba(229,9,20,0.15);   color: #ff6b6b; border: 1px solid rgba(229,9,20,0.25); }
+    .type-badge.series { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.25); }
+    .type-badge.anime  { background: rgba(167,139,250,0.15); color: #c084fc; border: 1px solid rgba(167,139,250,0.25); }
+
+    /* Go to full orchestrator link */
+    .orch-full-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.75rem;
+      color: var(--text3);
+      transition: color 0.2s;
+      text-decoration: none;
+    }
+    .orch-full-link:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="admin-logo">XLOOP Admin</div>
+    <nav class="admin-nav">
+      <a href="/admin/dashboard.html" class="active">Dashboard</a>
+      <a href="/admin/add-movie.html">+ Add Movie</a>
+      <a href="/admin/add-series.html">+ Add Series</a>
+      <a href="/admin/bulk-import.html">Bulk Import</a>
+      <a href="/admin/manager.html">Content Manager</a>
+      <a href="/admin/fix-posters.html">Fix Posters</a>
+      <a href="/admin/scraper.html">Scraper</a>
+      <a href="/admin/orchestrator.html">Orchestrator</a>
+      <a href="/" target="_blank" style="margin-top:auto;border-top:1px solid var(--border);border-radius:0;padding-top:16px;">View Site</a>
+      <a href="#" onclick="logout()" style="color:var(--red);">Logout</a>
+    </nav>
+  </aside>
+
+  <main class="admin-content">
+    <h1 class="admin-page-title">Dashboard</h1>
+
+    <!-- ── Stats ── -->
+    <div class="dash-stats">
+      <div class="dash-stat">
+        <div class="dash-stat-label">Total Movies</div>
+        <div class="dash-stat-value" id="statMovies">—</div>
+        <div class="dash-stat-sub">in database</div>
+      </div>
+      <div class="dash-stat">
+        <div class="dash-stat-label">Total Series</div>
+        <div class="dash-stat-value" id="statSeries">—</div>
+        <div class="dash-stat-sub">in database</div>
+      </div>
+      <div class="dash-stat">
+        <div class="dash-stat-label">Total Anime</div>
+        <div class="dash-stat-value" id="statAnime">—</div>
+        <div class="dash-stat-sub">in database</div>
+      </div>
+      <div class="dash-stat">
+        <div class="dash-stat-label">Total Items</div>
+        <div class="dash-stat-value" id="statTotal">—</div>
+        <div class="dash-stat-sub">all types</div>
+      </div>
+    </div>
+
+    <!-- ── Orchestrator Quick Control ── -->
+    <div class="dash-section-header">
+      <span class="dash-section-title">Pipeline Control</span>
+      <a href="/admin/orchestrator.html" class="orch-full-link">
+        Full Orchestrator
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </a>
+    </div>
+
+    <div class="orch-card">
+      <div class="orch-card-top">
+        <div class="orch-card-info">
+          <div class="orch-card-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </div>
+          <div>
+            <div class="orch-card-title">Master Orchestrator</div>
+            <div class="orch-card-desc">Extract links, import to MongoDB, heal missing data</div>
+          </div>
+        </div>
+        <span id="orchLiveStatus" class="orch-status-badge"><span class="dot"></span>Offline</span>
+      </div>
+
+      <div class="orch-card-actions">
+        <button class="orch-action-btn orch-btn-primary" id="btnStartOrch" onclick="startOrchestrator()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Full Pipeline
+        </button>
+        <button class="orch-action-btn orch-btn-outline" id="btnStartOrchManual" onclick="startOrchestrator(true)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Skip Scraper
+        </button>
+        <button class="orch-action-btn orch-btn-outline" id="btnHealDB" onclick="healDatabaseOnly()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M2 12h20"/></svg>
+          Heal DB Only
+        </button>
+        <button class="orch-action-btn orch-btn-danger orch-btn-stop" id="btnStopOrch" onclick="stopOrchestrator()" style="display:none;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
+          Stop
+        </button>
+        <button class="orch-action-btn orch-btn-wipe-sm" id="btnWipeDB" onclick="confirmWipe()" style="background:transparent; color:var(--red); border:1px solid rgba(239,68,68,0.28); transition: all 0.22s cubic-bezier(0.2,0.8,0.2,1);" onmouseover="this.style.background='rgba(239,68,68,0.1)'" onmouseout="this.style.background='transparent'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>
+          Wipe DB
+        </button>
+      </div>
+
+      <!-- Mini terminal -->
+      <div class="dash-terminal">
+        <div class="dash-terminal-header">
+          <div class="term-dots"><span></span><span></span><span></span></div>
+          <span class="term-title">xloop_orchestrator</span>
+          <button class="term-clear-btn" onclick="clearTerm()">clear</button>
+        </div>
+        <div id="orchTerminalBody">
+          <span class="orch-log sys">Ready. Select an action above to start the pipeline.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Recent Content ── -->
+    <div class="dash-section-header">
+      <span class="dash-section-title">Recent Content</span>
+      <a href="/admin/manager.html" class="orch-full-link">
+        View All
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </a>
+    </div>
+
+    <div class="dash-table-card">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Type</th>
+            <th>Year</th>
+            <th>Rating</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="recentTable">
+          <tr><td colspan="5" style="text-align:center;color:var(--text2);padding:24px;">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast">Message</div>
+<script src="/js/admin.js"></script>
+<script>
+  // ── Dashboard data load ───────────────────────────────────
+  async function loadDashboard() {
+    try {
+      const [mRes, sRes, aRes] = await Promise.all([
+        apiFetch('/api/movies?limit=6&type=movie&sort=updatedAt'),
+        apiFetch('/api/movies?limit=6&type=series&sort=updatedAt'),
+        apiFetch('/api/movies?limit=6&type=anime&sort=updatedAt')
+      ]);
+
+      function animateStat(id, val) {
+        const el = document.getElementById(id);
+        if (!el || el.textContent == val) return;
+        el.classList.remove('num-updated');
+        void el.offsetWidth;
+        el.textContent = val;
+        el.classList.add('num-updated');
+      }
+
+      const mTotal = mRes.total || 0;
+      const sTotal = sRes.total || 0;
+      const aTotal = aRes.total || 0;
+
+      animateStat('statMovies', mTotal.toLocaleString());
+      animateStat('statSeries', sTotal.toLocaleString());
+      animateStat('statAnime',  aTotal.toLocaleString());
+      animateStat('statTotal',  (mTotal + sTotal + aTotal).toLocaleString());
+
+      const combined = [
+        ...(mRes.movies || []).map(m => ({ ...m, _typeLabel: 'movie' })),
+        ...(sRes.movies || []).map(s => ({ ...s, _typeLabel: 'series' })),
+        ...(aRes.movies || []).map(a => ({ ...a, _typeLabel: 'anime' }))
+      ].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 10);
+
+      document.getElementById('recentTable').innerHTML = combined.length ? combined.map(item => `
+        <tr>
+          <td style="font-weight:600; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.title}</td>
+          <td><span class="type-badge ${item._typeLabel}">${item._typeLabel}</span></td>
+          <td style="color:var(--text2);">${item.year || '—'}</td>
+          <td style="color:var(--gold);">${item.rating ? item.rating + ' / 10' : '—'}</td>
+          <td>
+            <button class="btn-danger" onclick="deleteItem('${item._id}')">Delete</button>
+          </td>
+        </tr>
+      `).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:24px;">No content yet</td></tr>';
+
+    } catch (err) {
+      showToast('Error loading dashboard', true);
+    }
+  }
+
+  window.deleteItem = async (id) => {
+    if (!confirm('Delete this item?')) return;
+    try {
+      await apiFetch(`/api/movies/${id}`, { method: 'DELETE' });
+      showToast('Deleted');
+      loadDashboard();
+    } catch (e) { showToast(e.message, true); }
+  };
+
+  // ── Terminal helpers ──────────────────────────────────────
+  const MAX_LOG_LINES = 500;
+
+  function appendLog(text) {
+    const term = document.getElementById('orchTerminalBody');
+    // Prune old lines to avoid memory bloat
+    while (term.children.length >= MAX_LOG_LINES) term.removeChild(term.firstChild);
+    const span = document.createElement('span');
+    span.className = 'orch-log ' + classifyLine(text);
+    span.textContent = text;
+    term.appendChild(span);
+    term.scrollTop = term.scrollHeight;
+  }
+
+  function classifyLine(t) {
+    if (/ERROR|Fatal:|failed with code [^0]/i.test(t))                return 'err';
+    if (/🏁.*exit code 0|successfully|completed|healed/i.test(t))    return 'success';
+    if (/🏁.*exit code [^0]|failed with code/i.test(t))              return 'err';
+    if (/Starting Master|ORCHESTRATOR\]|Starting:/i.test(t))          return 'highlight';
+    if (/^➕ Added:/i.test(t))                                         return 'add';
+    if (/^🔗 Merged link:/i.test(t))                                  return 'merge';
+    if (/Connected|Skipping|Ready|Wiping/i.test(t))                   return 'sys';
+    return '';
+  }
+
+  async function clearTerm() {
+    document.getElementById('orchTerminalBody').innerHTML = '<span class="orch-log sys">Terminal cleared.</span>';
+    try {
+      await fetch('/api/orchestrator/clear-logs', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('xloop_admin_token')}` }
+      });
+    } catch (_) {}
+  }
+
+  // ── Badge & button state ──────────────────────────────────
+  function setLive(live) {
+    const badge    = document.getElementById('orchLiveStatus');
+    const btnStart = document.getElementById('btnStartOrch');
+    const btnManual= document.getElementById('btnStartOrchManual');
+    const btnHeal  = document.getElementById('btnHealDB');
+    const btnStop  = document.getElementById('btnStopOrch');
+    if (live) {
+      badge.className   = 'orch-status-badge live';
+      badge.innerHTML   = '<span class="dot"></span>Live';
+      if (btnStart)  btnStart.style.display  = 'none';
+      if (btnManual) btnManual.style.display = 'none';
+      if (btnHeal)   btnHeal.style.display   = 'none';
+      if (btnStop)   btnStop.style.display   = 'flex';
+      // Disable Wipe while running
+      const btnWipe = document.getElementById('btnWipeDB');
+      if (btnWipe) btnWipe.disabled = true;
+    } else {
+      badge.className   = 'orch-status-badge';
+      badge.innerHTML   = '<span class="dot"></span>Offline';
+      if (btnStart)  btnStart.style.display  = 'flex';
+      if (btnManual) btnManual.style.display = 'flex';
+      if (btnHeal)   btnHeal.style.display   = 'flex';
+      if (btnStop)   btnStop.style.display   = 'none';
+      // Re-enable Wipe when stopped
+      const btnWipe = document.getElementById('btnWipeDB');
+      if (btnWipe) btnWipe.disabled = false;
+    }
+  }
+
+  function setBusy(busy) {
+    ['btnStartOrch','btnStartOrchManual','btnHealDB','btnStopOrch','btnWipeDB'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = busy;
+    });
+  }
+
+  // ── Orchestrator SSE ──────────────────────────────────────
+  let eventSource    = null;
+  let reconnectTimer = null;
+
+  function connectOrchestratorStream() {
+    if (eventSource) { eventSource.close(); eventSource = null; }
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+
+    eventSource = new EventSource('/api/orchestrator/stream');
+
+    eventSource.onopen = () => {
+      // Clear any lingering reconnect timer
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    };
+
+    eventSource.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        const text = data.text || '';
+        appendLog(text);
+
+        // Sync badge based on key messages
+        if (/🚀 Starting Master|Wiping Database/i.test(text)) setLive(true);
+        if (/🏁 Pipeline finished|🏁 Wipe finished|🛑 Force stopped/i.test(text)) setLive(false);
+      } catch (_) {}
+    };
+
+    // onerror fires on ANY transport error — DON'T set Offline immediately
+    // because transient network blips shouldn't kill the status badge.
+    // Instead, try to reconnect silently after 3 s.
+    eventSource.onerror = () => {
+      eventSource.close();
+      eventSource = null;
+      // Re-poll status immediately on disconnect so badge doesn't go stale
+      syncOrchestratorStatus();
+      reconnectTimer = setTimeout(connectOrchestratorStream, 3000);
+    };
+  }
+
+  // ── Sync status on page load + keep polling every 5s ────────────────────────────
+  async function syncOrchestratorStatus() {
+    try {
+      const res  = await fetch('/api/orchestrator/status');
+      if (!res.ok) return;
+      const data = await res.json();
+      setLive(!!data.running);
+    } catch (_) { /* server not reachable yet — leave as Offline */ }
+  }
+
+  // ── API helpers ───────────────────────────────────────────
+  async function startOrchestrator(skipScraper = false) {
+    setBusy(true);
+    try {
+      appendLog('Sending start command...');
+      const res = await fetch('/api/orchestrator/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('xloop_admin_token')}` },
+        body: JSON.stringify({ skipScraper })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || data.message || 'Failed to start');
+      setLive(true);
+    } catch (e) {
+      appendLog(`❌ Error: ${e.message}`);
+      showToast(e.message, true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function healDatabaseOnly() {
+    setBusy(true);
+    try {
+      appendLog('Sending heal command...');
+      const res = await fetch('/api/orchestrator/heal', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('xloop_admin_token')}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || data.message || 'Failed to heal');
+      setLive(true);
+    } catch (e) {
+      appendLog(`❌ Error: ${e.message}`);
+      showToast(e.message, true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function stopOrchestrator() {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/orchestrator/stop', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('xloop_admin_token')}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || data.message || 'Failed to stop');
+      setLive(false);
+      appendLog('🛑 Stop command sent.');
+    } catch (e) {
+      appendLog(`❌ Error: ${e.message}`);
+      showToast(e.message, true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmWipe() {
+    if (!confirm('DANGER: Wipe the ENTIRE database? This cannot be undone.')) return;
+    setBusy(true);
+    try {
+      appendLog('Sending wipe command...');
+      const res = await fetch('/api/orchestrator/wipe', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('xloop_admin_token')}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || data.message || 'Failed to wipe');
+      setLive(true);
+    } catch (e) {
+      appendLog(`❌ Error: ${e.message}`);
+      showToast(e.message, true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  checkAuth().then(valid => {
+    if (valid) {
+      loadDashboard();
+      setInterval(loadDashboard, 8000);
+      connectOrchestratorStream();
+      // Sync badge & buttons immediately on load (fixes OFFLINE after page refresh mid-run)
+      syncOrchestratorStatus();
+      // Keep badge in sync every 5s regardless of SSE state
+      setInterval(syncOrchestratorStatus, 5000);
+    }
+  });
+</script>
+</body>
+</html>

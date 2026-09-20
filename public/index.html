@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>XLOOP — Stream & Download Movies, Series</title>
+  <meta name="description" content="XLOOP — Your ultimate destination to stream and download movies and series in HD, 1080p and 4K quality."/>
+  <link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar" id="navbar">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">XLOOP</a>
+    <ul class="nav-links">
+      <li><a href="/" class="active">Home</a></li>
+      <li><a href="/movies.html">Movies</a></li>
+      <li><a href="/shows.html">TV Shows</a></li>
+      <li><a href="/anime.html">Anime</a></li>
+    </ul>
+    <div class="nav-right">
+      <form class="nav-search-form" id="navSearchForm">
+        <input type="text" id="navSearchInput" placeholder="Search titles..." autocomplete="off"/>
+        <button type="submit">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </button>
+      </form>
+      <a href="/admin/login.html" class="btn-admin-nav">Admin</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-bg" id="heroBg"></div>
+  <div class="hero-content" id="heroContent">
+    <div class="spinner"></div>
+  </div>
+  <div class="hero-dots" id="heroDots"></div>
+</section>
+
+<!-- FEATURED TODAY -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title"><span></span> Latest Movies (2026)</h2>
+    <a href="/movies.html" class="see-all">See all →</a>
+  </div>
+  <div class="slider-wrap">
+    <button class="slider-btn prev" onclick="scrollSlider('featuredSlider',-1)">&#8249;</button>
+    <div class="slider" id="featuredSlider"><div class="spinner"></div></div>
+    <button class="slider-btn next" onclick="scrollSlider('featuredSlider',1)">&#8250;</button>
+  </div>
+</section>
+
+
+<!-- CONTINUE WATCHING -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title">Popular Movies</h2>
+    <div class="slider-nav-arrows">
+      <button class="slider-btn prev" onclick="scrollSlider('continueSlider',-1)">&#8249;</button>
+      <button class="slider-btn next" onclick="scrollSlider('continueSlider',1)">&#8250;</button>
+    </div>
+  </div>
+  <div class="slider-wrap">
+    <div class="slider continue-slider" id="continueSlider"><div class="spinner"></div></div>
+  </div>
+</section>
+
+<!-- EDITOR'S PICKS -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title">Editor's picks for this week</h2>
+    <div class="slider-nav-arrows">
+      <button class="slider-btn prev" onclick="scrollSlider('editorSlider',-1)">&#8249;</button>
+      <button class="slider-btn next" onclick="scrollSlider('editorSlider',1)">&#8250;</button>
+    </div>
+  </div>
+  <div class="slider-wrap">
+    <div class="slider" id="editorSlider"><div class="spinner"></div></div>
+  </div>
+</section>
+
+<!-- ORIGINALS -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title">Latest Movies</h2>
+    <div class="slider-nav-arrows">
+      <button class="slider-btn prev" onclick="scrollSlider('originalsSlider',-1)">&#8249;</button>
+      <button class="slider-btn next" onclick="scrollSlider('originalsSlider',1)">&#8250;</button>
+    </div>
+  </div>
+  <div class="slider-wrap">
+    <div class="slider" id="originalsSlider"><div class="spinner"></div></div>
+  </div>
+</section>
+
+<!-- TV SHOWS -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title">TV Shows</h2>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <a href="/shows.html" style="font-size:0.8rem; color:var(--accent); text-decoration:none; font-weight:600; white-space:nowrap;">View All →</a>
+      <div class="slider-nav-arrows">
+        <button class="slider-btn prev" onclick="scrollSlider('tvShowsSlider',-1)">&#8249;</button>
+        <button class="slider-btn next" onclick="scrollSlider('tvShowsSlider',1)">&#8250;</button>
+      </div>
+    </div>
+  </div>
+  <div class="slider-wrap">
+    <div class="slider" id="tvShowsSlider"><div class="spinner"></div></div>
+  </div>
+</section>
+
+<!-- ANIME -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title">Anime</h2>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <a href="/anime.html" style="font-size:0.8rem; color:#8b5cf6; text-decoration:none; font-weight:600; white-space:nowrap;">View All →</a>
+      <div class="slider-nav-arrows">
+        <button class="slider-btn prev" onclick="scrollSlider('animeSlider',-1)">&#8249;</button>
+        <button class="slider-btn next" onclick="scrollSlider('animeSlider',1)">&#8250;</button>
+      </div>
+    </div>
+  </div>
+  <div class="slider-wrap">
+    <div class="slider" id="animeSlider"><div class="spinner"></div></div>
+  </div>
+</section>
+
+<!-- THIS YEAR BANNER -->
+<section class="section banner-section">
+  <div class="year-banner">
+    <div class="banner-text">
+      <h2> New in 2026</h2>
+      <p>The latest releases added this year. Fresh from theaters and streaming platforms.</p>
+    </div>
+  </div>
+  <div class="slider-wrap">
+    <button class="slider-btn prev" onclick="scrollSlider('thisYearSlider',-1)">&#8249;</button>
+    <div class="slider" id="thisYearSlider"><div class="spinner"></div></div>
+    <button class="slider-btn next" onclick="scrollSlider('thisYearSlider',1)">&#8250;</button>
+  </div>
+</section>
+
+<!-- TOP RATED / FAMOUS -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title"> Top Rated & Famous</h2>
+    <a href="/movies.html" class="see-all">See all →</a>
+  </div>
+  <div class="slider-wrap">
+    <button class="slider-btn prev" onclick="scrollSlider('topRatedSlider',-1)">&#8249;</button>
+    <div class="slider" id="topRatedSlider"><div class="spinner"></div></div>
+    <button class="slider-btn next" onclick="scrollSlider('topRatedSlider',1)">&#8250;</button>
+  </div><!-- ═══ REGIONAL SECTIONS ═══ -->
+
+<!-- TELUGU -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title"> Trending in Telugu</h2>
+    <a href="/movies.html?lang=Telugu" class="see-all">See all →</a>
+  </div>
+  <div class="slider-wrap">
+    <button class="slider-btn prev" onclick="scrollSlider('teluguSlider',-1)">&#8249;</button>
+    <div class="slider" id="teluguSlider"><div class="spinner"></div></div>
+    <button class="slider-btn next" onclick="scrollSlider('teluguSlider',1)">&#8250;</button>
+  </div>
+</section>
+
+<!-- TAMIL -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title"> Top Tamil Hits</h2>
+    <a href="/movies.html?lang=Tamil" class="see-all">See all →</a>
+  </div>
+  <div class="slider-wrap">
+    <button class="slider-btn prev" onclick="scrollSlider('tamilSlider',-1)">&#8249;</button>
+    <div class="slider" id="tamilSlider"><div class="spinner"></div></div>
+    <button class="slider-btn next" onclick="scrollSlider('tamilSlider',1)">&#8250;</button>
+  </div>
+</section>
+
+<!-- HINDI -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title"> Blockbuster Hindi</h2>
+    <a href="/movies.html?lang=Hindi" class="see-all">See all →</a>
+  </div>
+  <div class="slider-wrap">
+    <button class="slider-btn prev" onclick="scrollSlider('hindiSlider',-1)">&#8249;</button>
+    <div class="slider" id="hindiSlider"><div class="spinner"></div></div>
+    <button class="slider-btn next" onclick="scrollSlider('hindiSlider',1)">&#8250;</button>
+  </div>
+</section>
+
+<!-- MALAYALAM -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title"> Malayalam Masterpieces</h2>
+    <a href="/movies.html?lang=Malayalam" class="see-all">See all →</a>
+  </div>
+  <div class="slider-wrap">
+    <button class="slider-btn prev" onclick="scrollSlider('malayalamSlider',-1)">&#8249;</button>
+    <div class="slider" id="malayalamSlider"><div class="spinner"></div></div>
+    <button class="slider-btn next" onclick="scrollSlider('malayalamSlider',1)">&#8250;</button>
+  </div>
+</section>
+
+<!-- ENGLISH -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title"> Hollywood & English</h2>
+    <a href="/movies.html?lang=English" class="see-all">See all →</a>
+  </div>
+  <div class="slider-wrap">
+    <button class="slider-btn prev" onclick="scrollSlider('englishSlider',-1)">&#8249;</button>
+    <div class="slider" id="englishSlider"><div class="spinner"></div></div>
+    <button class="slider-btn next" onclick="scrollSlider('englishSlider',1)">&#8250;</button>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <p>Every Story has a Home</p>
+      <div class="newsletter">
+        <input type="email" placeholder="Your email">
+        <button class="btn-price active">SUBSCRIBE</button>
+      </div>
+    </div>
+    <div class="footer-links-grid">
+      <div class="link-col">
+        <a href="#">Movies</a>
+        <a href="#">Series</a>
+        <a href="#">Originals</a>
+      </div>
+      <div class="link-col">
+        <a href="#">Support</a>
+        <a href="#">Help Center</a>
+        <a href="#">Terms</a>
+      </div>
+      <div class="link-col">
+        <a href="#">Partners</a>
+        <a href="#">API</a>
+        <a href="/admin/login.html">Admin</a>
+      </div>
+    </div>
+  </div>
+  <div class="giant-logo">XLOOP</div>
+</footer>
+
+<script src="/js/app.js"></script>
+<script>
+  // Navbar scroll effect
+  window.addEventListener('scroll', () => {
+    document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 10);
+  });
+  // Search redirect
+  document.getElementById('navSearchForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const q = document.getElementById('navSearchInput').value.trim();
+    if (q) window.location.href = `/search.html?q=${encodeURIComponent(q)}`;
+  });
+</script>
+</body>
+</html>

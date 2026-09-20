@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450">
+  <rect width="300" height="450" fill="#1a1a1a" />
+  <rect width="280" height="430" x="10" y="10" fill="#111111" rx="8" />
+  <g fill="#444444" font-family="sans-serif" font-weight="bold" text-anchor="middle">
+    <path d="M150 180 c-20 0-35 15-35 35 s15 35 35 35 s35-15 35-35 s-15-35-35-35 z m0 60 c-14 0-25-11-25-25 s11-25 25-25 s25 11 25 25 s-11 25-25 25 z" />
+    <path d="M150 195 l10 15 l-20 0 z" />
+    <text x="150" y="270" font-size="18">NO POSTER</text>
+    <text x="150" y="295" font-size="12" font-weight="normal" fill="#333333">Image not available</text>
+  </g>
+</svg>

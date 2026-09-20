@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Telegram Scraper — XLOOP Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    /*  Scraper Page Styles  */
+    .scraper-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .mode-card {
+      background: var(--card-bg, #1a1a2e);
+      border: 2px solid transparent;
+      border-radius: 14px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all .2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .mode-card:hover { border-color: var(--primary, #e50914); transform: translateY(-2px); }
+    .mode-card.selected { border-color: var(--primary, #e50914); background: rgba(229,9,20,.08); }
+    .mode-card input[type=radio] { display: none; }
+    .mode-icon { font-size: 2rem; margin-bottom: 8px; }
+    .mode-title { font-size: 1rem; font-weight: 700; color: #fff; margin-bottom: 4px; }
+    .mode-desc { font-size: 0.8rem; color: rgba(255,255,255,.5); line-height: 1.4; }
+    .mode-badge {
+      position: absolute; top: 12px; right: 12px;
+      background: var(--primary, #e50914); color: #fff;
+      font-size: 0.65rem; font-weight: 800; padding: 2px 8px; border-radius: 20px;
+    }
+
+    /*  Options Panel  */
+    .options-panel {
+      background: var(--card-bg, #1a1a2e);
+      border-radius: 14px; padding: 20px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .options-panel.visible { display: block; }
+    .options-panel h3 { font-size: 0.85rem; color: rgba(255,255,255,.5); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 14px; }
+
+    /*  Channel Picker  */
+    .channel-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+      padding: 4px;
+    }
+    .channel-chip {
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 8px; padding: 8px 10px;
+      font-size: 0.78rem; cursor: pointer;
+      transition: all .15s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .channel-chip:hover { border-color: var(--primary); }
+    .channel-chip.selected { background: rgba(229,9,20,.15); border-color: var(--primary); color: #fff; }
+    .channel-chip input { display: none; }
+    .chip-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.2); flex-shrink: 0; }
+    .channel-chip.selected .chip-dot { background: var(--primary); }
+
+    .select-all-row {
+      display: flex; gap: 8px; margin-bottom: 10px;
+    }
+    .select-all-row button {
+      font-size: 0.78rem; padding: 4px 12px;
+      border-radius: 6px; border: 1px solid rgba(255,255,255,.2);
+      background: transparent; color: rgba(255,255,255,.7);
+      cursor: pointer; transition: all .15s;
+    }
+    .select-all-row button:hover { border-color: var(--primary); color: #fff; }
+
+    /*  Date Picker UI  */
+    .date-row { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+    .date-input-group { display: flex; flex-direction: column; gap: 4px; }
+    .date-input-group label { font-size: 0.75rem; color: rgba(255,255,255,.6); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+    .date-input-group input[type=date] {
+      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15);
+      border-radius: 8px; color: #fff; padding: 8px 12px; font-size: 0.9rem; font-family: 'Inter', sans-serif;
+      outline: none; transition: all 0.2s;
+    }
+    .date-input-group input[type=date]:focus { border-color: var(--primary); background: rgba(255,255,255,.1); }
+    /* Style calendar icon for dark mode */
+    .date-input-group input[type=date]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.7; cursor: pointer; }
+    .date-input-group input[type=date]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+    
+    .quick-date-btn {
+      align-self: flex-end; padding: 8px 16px; font-size: 0.85rem; height: 37px;
+      background: transparent; color: var(--primary); border: 1px solid var(--primary);
+      border-radius: 8px; cursor: pointer; transition: all 0.2s; font-weight: 600;
+    }
+    .quick-date-btn:hover { background: rgba(229,9,20,.15); }
+
+    /*  Auth Warning  */
+    .auth-notice {
+      background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3);
+      border-radius: 10px; padding: 12px 16px; margin-bottom: 20px;
+      font-size: 0.82rem; color: rgba(255,255,255,.8); line-height: 1.5;
+    }
+    .auth-notice strong { color: #f59e0b; }
+
+    /*  Start Button  */
+    #startBtn {
+      width: 100%; padding: 14px;
+      background: var(--primary, #e50914); border: none; border-radius: 10px;
+      color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer;
+      transition: all .2s; letter-spacing: .04em;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    #startBtn:hover { background: #ff1a26; transform: translateY(-1px); }
+    #startBtn:disabled { background: #444; cursor: not-allowed; transform: none; }
+
+    /*  Live Log  */
+    #logSection { display: none; }
+    #logSection.visible { display: block; }
+    .log-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .log-header h3 { font-size: 0.85rem; color: rgba(255,255,255,.5); letter-spacing: .1em; text-transform: uppercase; margin: 0; }
+    #logStatus {
+      font-size: 0.78rem; padding: 4px 12px; border-radius: 20px;
+      background: rgba(255,255,255,.08); color: rgba(255,255,255,.6);
+    }
+    #logStatus.running { background: rgba(59,130,246,.2); color: #60a5fa; }
+    #logStatus.done    { background: rgba(34,197,94,.2);  color: #4ade80; }
+    #logStatus.fail    { background: rgba(239,68,68,.2);  color: #f87171; }
+
+    #logBox {
+      background: #0d0d0d; border-radius: 10px;
+      padding: 16px; font-family: 'Fira Mono', monospace;
+      font-size: 0.78rem; color: #aaa;
+      height: 340px; overflow-y: auto;
+      border: 1px solid rgba(255,255,255,.08);
+      line-height: 1.6;
+    }
+    #logBox .log-line { padding: 1px 0; }
+    #logBox .log-err  { color: #f87171; }
+    #logBox .log-ok   { color: #4ade80; }
+    #logBox .log-head { color: #60a5fa; font-weight: 600; }
+
+    /*  Done Banner  */
+    #doneBanner {
+      display: none; margin-top: 16px;
+      background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.3);
+      border-radius: 12px; padding: 16px;
+      text-align: center;
+    }
+    #doneBanner.visible { display: block; }
+    #doneBanner h4 { color: #4ade80; margin: 0 0 6px; font-size: 1rem; }
+    #doneBanner p  { margin: 0; font-size: 0.82rem; color: rgba(255,255,255,.6); }
+    #doneBanner a  { color: var(--primary); text-decoration: none; font-weight: 600; }
+  </style>
+</head>
+<body>
+<div class="admin-layout">
+  <!--  Sidebar  -->
+  <aside class="admin-sidebar">
+    <div class="admin-logo">XLOOP Admin</div>
+    <nav class="admin-nav">
+      <a href="/admin/dashboard.html">Dashboard</a>
+      <a href="/admin/add-movie.html">+ Add Movie</a>
+      <a href="/admin/add-series.html">+ Add Series</a>
+      <a href="/admin/bulk-import.html">Bulk Import</a>
+      <a href="/admin/scraper.html" class="active"> Scraper</a>
+      <a href="/" target="_blank" style="margin-top:auto;border-top:1px solid var(--border);border-radius:0;padding-top:16px;">View Site ↗</a>
+      <a href="#" onclick="logout()" style="color:var(--red);">Logout</a>
+    </nav>
+  </aside>
+
+  <!--  Main Content  -->
+  <main class="admin-content">
+    <h1 class="admin-page-title"> Telegram Scraper</h1>
+
+    <div class="auth-notice">
+      <strong> First-time setup:</strong> You must run <code>node scrape.js</code> once from the terminal to authenticate your Telegram account. After that, the session is saved and you can use this panel freely without re-authenticating.
+    </div>
+
+    <!--  Mode Selection  -->
+    <p style="color:rgba(255,255,255,.5); font-size:0.85rem; margin-bottom:14px;">Select a scrape mode:</p>
+    <div class="scraper-grid" id="modeGrid">
+
+      <label class="mode-card selected" onclick="selectMode(1)">
+        <input type="radio" name="mode" value="1" checked>
+        <div class="mode-icon"></div>
+        <div class="mode-title">Full Scrape</div>
+        <div class="mode-desc">Scrape entire history of ALL channels from the very first message ever posted.</div>
+        <span class="mode-badge">COMPLETE</span>
+      </label>
+
+      <label class="mode-card" onclick="selectMode(2)">
+        <input type="radio" name="mode" value="2">
+        <div class="mode-icon"></div>
+        <div class="mode-title">Select Channels</div>
+        <div class="mode-desc">Choose specific channel IDs to scrape fully. Handy for targeted updates.</div>
+      </label>
+
+      <label class="mode-card" onclick="selectMode(3)">
+        <input type="radio" name="mode" value="3">
+        <div class="mode-icon"></div>
+        <div class="mode-title">Daily History</div>
+        <div class="mode-desc">Scrape only the last N days. Choose all channels or specific ones.</div>
+        <span class="mode-badge">FAST</span>
+      </label>
+
+      <label class="mode-card" onclick="selectMode(4)">
+        <input type="radio" name="mode" value="4">
+        <div class="mode-icon"></div>
+        <div class="mode-title">New Only</div>
+        <div class="mode-desc">Fetch only messages newer than your existing export. Merges automatically.</div>
+        <span class="mode-badge">SMART</span>
+      </label>
+
+    </div>
+
+    <!--  Options: Channel Picker (Modes 2, 3, 4)  -->
+    <div class="options-panel" id="channelPanel">
+      <h3>Select Channels</h3>
+      <div class="select-all-row">
+        <button onclick="toggleAllChannels(true)"> Select All</button>
+        <button onclick="toggleAllChannels(false)"> Deselect All</button>
+      </div>
+      <div class="channel-grid" id="channelGrid">
+        <div class="spinner"></div>
+      </div>
+      
+      <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <label style="display:block; font-size:0.85rem; color:rgba(255,255,255,.7); margin-bottom:8px;">Add Custom Channel ID(s)</label>
+        <div style="display:flex; gap:10px;">
+          <input type="text" id="customChannelsInput" placeholder="e.g. 1234567890, 0987654321" style="flex:1; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); border-radius:8px; color:#fff; padding:8px 12px; font-size:0.9rem;">
+          <button type="button" onclick="addCustomChannels()" style="padding:8px 16px; background:var(--primary); color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">Add to List</button>
+        </div>
+      </div>
+    </div>
+
+    <!--  Options: Date Range Picker (Mode 3)  -->
+    <div class="options-panel" id="daysPanel">
+      <h3>Date Range</h3>
+      <div class="date-row">
+        <div class="date-input-group">
+          <label>Start Date</label>
+          <input type="date" id="startDateInput">
+        </div>
+        <div class="date-input-group">
+          <label>End Date (Optional)</label>
+          <input type="date" id="endDateInput">
+        </div>
+        <button class="quick-date-btn" onclick="setDailyScrape()">Daily Scrape (Last 24h)</button>
+      </div>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0; margin-top: 8px;">Leave dates empty to default to the last 1 day.</p>
+    </div>
+
+    <!--  Start Button  -->
+    <button id="startBtn" onclick="startScrape()">
+      <span></span> Start Scrape
+    </button>
+
+    <!--  Live Log Output  -->
+    <div id="logSection" style="margin-top:24px;">
+      <div class="log-header">
+        <h3>Live Output</h3>
+        <span id="logStatus">Idle</span>
+      </div>
+      <div id="logBox"></div>
+      <div id="doneBanner">
+        <h4> Scrape Complete!</h4>
+        <p id="doneFileSize"></p>
+        <p style="margin-top:8px;">
+          <a href="/admin/bulk-import.html">→ Go to Bulk Import</a> to import the scraped data.
+        </p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast">Message</div>
+<script src="/js/admin.js"></script>
+<script>
+  let selectedMode    = 1;
+  let selectedChannels = [];
+  let allChannels      = [];
+
+  //  Load channel list from API 
+  async function loadChannels() {
+    try {
+      const res  = await apiFetch('/api/scrape/channels');
+      allChannels = res.channels || [];
+      renderChannels();
+    } catch(e) {
+      document.getElementById('channelGrid').innerHTML = '<p style="color:#f87171;font-size:0.82rem;">Failed to load channels</p>';
+    }
+  }
+
+  function renderChannels() {
+    const grid = document.getElementById('channelGrid');
+    grid.innerHTML = allChannels.map((id, i) => `
+      <div class="channel-chip ${selectedChannels.includes(id) ? 'selected' : ''}" onclick="toggleChannel(${id})" id="chip-${id}">
+        <span class="chip-dot"></span>
+        <span>${id}</span>
+      </div>
+    `).join('');
+  }
+
+  function toggleChannel(id) {
+    const idx = selectedChannels.indexOf(id);
+    if (idx === -1) selectedChannels.push(id);
+    else selectedChannels.splice(idx, 1);
+    renderChannels();
+  }
+
+  function toggleAllChannels(select) {
+    selectedChannels = select ? [...allChannels] : [];
+    renderChannels();
+  }
+
+  function addCustomChannels() {
+    const input = document.getElementById('customChannelsInput').value;
+    if (!input) return;
+    const newIds = input.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+    if (newIds.length === 0) return showToast('Please enter valid channel IDs', true);
+    
+    newIds.forEach(id => {
+      if (!allChannels.includes(id)) {
+        allChannels.push(id);
+      }
+      if (!selectedChannels.includes(id)) {
+        selectedChannels.push(id);
+      }
+    });
+    
+    document.getElementById('customChannelsInput').value = '';
+    renderChannels();
+    showToast(`Added ${newIds.length} custom channel(s)`);
+  }
+
+  //  Mode selection 
+  function selectMode(m) {
+    selectedMode = m;
+    document.querySelectorAll('.mode-card').forEach((c, i) => {
+      c.classList.toggle('selected', i + 1 === m);
+    });
+
+    const channelPanel = document.getElementById('channelPanel');
+    const daysPanel    = document.getElementById('daysPanel');
+
+    channelPanel.classList.toggle('visible', m === 2 || m === 3 || m === 4);
+    daysPanel.classList.toggle('visible',    m === 3);
+  }
+
+  function setDailyScrape() {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    document.getElementById('startDateInput').value = yesterday.toISOString().split('T')[0];
+    document.getElementById('endDateInput').value = today.toISOString().split('T')[0];
+    showToast('Date range set to Daily Scrape');
+  }
+
+  //  Start Scrape 
+  async function startScrape() {
+    const btn       = document.getElementById('startBtn');
+    const logBox    = document.getElementById('logBox');
+    const logStatus = document.getElementById('logStatus');
+    const logSection= document.getElementById('logSection');
+    const doneBanner= document.getElementById('doneBanner');
+
+    // Validate
+    if ((selectedMode === 2 || selectedMode === 3 || selectedMode === 4) && selectedChannels.length === 0) {
+      showToast('Please select at least one channel', true); return;
+    }
+
+    const startDate = document.getElementById('startDateInput').value;
+    const endDate   = document.getElementById('endDateInput').value;
+
+    btn.disabled  = true;
+    btn.innerHTML = '<span class="spinner-sm"></span> Scraping...';
+    logSection.classList.add('visible');
+    doneBanner.classList.remove('visible');
+    logBox.innerHTML = '';
+    logStatus.className = 'running';
+    logStatus.textContent = '⏳ Running';
+
+    const body = {
+      mode:     selectedMode,
+      channels: (selectedMode === 1) ? [] : selectedChannels,
+      startDate: startDate,
+      endDate:   endDate
+    };
+
+    try {
+      const res = await fetch('/api/scrape/start', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('gp_token')}` },
+        body:    JSON.stringify(body),
+      });
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      let   buffer  = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop();
+
+        for (const part of parts) {
+          const line = part.replace(/^data: /, '').trim();
+          if (!line) continue;
+          try {
+            const ev = JSON.parse(line);
+            appendLog(ev, logBox, logStatus, doneBanner);
+          } catch(_) {}
+        }
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    } catch(e) {
+      appendLog({ type: 'fail', message: 'Connection lost: ' + e.message }, logBox, logStatus, doneBanner);
+    }
+
+    btn.disabled  = false;
+    btn.innerHTML = '<span></span> Start Scrape';
+  }
+
+  function appendLog(ev, logBox, logStatus, doneBanner) {
+    const div = document.createElement('div');
+    div.className = 'log-line';
+
+    if (ev.type === 'error') { div.className += ' log-err'; }
+    else if (ev.type === 'done') {
+      div.className += ' log-ok';
+      logStatus.className   = 'done';
+      logStatus.textContent = ' Done';
+      doneBanner.classList.add('visible');
+      document.getElementById('doneFileSize').textContent = ev.fileSize ? `Output file: ${ev.fileSize}` : '';
+    } else if (ev.type === 'fail') {
+      div.className += ' log-err';
+      logStatus.className   = 'fail';
+      logStatus.textContent = ' Failed';
+    } else if (ev.type === 'start') {
+      div.className += ' log-head';
+    }
+
+    div.textContent = ev.message;
+    logBox.appendChild(div);
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  //  Init 
+  checkAuth().then(valid => {
+    if (valid) {
+      loadChannels();
+      // Pre-select all channels by default
+      setTimeout(() => {
+        if (allChannels.length > 0) {
+          selectedChannels = [...allChannels];
+          renderChannels();
+        }
+      }, 500);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Movie - XLOOP Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <aside class="admin-sidebar">
+      <div class="admin-logo">XLOOP Admin</div>
+      <nav class="admin-nav">
+        <a href="/admin/dashboard.html">Dashboard</a>
+        <a href="/admin/add-movie.html" class="active">+ Add Movie</a>
+        <a href="/admin/add-series.html">+ Add Series</a>
+        <a href="/admin/fix-posters.html"> Fix Posters</a>
+        <a href="/admin/scraper.html"> Scraper</a>
+      <a href="/admin/orchestrator.html"> Orchestrator</a>
+        <a href="/" target="_blank" style="margin-top:auto; border-top:1px solid var(--border); border-radius:0; padding-top:16px;">View Site ↗</a>
+        <a href="#" onclick="logout()" style="color:var(--red);">Logout</a>
+      </nav>
+    </aside>
+    
+    <main class="admin-content">
+      <h1 class="admin-page-title">Add New Movie</h1>
+
+      <!-- QUICK PASTE SECTION -->
+      <div class="form-card" style="margin-bottom:20px; border: 1px solid var(--accent);">
+        <h2 style="font-size:1.1rem; font-weight:600; margin-bottom:10px; color:var(--text);"> Quick Paste Auto-Import</h2>
+        <p style="font-size:0.85rem; color:var(--text2); margin-bottom:12px;">
+          Paste text exactly as you would send it on Telegram (filename + URL). The system will automatically detect the movie, fetch TMDB posters, and publish it immediately.
+        </p>
+        <textarea id="quick-paste-text" rows="5" class="form-input" placeholder="Pushpa.2.The.Rule.2024.1080p.mkv&#10;https://gdflix.com/..."></textarea>
+        <div style="margin-top:12px; display:flex; align-items:center; gap:15px;">
+          <button type="button" class="btn-primary" onclick="submitQuickPaste()"> Auto Process & Publish</button>
+          <span id="quick-paste-status" style="font-size:0.85rem; font-weight:600;"></span>
+        </div>
+      </div>
+
+      <h2 style="font-size:1.1rem; font-weight:600; margin-bottom:15px; color:var(--text);"> Manual Entry (Overrides)</h2>
+      
+      <form class="form-card" id="movieForm">
+        <div class="form-grid">
+          <div class="form-group full">
+            <label class="form-label">Movie Title</label>
+            <div style="display:flex; gap:10px;">
+              <input type="text" id="title" class="form-input" style="flex:1;" required>
+              <button type="button" class="btn-primary" onclick="autoFillTmdb()" style="white-space:nowrap; padding:0 20px;">🪄 Auto Fill TMDB</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Poster URL (Vertical)</label>
+            <input type="url" id="poster" class="form-input" placeholder="https://...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Backdrop URL (Horizontal)</label>
+            <input type="url" id="backdrop" class="form-input" placeholder="https://...">
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Description</label>
+            <textarea id="description" class="form-textarea"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Genres (comma separated)</label>
+            <input type="text" id="genre" class="form-input" placeholder="Action, Drama, Sci-Fi">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Year</label>
+            <input type="number" id="year" class="form-input" placeholder="2024">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rating (0-10)</label>
+            <input type="number" step="0.1" id="rating" class="form-input" placeholder="8.5">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Quality</label>
+            <select id="quality" class="form-select">
+              <option value="4K">4K</option>
+              <option value="1080p" selected>1080p</option>
+              <option value="720p">720p</option>
+              <option value="CAM">CAM</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Duration</label>
+            <input type="text" id="duration" class="form-input" placeholder="2h 15m">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stream Embed URL (iframe src)</label>
+            <input type="url" id="streamEmbed" class="form-input" placeholder="https://vidsrc.me/...">
+          </div>
+          <div class="form-group full" style="display:flex; gap:20px; align-items:center; margin-top:10px;">
+            <label class="form-toggle">
+              <div class="toggle" id="isFeatured"></div> Featured (Hero)
+            </label>
+            <label class="form-toggle">
+              <div class="toggle" id="isTrending"></div> Trending Slider
+            </label>
+          </div>
+        </div>
+        
+        <h3 style="margin:24px 0 12px; font-size:1rem;">Download Links (JSON Format)</h3>
+        <div class="form-group full">
+          <textarea id="downloadsJson" class="form-textarea" style="font-family:monospace; min-height:150px;" placeholder='[
+  {
+    "quality": "1080p",
+    "size": "1.5 GB",
+    "links": [
+      { "host": "GDFlix", "url": "https://...", "isFast": true },
+      { "host": "HubCloud", "url": "https://...", "isFast": false }
+    ]
+  }
+]'></textarea>
+          <p style="font-size:0.75rem; color:var(--text2); margin-top:4px;">Paste the JSON array for downloads here.</p>
+        </div>
+
+        <div style="margin-top: 24px;">
+          <button type="submit" class="btn-primary">Publish Movie</button>
+        </div>
+      </form>
+    </main>
+  </div>
+  
+  <div class="toast" id="toast">Message here</div>
+  <script src="/js/admin.js"></script>
+  <script>
+    checkAuth();
+    
+    // Toggle logic
+    let isFeatured = false;
+    let isTrending = false;
+    document.getElementById('isFeatured').addEventListener('click', function() {
+      isFeatured = !isFeatured;
+      this.classList.toggle('on', isFeatured);
+    });
+    document.getElementById('isTrending').addEventListener('click', function() {
+      isTrending = !isTrending;
+      this.classList.toggle('on', isTrending);
+    });
+
+    document.getElementById('movieForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const genreStr = document.getElementById('genre').value;
+      const genres = genreStr ? genreStr.split(',').map(s => s.trim()) : [];
+      
+      let downloads = [];
+      const dlVal = document.getElementById('downloadsJson').value.trim();
+      if (dlVal) {
+        try { downloads = JSON.parse(dlVal); } 
+        catch (err) { return showToast('Invalid JSON in downloads field', true); }
+      }
+
+      const payload = {
+        title: document.getElementById('title').value,
+        poster: document.getElementById('poster').value,
+        backdrop: document.getElementById('backdrop').value,
+        description: document.getElementById('description').value,
+        genre: genres,
+        year: parseInt(document.getElementById('year').value) || null,
+        rating: parseFloat(document.getElementById('rating').value) || 0,
+        quality: document.getElementById('quality').value,
+        duration: document.getElementById('duration').value,
+        streamEmbed: document.getElementById('streamEmbed').value,
+        isFeatured,
+        isTrending,
+        downloads
+      };
+
+      try {
+        await apiFetch('/api/movies', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        showToast('Movie added successfully!');
+        e.target.reset();
+        document.getElementById('isFeatured').classList.remove('on');
+        document.getElementById('isTrending').classList.remove('on');
+        isFeatured = false; isTrending = false;
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+
+      // Quick Paste Auto-Import function
+      async function submitQuickPaste() {
+        const text = document.getElementById('quick-paste-text').value.trim();
+        const statusEl = document.getElementById('quick-paste-status');
+        if (!text) {
+          statusEl.textContent = 'Paste some text first!';
+          statusEl.style.color = 'var(--red)';
+          return;
+        }
+
+        const btn = document.querySelector('button[onclick="submitQuickPaste()"]');
+        btn.disabled = true;
+        statusEl.textContent = '⏳ Fetching from TMDB...';
+        statusEl.style.color = 'var(--text2)';
+
+        try {
+          const data = await apiFetch('/api/import/bulk', {
+            method: 'POST',
+            body: JSON.stringify({ messages: [{ text }] }) // server uses env keys
+          });
+
+          const added     = data.successCount  || 0;
+          const updated   = data.updatedCount  || 0;
+          const skipped   = data.skippedCount  || 0;
+          const low       = data.lowConfidence || 0;
+          const duplicate = data.duplicateCount || 0;
+
+          if (data.errors && data.errors.length > 0) {
+            statusEl.textContent = '❌ ' + data.errors[0];
+            statusEl.style.color = 'var(--red)';
+          } else if (added > 0 || updated > 0) {
+            statusEl.textContent = added > 0
+              ? `✅ Added "${data.addedTitle || 'movie'}" successfully!`
+              : `🔄 Updated existing entry with new download link!`;
+            statusEl.style.color = '#10b981';
+            document.getElementById('quick-paste-text').value = '';
+          } else if (duplicate > 0) {
+            statusEl.textContent = '✅ Already in database — no changes needed.';
+            statusEl.style.color = '#10b981';
+            document.getElementById('quick-paste-text').value = '';
+          } else if (low > 0) {
+            statusEl.textContent = '⚠️ Could not identify movie with enough confidence. Try adding the movie name explicitly on the first line.';
+            statusEl.style.color = '#f59e0b';
+          } else if (skipped > 0) {
+            statusEl.textContent = '⚠️ Could not detect movie name. Make sure you paste the filename + link together (no blank line between them).';
+            statusEl.style.color = '#f59e0b';
+          } else {
+            statusEl.textContent = '⚠️ Nothing was imported. ' + (data.message || '');
+            statusEl.style.color = '#f59e0b';
+          }
+        } catch (err) {
+          statusEl.textContent = '❌ ' + err.message;
+          statusEl.style.color = 'var(--red)';
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+
+      // ── Auto Fill TMDB for Manual Form ──
+      async function autoFillTmdb() {
+        const title = document.getElementById('title').value.trim();
+        const year = document.getElementById('year').value.trim();
+        if (!title) {
+          showToast('Please enter a movie title first!', true);
+          return;
+        }
+
+        const btn = document.querySelector('button[onclick="autoFillTmdb()"]');
+        const oldText = btn.textContent;
+        btn.textContent = '⏳ Fetching...';
+        btn.disabled = true;
+
+        try {
+          const tmdbKey = localStorage.getItem('tmdb_key');
+          const omdbKey = localStorage.getItem('omdb_key');
+
+          const data = await apiFetch('/api/import/fetch-meta', {
+            method: 'POST',
+            body: JSON.stringify({ title, year, tmdbKey, omdbKey, isSeries: false })
+          });
+
+          if (data && data.title) {
+            if (data.poster) document.getElementById('poster').value = data.poster;
+            if (data.backdrop) document.getElementById('backdrop').value = data.backdrop;
+            if (data.description) document.getElementById('description').value = data.description;
+            if (data.genre && data.genre.length) document.getElementById('genre').value = data.genre.join(', ');
+            if (data.year) document.getElementById('year').value = data.year;
+            if (data.rating) document.getElementById('rating').value = data.rating;
+            showToast('TMDB Data fetched successfully!');
+          } else {
+            showToast('No matching TMDB data found', true);
+          }
+        } catch (err) {
+          showToast('Failed: ' + err.message, true);
+        } finally {
+          btn.textContent = oldText;
+          btn.disabled = false;
+        }
+      }
+    </script>
+</body>
+</html>

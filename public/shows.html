@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TV Shows - XLOOP</title>
+  <meta name="description" content="Browse all TV series and anime on XLOOP. Filter by genre, year, and quality.">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    /* ── Type tab pills ──────────────────────────────────────────────────── */
+    .type-tabs {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin: 0 auto 28px;
+      padding: 0 20px;
+      flex-wrap: wrap;
+    }
+    .type-tab {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 22px;
+      border-radius: 999px;
+      border: 1.5px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.05);
+      color: var(--text2);
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.3px;
+      backdrop-filter: blur(6px);
+    }
+    .type-tab svg { transition: all 0.2s; }
+    .type-tab:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(239,68,68,0.08);
+      transform: translateY(-1px);
+    }
+    .type-tab.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(239,68,68,0.35);
+    }
+    .type-tab .count-badge {
+      background: rgba(255,255,255,0.18);
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 1px 7px;
+      letter-spacing: 0px;
+      min-width: 26px;
+      text-align: center;
+    }
+    /* ── Stats row ───────────────────────────────────────────────────────── */
+    .shows-stats {
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--text2);
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    .shows-stats span {
+      color: var(--accent);
+      font-weight: 700;
+    }
+    /* ── Sort strip ───────────────────────────────────────────────────────── */
+    .sort-strip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: flex-end;
+      padding: 0 20px;
+      margin-bottom: 10px;
+      font-size: 0.82rem;
+      color: var(--text2);
+    }
+    .sort-strip select {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--text1);
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">XLOOP</a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/movies.html">Movies</a></li>
+        <li><a href="/shows.html" class="active">TV Shows</a></li>
+        <li><a href="/anime.html">Anime</a></li>
+      </ul>
+      <div class="nav-right">
+        <form class="nav-search-form" id="navSearchForm">
+          <input type="text" id="navSearchInput" placeholder="Search titles..." autocomplete="off">
+          <button type="submit">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          </button>
+        </form>
+      </div>
+    </div>
+  </nav>
+
+  <!-- PAGE HEADER -->
+  <div class="page-header">
+    <h1 class="page-title">TV Shows</h1>
+    <p class="page-sub">Series &amp; Anime — all in one place</p>
+  </div>
+
+  <!-- TYPE TABS: All Shows + Series only (Anime is in the navbar) -->
+  <div class="type-tabs" id="typeTabs">
+    <button class="type-tab active" data-type="all" id="tab-all">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      All Shows
+      <span class="count-badge" id="countAll">–</span>
+    </button>
+    <button class="type-tab" data-type="series" id="tab-series">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Series
+      <span class="count-badge" id="countSeries">–</span>
+    </button>
+  </div>
+
+  <!-- FILTERS: Genre / Year / Quality only -->
+  <div class="filters" id="filtersBar">
+    <select class="filter-select" id="genreFilter">
+      <option value="">All Genres</option>
+      <option value="Action">Action</option>
+      <option value="Adventure">Adventure</option>
+      <option value="Comedy">Comedy</option>
+      <option value="Crime">Crime</option>
+      <option value="Drama">Drama</option>
+      <option value="Fantasy">Fantasy</option>
+      <option value="Horror">Horror</option>
+      <option value="Mystery">Mystery</option>
+      <option value="Romance">Romance</option>
+      <option value="Sci-Fi">Sci-Fi</option>
+      <option value="Thriller">Thriller</option>
+    </select>
+    <select class="filter-select" id="yearFilter">
+      <option value="">All Years</option>
+    </select>
+    <select class="filter-select" id="qualityFilter">
+      <option value="">All Qualities</option>
+      <option value="4K">4K</option>
+      <option value="1080p">1080p</option>
+      <option value="720p">720p</option>
+      <option value="480p">480p</option>
+    </select>
+    <!-- Language filter -->
+    <select class="filter-select" id="langFilter"
+            data-icon='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>'
+            data-label="Language">
+      <option value="">All Languages</option>
+      <option value="Telugu">Telugu</option>
+      <option value="Tamil">Tamil</option>
+      <option value="Hindi">Hindi</option>
+      <option value="Malayalam">Malayalam</option>
+      <option value="Kannada">Kannada</option>
+      <option value="Bengali">Bengali</option>
+      <option value="English">English</option>
+      <option value="Japanese">Japanese</option>
+      <option value="Korean">Korean</option>
+      <option value="Chinese">Chinese</option>
+      <option value="Spanish">Spanish</option>
+      <option value="Turkish">Turkish</option>
+    </select>
+  </div>
+
+  <!-- SHOWS STATS -->
+  <div class="shows-stats" id="showsStats"></div>
+
+  <!-- CONTENT GRID -->
+  <section class="section" style="padding-top: 0;">
+    <div class="content-grid" id="moviesGrid">
+      <div class="spinner"></div>
+    </div>
+    <div class="pagination-wrap" id="moviesPagination"></div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-logo">XLOOP</div>
+    <div class="footer-links">
+      <a href="/movies.html">Movies</a>
+      <a href="/shows.html">TV Shows</a>
+      <a href="/anime.html">Anime</a>
+      <a href="/search.html">Search</a>
+    </div>
+    <p class="footer-copy">© 2025 XLOOP.</p>
+  </footer>
+
+  <script src="/js/app.js"></script>
+  <script>
+    // ── Search ────────────────────────────────────────────────────────────────
+    document.getElementById('navSearchForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const q = document.getElementById('navSearchInput').value.trim();
+      if (q) window.location.href = `/search.html?q=${encodeURIComponent(q)}`;
+    });
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    let currentPage = 1;
+    let activeType  = 'all'; // 'all' | 'series' | 'anime'
+
+    // ── Load counts for tab badges ───────────────────────────────────────────────
+    async function loadCounts() {
+      try {
+        const [resSeries, resAnime] = await Promise.all([
+          fetch('/api/movies?type=series&limit=1&page=1'),
+          fetch('/api/movies?type=anime&limit=1&page=1'),
+        ]);
+        const [dSeries, dAnime] = await Promise.all([resSeries.json(), resAnime.json()]);
+        const totalAll = (dSeries.total || 0) + (dAnime.total || 0);
+        document.getElementById('countAll').textContent    = totalAll > 999 ? (totalAll/1000).toFixed(1)+'k' : totalAll;
+        document.getElementById('countSeries').textContent = dSeries.total || 0;
+      } catch {}
+    }
+
+    // ── Load grid ─────────────────────────────────────────────────────────────
+    async function loadShows(page = 1) {
+      currentPage = page;
+      const genre   = document.getElementById('genreFilter').value;
+      const year    = document.getElementById('yearFilter').value;
+      const quality = document.getElementById('qualityFilter').value;
+      const lang    = document.getElementById('langFilter').value;
+
+      // Build API URLs — "all" means we fetch series AND anime and merge
+      const container = document.getElementById('moviesGrid');
+      container.classList.add('loading');
+      container.innerHTML = '<div class="spinner"></div>';
+
+      let items = [], total = 0;
+
+      try {
+        if (activeType === 'all') {
+          // Fetch both in parallel, merge & re-sort
+          const base = `page=${page}&limit=20${genre ? '&genre='+genre : ''}${year ? '&year='+year : ''}${quality ? '&quality='+quality : ''}${lang ? '&language='+encodeURIComponent(lang) : ''}`;
+          const [resSeries, resAnime] = await Promise.all([
+            fetch(`/api/movies?type=series&${base}`),
+            fetch(`/api/movies?type=anime&${base}`)
+          ]);
+          const [dSeries, dAnime] = await Promise.all([resSeries.json(), resAnime.json()]);
+          total = (dSeries.total || 0) + (dAnime.total || 0);
+          items = [...(dSeries.movies || []), ...(dAnime.movies || [])];
+        } else {
+          let url = `/api/movies?type=${activeType}&page=${page}&limit=20`;
+          if (genre)   url += `&genre=${genre}`;
+          if (year)    url += `&year=${year}`;
+          if (quality) url += `&quality=${quality}`;
+          if (lang)    url += `&language=${encodeURIComponent(lang)}`;
+          const res  = await fetch(url);
+          const data = await res.json();
+          items = data.movies || [];
+          total = data.total  || 0;
+        }
+
+        // Stats bar
+        document.getElementById('showsStats').innerHTML =
+          `<span>${total.toLocaleString()}</span> titles found`;
+
+        if (!items.length) {
+          container.innerHTML = '<div class="empty-state">No shows found</div>';
+          document.getElementById('moviesPagination').innerHTML = '';
+          container.classList.remove('loading');
+          container.classList.add('loaded');
+          return;
+        }
+
+        // Render cards
+        container.innerHTML = items.map((item, i) => createCard(item, item.type || 'series', i)).join('');
+        container.classList.remove('loading');
+        container.classList.add('loaded');
+        activateLazyImages();
+
+        // Pagination
+        const totalPages = Math.ceil(total / 20);
+        let pagHtml = '';
+        if (totalPages > 1) {
+          if (currentPage > 1)
+            pagHtml += `<button class="btn-sm" onclick="loadShows(${currentPage - 1})">← Prev</button>`;
+          pagHtml += `<span style="font-size:0.85rem;color:var(--text2);margin:0 15px;font-weight:500;">Page ${currentPage} of ${totalPages}</span>`;
+          if (currentPage < totalPages)
+            pagHtml += `<button class="btn-sm" onclick="loadShows(${currentPage + 1})">Next →</button>`;
+        }
+        document.getElementById('moviesPagination').innerHTML = pagHtml;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      } catch (err) {
+        console.error(err);
+        container.innerHTML = '<div class="empty-state">Error loading shows</div>';
+        container.classList.add('loaded');
+      }
+    }
+
+    // ── Tab switching ─────────────────────────────────────────────────────────
+    document.getElementById('typeTabs').addEventListener('click', e => {
+      const tab = e.target.closest('.type-tab');
+      if (!tab) return;
+      document.querySelectorAll('.type-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      activeType = tab.dataset.type;
+      loadShows(1);
+    });
+
+    // ── Filters ───────────────────────────────────────────────────────────────
+    ['genreFilter', 'yearFilter', 'qualityFilter', 'langFilter'].forEach(id => {
+      document.getElementById(id).addEventListener('change', () => loadShows(1));
+    });
+
+    // ── Populate years ─────────────────────────────────────────────────────────
+    const yearFilter = document.getElementById('yearFilter');
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear; y >= 2000; y--) {
+      const opt = document.createElement('option');
+      opt.value = y; opt.textContent = y;
+      yearFilter.appendChild(opt);
+    }
+
+    // ── Build premium animated custom selects ────────────────────────────────
+    const FILTER_META = {
+      genreFilter:   { icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>',   label: 'Genre' },
+      yearFilter:    { icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>', label: 'Year' },
+      qualityFilter: { icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>', label: 'Quality' },
+      langFilter:    { icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>', label: 'Language' },
+    };
+
+    // Reset button
+    const filtersBar = document.getElementById('filtersBar');
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'filter-reset';
+    resetBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Reset';
+    resetBtn.addEventListener('click', () => {
+      document.querySelectorAll('select.filter-select').forEach(s => s.selectedIndex = 0);
+      document.querySelectorAll('.custom-select').forEach(cs => {
+        const wrapper = cs.closest('.custom-select-wrapper');
+        const sel = wrapper?.querySelector('select');
+        if (sel) cs.querySelector('span.label-text').textContent = sel.options[0].text;
+        cs.classList.remove('has-value');
+        const opts = wrapper?.querySelectorAll('.custom-option');
+        opts?.forEach((o, i) => o.classList.toggle('selected', i === 0));
+      });
+      resetBtn.classList.remove('visible');
+      loadShows(1);
+    });
+    filtersBar.appendChild(resetBtn);
+
+    function checkResetVisibility() {
+      const anyActive = Array.from(document.querySelectorAll('select.filter-select')).some(s => s.selectedIndex > 0);
+      resetBtn.classList.toggle('visible', anyActive);
+    }
+
+    document.querySelectorAll('select.filter-select').forEach(select => {
+      select.style.display = 'none';
+      const meta = FILTER_META[select.id] || { icon: '', label: '' };
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'custom-select-wrapper';
+      select.parentNode.insertBefore(wrapper, select);
+      wrapper.appendChild(select);
+
+      // Build the pill button
+      const customSelect = document.createElement('div');
+      customSelect.className = 'custom-select';
+
+      // Icon
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'filter-icon';
+      iconSpan.innerHTML = meta.icon;
+
+      // Label text
+      const textSpan = document.createElement('span');
+      textSpan.className = 'label-text';
+      textSpan.textContent = select.options[select.selectedIndex].text;
+
+      // Arrow SVG
+      const arrow = document.createElement('span');
+      arrow.className = 'arrow';
+      arrow.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>';
+
+      customSelect.appendChild(iconSpan);
+      customSelect.appendChild(textSpan);
+      customSelect.appendChild(arrow);
+      wrapper.appendChild(customSelect);
+
+      // Build the dropdown
+      const customOptions = document.createElement('div');
+      customOptions.className = 'custom-options';
+
+      // Header
+      const header = document.createElement('div');
+      header.className = 'custom-options-header';
+      header.textContent = meta.label;
+      customOptions.appendChild(header);
+
+      Array.from(select.options).forEach((opt, index) => {
+        const div = document.createElement('div');
+        div.className = 'custom-option' + (index === select.selectedIndex ? ' selected' : '');
+        div.textContent = opt.text;
+        div.addEventListener('click', () => {
+          textSpan.textContent = opt.text;
+          select.selectedIndex = index;
+          Array.from(customOptions.querySelectorAll('.custom-option')).forEach(c => c.classList.remove('selected'));
+          div.classList.add('selected');
+          customSelect.classList.remove('open');
+          // Glow if a real filter value is selected
+          customSelect.classList.toggle('has-value', index > 0);
+          if (index === 0) textSpan.textContent = opt.text;
+          select.dispatchEvent(new Event('change'));
+          checkResetVisibility();
+        });
+        customOptions.appendChild(div);
+      });
+      wrapper.appendChild(customOptions);
+
+      customSelect.addEventListener('click', e => {
+        e.stopPropagation();
+        document.querySelectorAll('.custom-select').forEach(cs => {
+          if (cs !== customSelect) cs.classList.remove('open');
+        });
+        customSelect.classList.toggle('open');
+      });
+    });
+
+    document.addEventListener('click', () => {
+      document.querySelectorAll('.custom-select').forEach(cs => cs.classList.remove('open'));
+    });
+
+    // ── Navbar scroll ──────────────────────────────────────────────────────────
+    window.addEventListener('scroll', () => {
+      document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 10);
+    });
+
+    // ── Init ───────────────────────────────────────────────────────────────────
+    loadCounts();
+    loadShows(1);
+  </script>
+</body>
+</html>

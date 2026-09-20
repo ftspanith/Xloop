@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bulk Import - XLOOP Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <aside class="admin-sidebar">
+      <div class="admin-logo">XLOOP Admin</div>
+      <nav class="admin-nav">
+        <a href="/admin/dashboard.html">Dashboard</a>
+        <a href="/admin/add-movie.html">+ Add Movie</a>
+        <a href="/admin/add-series.html">+ Add Series</a>
+        <a href="/admin/bulk-import.html" class="active">Bulk Import</a>
+        <a href="/admin/fix-posters.html"> Fix Posters</a>
+        <a href="/admin/scraper.html"> Scraper</a>
+      <a href="/admin/orchestrator.html"> Orchestrator</a>
+        <a href="/" target="_blank" style="margin-top:auto; border-top:1px solid var(--border); border-radius:0; padding-top:16px;">View Site ↗</a>
+        <a href="#" onclick="logout()" style="color:var(--red);">Logout</a>
+      </nav>
+    </aside>
+    
+    <main class="admin-content">
+      <h1 class="admin-page-title">Telegram Bulk Importer</h1>
+      
+      <div class="form-card">
+        <p style="font-size:0.85rem; color:var(--text2); margin-bottom:20px;">Upload your <code>telegram_export.json</code>. The engine will parse filenames, detect movie/series/anime type, fetch posters from TMDB &amp; OMDB and save everything to the database.</p>
+        
+        <div class="form-grid">
+          <div class="form-group full">
+            <label class="form-label">TMDB API Key <span style="color:var(--text3)">(recommended — for posters, backdrops, genres)</span></label>
+            <input type="text" id="tmdbKey" class="form-input" placeholder="Enter your TMDB API v3 Key">
+          </div>
+          <div class="form-group full">
+            <label class="form-label">OMDB API Key <span style="color:var(--text3)">(free at omdbapi.com — IMDB ratings &amp; posters for Indian movies)</span></label>
+            <input type="text" id="omdbKey" class="form-input" placeholder="Enter your OMDB API Key (e.g. a1b2c3d4)">
+          </div>
+          
+          <div class="form-group full">
+            <label class="form-label">Upload JSON Export</label>
+            <input type="file" id="fileUpload" accept=".json" class="form-input" style="padding: 6px;">
+          </div>
+
+          <div class="form-group" style="margin-top: 8px;">
+            <label class="form-label">Resume from Batch # <span style="color:var(--text3)">(optional)</span></label>
+            <input type="number" id="resumeBatch" placeholder="e.g. 10" class="form-input" min="1">
+            <div style="font-size: 0.75rem; color: var(--text2); margin-top: 4px;">If a previous import was interrupted, enter the batch number to resume.</div>
+          </div>
+        </div>
+
+        <!-- Fresh Import (Wipe DB) toggle -->
+        <div id="wipeToggleBox" style="margin-top:20px; padding:16px 20px; border-radius:var(--r); border:1.5px solid #7c1a1a; background:rgba(180,30,30,0.07); display:flex; align-items:flex-start; gap:14px;">
+          <input type="checkbox" id="wipeFirst" style="margin-top:3px; accent-color:var(--red); width:16px; height:16px; cursor:pointer; flex-shrink:0;">
+          <div>
+            <label for="wipeFirst" style="font-weight:600; color:#e05555; cursor:pointer; font-size:0.9rem;">Fresh Import — Wipe entire database first</label>
+            <p style="font-size:0.78rem; color:var(--text2); margin:4px 0 0;">Deletes ALL existing movies/series/anime from the database before importing. Use this when you want a completely clean, fresh start. <strong style="color:#e05555;">This cannot be undone.</strong></p>
+          </div>
+        </div>
+
+        <!-- Progress bar -->
+        <div id="progressWrap" style="margin-top:20px; display:none;">
+          <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:var(--text2); margin-bottom:6px;">
+            <span id="progressLabel">Processing...</span>
+            <span id="progressPct">0%</span>
+          </div>
+          <div style="background:var(--bg2); border-radius:99px; height:8px; overflow:hidden;">
+            <div id="progressBar" style="height:100%; width:0%; background:linear-gradient(90deg,var(--red),#ff6b6b); border-radius:99px; transition:width 0.4s ease;"></div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px; display:flex; align-items:center; gap:15px; flex-wrap:wrap;">
+          <button id="importBtn" class="btn-primary">Start Import</button>
+          <div id="statusText" style="font-size:0.85rem; color:var(--accent);"></div>
+        </div>
+      </div>
+      
+      <div id="logArea" style="margin-top: 20px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); padding:16px; font-family:monospace; font-size:0.75rem; color:var(--text2); max-height:400px; overflow-y:auto; display:none;">
+        <div style="color:var(--text); font-weight:bold; margin-bottom:8px;">Import Logs:</div>
+      </div>
+    </main>
+  </div>
+  
+  <div class="toast" id="toast">Message here</div>
+  <script src="/js/admin.js"></script>
+  <script>
+    checkAuth();
+
+    // Load saved API keys
+    const savedKey = localStorage.getItem('tmdb_key');
+    if(savedKey) document.getElementById('tmdbKey').value = savedKey;
+    const savedOmdb = localStorage.getItem('omdb_key');
+    if(savedOmdb) document.getElementById('omdbKey').value = savedOmdb;
+
+    const logArea = document.getElementById('logArea');
+    const statusText = document.getElementById('statusText');
+    const importBtn = document.getElementById('importBtn');
+
+    function log(msg, isError=false) {
+      logArea.style.display = 'block';
+      const div = document.createElement('div');
+      div.textContent = msg;
+      if(isError) div.style.color = 'var(--red)';
+      logArea.appendChild(div);
+      logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    function updateProgress(current, total) {
+      const pct = Math.round((current / total) * 100);
+      document.getElementById('progressBar').style.width = pct + '%';
+      document.getElementById('progressPct').textContent = pct + '%';
+      document.getElementById('progressLabel').textContent = `Batch ${current} of ${total}`;
+    }
+
+    importBtn.addEventListener('click', async () => {
+      const file = document.getElementById('fileUpload').files[0];
+      const tmdbKey = document.getElementById('tmdbKey').value.trim();
+      const omdbKey = document.getElementById('omdbKey').value.trim();
+      const wipeFirst = document.getElementById('wipeFirst').checked;
+
+      if (!file) return showToast('Please select a JSON file first', true);
+
+      if (tmdbKey) localStorage.setItem('tmdb_key', tmdbKey);
+      if (omdbKey) localStorage.setItem('omdb_key', omdbKey);
+
+      // Wipe confirmation
+      if (wipeFirst) {
+        const confirmed = confirm('WARNING: This will permanently delete ALL movies, series, and anime from the database before importing. Are you sure?');
+        if (!confirmed) return;
+      }
+
+      importBtn.disabled = true;
+      importBtn.style.opacity = '0.5';
+      document.getElementById('progressWrap').style.display = 'block';
+      statusText.textContent = 'Reading file...';
+      log('Reading JSON file...');
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+
+          // Support both our internal format and raw Telegram Desktop export
+          let rawMessages = [];
+          if (data.messages && Array.isArray(data.messages)) {
+            rawMessages = data.messages;
+          } else {
+            throw new Error("No 'messages' array found in JSON. Make sure it's either a Telegram export or telegram_export.json.");
+          }
+
+          //  Wipe DB if requested 
+          if (wipeFirst) {
+            log('Wiping entire database...');
+            statusText.textContent = 'Wiping database...';
+            try {
+              const wipeRes = await apiFetch('/api/import/wipe-all', { method: 'DELETE' });
+              log(`Database wiped: ${wipeRes.message}`);
+            } catch (err) {
+              log(`Wipe failed: ${err.message}`, true);
+              throw new Error('DB wipe failed, import aborted.');
+            }
+          }
+
+          log(`Found ${rawMessages.length} raw messages. Filtering...`);
+          statusText.textContent = 'Filtering messages...';
+
+          // Build text blocks — support both our scraped format and raw Telegram Desktop
+          let textBlocks = [];
+          rawMessages.forEach(msg => {
+            if (msg.type && msg.type !== 'message') return;
+
+            let fullText = '';
+
+            // Our scrape_api.js format: { id, text, channel_name, date }
+            if (typeof msg.text === 'string' && msg.channel_id) {
+              fullText = msg.text;
+            }
+            // Raw Telegram Desktop format: text is string or array
+            else if (Array.isArray(msg.text)) {
+              fullText = msg.text.map(t => {
+                if (typeof t === 'string') return t;
+                if (t.type === 'text_link') return t.text + '\n' + t.href; // extract inline links
+                return t.text || '';
+              }).join('');
+            } else if (typeof msg.text === 'string') {
+              fullText = msg.text;
+            }
+
+            if (fullText.trim().length > 0) {
+              textBlocks.push({ id: msg.id, text: fullText.trim() });
+            }
+          });
+
+          const BATCH_SIZE = 20;
+          const totalBatches = Math.ceil(textBlocks.length / BATCH_SIZE);
+          log(`${textBlocks.length} usable messages → ${totalBatches} batches of ${BATCH_SIZE}`);
+          statusText.textContent = `Importing ${textBlocks.length} messages in ${totalBatches} batches...`;
+
+          let resumeBatch = parseInt(document.getElementById('resumeBatch').value);
+          let startBatch = 0;
+          if (!isNaN(resumeBatch) && resumeBatch > 1) {
+            startBatch = resumeBatch - 1;
+            log(`Resuming from batch ${resumeBatch}...`);
+          }
+
+          let totalSuccess = 0, totalUpdated = 0, totalSkipped = 0;
+
+          for (let b = startBatch; b < totalBatches; b++) {
+            const batch = textBlocks.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+            updateProgress(b + 1, totalBatches);
+            log(`Batch ${b + 1}/${totalBatches} — processing ${batch.length} messages...`);
+
+            try {
+              const res = await apiFetch('/api/import/bulk', {
+                method: 'POST',
+                body: JSON.stringify({ messages: batch, tmdbKey, omdbKey })
+              });
+              totalSuccess  += res.successCount  || 0;
+              totalUpdated  += res.updatedCount   || 0;
+              totalSkipped  += res.skippedCount   || 0;
+              log(res.message);
+              if (res.errors && res.errors.length > 0) {
+                res.errors.forEach(err => log(`  Error: ${err}`, true));
+              }
+            } catch (err) {
+              log(`Batch ${b + 1} failed: ${err.message}`, true);
+            }
+
+            // Rate limit pause between batches
+            await new Promise(r => setTimeout(r, 800));
+          }
+
+          updateProgress(totalBatches, totalBatches);
+          statusText.textContent = 'Import Complete!';
+          log('');
+          log(`DONE — Added: ${totalSuccess} | Updated: ${totalUpdated} | Skipped: ${totalSkipped}`);
+          showToast(`Import complete! ${totalSuccess} added, ${totalUpdated} updated`);
+
+        } catch (err) {
+          log(`Error: ${err.message}`, true);
+          statusText.textContent = 'Failed!';
+          showToast(err.message, true);
+        } finally {
+          importBtn.disabled = false;
+          importBtn.style.opacity = '1';
+        }
+      };
+
+      reader.readAsText(file);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+// Admin Utility Functions
+
+function showToast(msg, isError = false) {
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.textContent = msg;
+  toast.className = 'toast show ' + (isError ? 'error' : 'success');
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 3000);
+}
+
+function getToken() {
+  return localStorage.getItem('xloop_admin_token');
+}
+
+function logout() {
+  localStorage.removeItem('xloop_admin_token');
+  window.location.href = '/admin/login.html';
+}
+
+async function checkAuth() {
+  const token = getToken();
+  if (!token) {
+    if(!window.location.pathname.includes('login.html')) {
+        window.location.href = '/admin/login.html';
+    }
+    return false;
+  }
+  
+  try {
+    const res = await fetch('/api/auth/verify', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Invalid token');
+    return true;
+  } catch (err) {
+    logout();
+    return false;
+  }
+}
+
+async function apiFetch(url, options = {}) {
+  const token = getToken();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(url, { ...options, headers });
+  const data = await res.json();
+  
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) logout();
+    throw new Error(data.message || 'API request failed');
+  }
+  return data;
+}

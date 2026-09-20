@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TV Series - XLOOP</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- NAVBAR -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">XLOOP</a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/movies.html">Movies</a></li>
+        <li><a href="/shows.html">TV Shows</a></li>
+      <li><a href="/anime.html">Anime</a></li>
+      </ul>
+      <div class="nav-right">
+        <form class="nav-search-form" id="navSearchForm">
+          <input type="text" id="navSearchInput" placeholder="Search titles..." autocomplete="off">
+          <button type="submit">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          </button>
+        </form>
+      </div>
+    </div>
+  </nav>
+
+  <div class="page-header">
+    <h1 class="page-title">TV Series</h1>
+    <p class="page-sub">Browse all available TV shows and series</p>
+  </div>
+
+  <div class="filters">
+    <select class="filter-select" id="genreFilter">
+      <option value="">All Genres</option>
+      <option value="Action">Action</option>
+      <option value="Comedy">Comedy</option>
+      <option value="Drama">Drama</option>
+      <option value="Sci-Fi">Sci-Fi</option>
+      <option value="Horror">Horror</option>
+      <option value="Thriller">Thriller</option>
+      <option value="Romance">Romance</option>
+    </select>
+    <select class="filter-select" id="yearFilter">
+      <option value="">All Years</option>
+      <!-- Will be populated dynamically or static -->
+    </select>
+    <select class="filter-select" id="qualityFilter">
+      <option value="">All Qualities</option>
+      <option value="4K">4K</option>
+      <option value="1080p">1080p</option>
+      <option value="720p">720p</option>
+      <option value="480p">480p</option>
+    </select>
+  </div>
+
+  <section class="section" style="padding-top: 0;">
+    <div class="content-grid" id="moviesGrid">
+      <div class="spinner"></div>
+    </div>
+    <div class="pagination-wrap" id="moviesPagination"></div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-logo">XLOOP</div>
+    <div class="footer-links">
+      <a href="/movies.html">Movies</a>
+      <a href="/shows.html">TV Shows</a>
+      <a href="/anime.html">Anime</a>
+      <a href="/search.html">Search</a>
+    </div>
+    <p class="footer-copy">© 2024 XLOOP.</p>
+  </footer>
+
+  <script src="/js/app.js"></script>
+  <script>
+    document.getElementById('navSearchForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const q = document.getElementById('navSearchInput').value.trim();
+      if (q) window.location.href = `/search.html?q=${encodeURIComponent(q)}`;
+    });
+    
+    let currentPage = 1;
+    
+    async function loadMovies(page = 1) {
+      currentPage = page;
+      const genre = document.getElementById('genreFilter').value;
+      const year = document.getElementById('yearFilter').value;
+      const quality = document.getElementById('qualityFilter').value;
+      
+      let url = `/api/movies?type=series&page=${page}&limit=20`;
+      if (genre) url += `&genre=${genre}`;
+      if (year) url += `&year=${year}`;
+      if (quality) url += `&quality=${quality}`;
+      
+      const container = document.getElementById('moviesGrid');
+      
+      // Fade out
+      container.classList.add('loading');
+      container.classList.remove('loaded');
+      
+      await new Promise(r => setTimeout(r, 200));
+      container.innerHTML = '<div class="spinner"></div>';
+      container.classList.remove('loading');
+      
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        if (!data.movies || data.movies.length === 0) {
+          container.innerHTML = '<div class="empty-state">No movies found</div>';
+          document.getElementById('moviesPagination').innerHTML = '';
+          container.classList.add('loaded');
+          return;
+        }
+        
+        let html = '';
+        data.movies.forEach((item, index) => {
+          html += createCard(item, 'movie', index);
+        });
+        container.innerHTML = html;
+        container.classList.add('loaded');
+        activateLazyImages();
+        
+        const totalPages = Math.ceil(data.total / 20);
+        let pagHtml = '';
+        if (totalPages > 1) {
+          if (currentPage > 1) {
+            pagHtml += `<button class="btn-sm" onclick="loadMovies(${currentPage - 1})">← Prev</button>`;
+          }
+          pagHtml += `<span style="font-size: 0.85rem; color: var(--text2); margin: 0 15px; font-weight: 500;">Page ${currentPage} of ${totalPages}</span>`;
+          if (currentPage < totalPages) {
+            pagHtml += `<button class="btn-sm" onclick="loadMovies(${currentPage + 1})">Next →</button>`;
+          }
+        }
+        document.getElementById('moviesPagination').innerHTML = pagHtml;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (err) {
+        container.innerHTML = '<div class="empty-state">Error loading movies</div>';
+        container.classList.add('loaded');
+      }
+    }
+
+    // Load on page load (script is at bottom of body, DOM is already ready)
+    loadMovies(1);
+
+
+    // Handle filters
+    const filters = ['genreFilter', 'yearFilter', 'qualityFilter'];
+    filters.forEach(id => {
+      document.getElementById(id).addEventListener('change', () => {
+        loadMovies(1);
+      });
+    });
+
+    // Populate years
+    const yearFilter = document.getElementById('yearFilter');
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear; y >= 2000; y--) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      yearFilter.appendChild(opt);
+    }
+
+    // Build custom selects
+    document.querySelectorAll('select.filter-select').forEach(select => {
+      select.style.display = 'none'; // hide native select
+      
+      const wrapper = document.createElement('div');
+      wrapper.className = 'custom-select-wrapper';
+      select.parentNode.insertBefore(wrapper, select);
+      wrapper.appendChild(select);
+      
+      const customSelect = document.createElement('div');
+      customSelect.className = 'custom-select';
+      
+      const textSpan = document.createElement('span');
+      textSpan.textContent = select.options[select.selectedIndex].text;
+      
+      const arrow = document.createElement('span');
+      arrow.className = 'arrow';
+      
+      customSelect.appendChild(textSpan);
+      customSelect.appendChild(arrow);
+      wrapper.appendChild(customSelect);
+      
+      const customOptions = document.createElement('div');
+      customOptions.className = 'custom-options';
+      
+      Array.from(select.options).forEach((opt, index) => {
+        const div = document.createElement('div');
+        div.className = 'custom-option' + (index === select.selectedIndex ? ' selected' : '');
+        div.textContent = opt.text;
+        div.addEventListener('click', () => {
+          textSpan.textContent = opt.text;
+          select.selectedIndex = index;
+          
+          Array.from(customOptions.children).forEach(c => c.classList.remove('selected'));
+          div.classList.add('selected');
+          
+          customSelect.classList.remove('open');
+          
+          // Trigger change event
+          const event = new Event('change');
+          select.dispatchEvent(event);
+        });
+        customOptions.appendChild(div);
+      });
+      
+      wrapper.appendChild(customOptions);
+      
+      customSelect.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Close others
+        document.querySelectorAll('.custom-select').forEach(cs => {
+          if (cs !== customSelect) cs.classList.remove('open');
+        });
+        customSelect.classList.toggle('open');
+      });
+    });
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', () => {
+      document.querySelectorAll('.custom-select').forEach(cs => cs.classList.remove('open'));
+    });
+  </script>
+</body>
+</html>

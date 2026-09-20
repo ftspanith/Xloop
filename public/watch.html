@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watch - XLOOP</title>
+  <meta name="description" content="Watch and download movies and series on XLOOP.">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/watch.css">
+</head>
+<body class="watch-body">
+
+<!-- NAVBAR -->
+<nav class="navbar scrolled" id="navbar">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">XLOOP</a>
+    <ul class="nav-links">
+      <li><a href="/">Home</a></li>
+      <li><a href="/movies.html">Movies</a></li>
+      <li><a href="/shows.html">TV Shows</a></li>
+      <li><a href="/anime.html">Anime</a></li>
+    </ul>
+    <div class="nav-right">
+      <form class="nav-search-form" id="navSearchForm">
+        <input type="text" id="navSearchInput" placeholder="Search titles..." autocomplete="off">
+        <button type="submit">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </button>
+      </form>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO SECTION (backdrop lives here) -->
+<div class="wp-hero" id="wpHero">
+  <div class="wp-hero-bg" id="wpHeroBg"></div>
+  <div class="wp-hero-overlay"></div>
+  <div class="wp-hero-content">
+    <div class="wp-card" id="wpCard">
+      <div class="spinner" id="wpSpinner"></div>
+    </div>
+  </div>
+</div>
+
+<!-- BELOW-HERO CONTENT (episodes, similar, downloads) -->
+<div class="wp-below" id="wpBelow">
+
+  <!-- VIDEO PLAYER MODAL -->
+  <div class="wp-player-modal" id="watchPlayerModal" style="display:none;">
+    <div class="wp-player-header">
+      <span id="wpPlayerTitle" class="wp-player-title"></span>
+      <button class="wp-close-btn" id="closePlayerBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Close
+      </button>
+    </div>
+    <div class="wp-player-wrap" id="playerWrap"></div>
+  </div>
+
+  <!-- SEASONS & EPISODES (TV Series) -->
+  <div class="section" id="episodeSection" style="display:none;">
+    <div class="section-header" style="justify-content: flex-start; gap: 12px; align-items: center; padding-left: 32px; padding-bottom: 12px;">
+      <h2 class="section-title" style="margin: 0;">Seasons</h2>
+    </div>
+    <!-- Season tab buttons -->
+    <div id="seasonTabs" class="season-tabs-wrap"></div>
+    <div class="section-header" style="justify-content: flex-start; gap: 12px; align-items: center; padding-left: 32px; padding-top: 20px; padding-bottom: 12px;">
+      <h2 class="section-title" style="margin: 0;" id="episodesSectionTitle">Episodes</h2>
+      <span id="seasonEpCountBadge" style="font-size:0.85em; color:var(--accent); font-weight:600;"></span>
+    </div>
+    <div id="episodeGrid" class="ep-button-grid"></div>
+  </div>
+
+  <!-- SIMILAR CONTENT -->
+  <section class="section" style="padding-bottom: 60px;">
+    <div class="section-header">
+      <h2 class="section-title">Similar Content</h2>
+      <div class="slider-nav-arrows">
+        <button class="slider-btn prev" onclick="scrollSlider('similarGrid',-1)">&#8249;</button>
+        <button class="slider-btn next" onclick="scrollSlider('similarGrid',1)">&#8250;</button>
+      </div>
+    </div>
+    <div class="slider-wrap">
+      <div class="slider" id="similarGrid"><div class="spinner"></div></div>
+    </div>
+  </section>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="giant-logo">XLOOP</div>
+</footer>
+
+<script src="/js/app.js"></script>
+<script src="/js/watch.js"></script>
+<script>
+  window.addEventListener('scroll', () => {
+    document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 10);
+  });
+  document.getElementById('navSearchForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const q = document.getElementById('navSearchInput').value.trim();
+    if (q) window.location.href = `/search.html?q=${encodeURIComponent(q)}`;
+  });
+</script>
+</body>
+</html>

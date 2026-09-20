@@ -1,0 +1,4794 @@
+[
+  {
+    "title": "Ghulam Begam Badshah",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Khanna and Iyer",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Yeh Hai Mumbai Meri Jaan",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Yeh Hai Mumbai Meri Jaan",
+    "sim": 1
+  },
+  {
+    "title": "Ehsaas: The Feeling",
+    "fixed": [
+      "poster",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Ehsaas: The Feeling",
+    "sim": 1
+  },
+  {
+    "title": "Kashmakash",
+    "fixed": [
+      "description",
+      "genre"
+    ],
+    "tmdbMatch": "Kashmakash",
+    "sim": null
+  },
+  {
+    "title": "Billa The Don",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Irul Ek Bhayanak Raat",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Nagavalli",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Nagavalli",
+    "sim": 1
+  },
+  {
+    "title": "Revolver Raja",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Waris Shah: Ishq Daa Waaris",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Waris Shah: Ishq Daa Waaris",
+    "sim": 1
+  },
+  {
+    "title": "Poorna Courage Has No Limit",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Main Hoon Zakhmi Khiladi",
+    "fixed": [
+      "description",
+      "tmdbId",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Main Hoon Zakhmi Khiladi",
+    "sim": 1
+  },
+  {
+    "title": "Bajirao The Fighter",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Minsara Kanavu",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Minsara Kanavu",
+    "sim": 1
+  },
+  {
+    "title": "What If",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "What If",
+    "sim": 1
+  },
+  {
+    "title": "Blast Barood",
+    "fixed": [
+      "genre"
+    ],
+    "tmdbMatch": "Blast Barood",
+    "sim": null
+  },
+  {
+    "title": "Bhageeratha",
+    "fixed": [
+      "poster",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Bhageeratha",
+    "sim": 1
+  },
+  {
+    "title": "Don Ka Muqabla",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Vel",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Vel",
+    "sim": 1
+  },
+  {
+    "title": "Return Of Chandramukhi",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Don Aur Doctor",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Atharintiki Daaredi",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Atharintiki Daaredi",
+    "sim": 1
+  },
+  {
+    "title": "Singam",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Singam",
+    "sim": 1
+  },
+  {
+    "title": "Witch Hat Atelier",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Witch Hat Atelier",
+    "sim": 1
+  },
+  {
+    "title": "Marshals Wolves at the Door",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "The Best of the Best: Jazz From Detroit",
+    "fixed": [
+      "poster",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Best of the Best: Jazz From Detroit",
+    "sim": 1
+  },
+  {
+    "title": "Thattukada Muthal Semitheri Vare",
+    "fixed": [
+      "poster",
+      "description",
+      "genre",
+      "language"
+    ],
+    "tmdbMatch": "Thattukada Muthal Semitheri Vare",
+    "sim": null
+  },
+  {
+    "title": "Goodachari",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Goodachari",
+    "sim": 1
+  },
+  {
+    "title": "In The Name Of Scheherazade Or The First Beergarden In Tehran",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "In The Name Of Scheherazade Or The First Beergarden In Tehran",
+    "sim": 1
+  },
+  {
+    "title": "INVINCIBLE",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "INVINCIBLE",
+    "sim": 1
+  },
+  {
+    "title": "Mahaprabhu Jagannath",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Mahaprabhu Jagannath",
+    "sim": 1
+  },
+  {
+    "title": "Jai Bhajarangi",
+    "fixed": [
+      "genre",
+      "language"
+    ],
+    "tmdbMatch": "Jai Bhajarangi",
+    "sim": null
+  },
+  {
+    "title": "Dilse",
+    "fixed": [
+      "poster",
+      "description",
+      "genre",
+      "language"
+    ],
+    "tmdbMatch": "Dilse",
+    "sim": null
+  },
+  {
+    "title": "The Second Best Hospital in the Galaxy",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Second Best Hospital in the Galaxy",
+    "sim": 1
+  },
+  {
+    "title": "Manal Pakshikal",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "super undi okasari checkout cheyandi",
+    "fixed": [
+      "title_cleaned"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "The Academy of Fine Arts",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Academy of Fine Arts",
+    "sim": 1
+  },
+  {
+    "title": "A.R.M",
+    "fixed": [
+      "poster",
+      "description",
+      "rating",
+      "genre",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "A.R.M",
+    "sim": null
+  },
+  {
+    "title": "The Spy Family",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "tmdbId",
+      "genre",
+      "type",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "The Spy Family",
+    "sim": 1
+  },
+  {
+    "title": "The Flowers Are Blooming",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Flowers Are Blooming",
+    "sim": 1
+  },
+  {
+    "title": "Dacoit",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Dacoit",
+    "sim": 1
+  },
+  {
+    "title": "Zig and Sharko",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "tmdbId",
+      "genre",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "Zig and Sharko",
+    "sim": 1
+  },
+  {
+    "title": "Henry and Anne: The Lovers Who Changed History",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "totalSeasons",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Henry and Anne: The Lovers Who Changed History",
+    "sim": 1
+  },
+  {
+    "title": "Keladi Kannmanii",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "TRON: Legacy",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "TRON: Legacy",
+    "sim": 1
+  },
+  {
+    "title": "1 Joining the Channel Group",
+    "fixed": [
+      "title_cleaned"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Simbaa",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Simbaa",
+    "sim": 1
+  },
+  {
+    "title": "Malgudi Days SWEETS FOR ANGELS KAALI",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Jai Hanuman",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "tmdbId",
+      "genre",
+      "language",
+      "type"
+    ],
+    "tmdbMatch": "Jai Hanuman",
+    "sim": 1
+  },
+  {
+    "title": "Malgudi Days THE GOLD BELT SONE KA KAMARBANDH",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days THE MISSING MAIL DAAKIYA",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days THE HOARD MAHAKANJOOS",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days THE GATEMANS GIFT GOVIND SINGH KI BHET",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days THE EDGE DHARA",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days THE DOCTORS WORD AAKHRI BAAT",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days THE CAREER RAMJI KI LEELA",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days NAMAK AUR CHINI 2",
+    "fixed": [
+      "title_cleaned"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Malgudi Days NAMAK AUR CHINI 1",
+    "fixed": [
+      "title_cleaned"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "I Need My Driving License",
+    "fixed": [
+      "poster",
+      "description",
+      "tmdbId",
+      "genre",
+      "title_canonical"
+    ],
+    "tmdbMatch": "I Need My Driving License",
+    "sim": 1
+  },
+  {
+    "title": "Malgudi Days THE SNAKE SONG SAAP KA RAAG",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days ROMAN IMAGE ROM KI MURTI",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days NITYA",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days NEIGHBOURS HELP PADOSI KI MADAD",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days NAGA PART 2",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days MINISTER WITHOUT PORTFOLIO BINA KURSI KA MANTRI",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days LEELAS FRIEND SIDDHA",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days LAWLEY ROAD PART 2",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days LAWLEY ROAD PART 1",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days ISHWARAN",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days FOUR RUPEES CHAAR RUPAYE",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days FORTY FIVE A MONTH 45 RUPAYE",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days THE PERFORMING CHILD ABHINETRI",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days THE SEVENTH HOUSE SAATWA GHAR",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days TRAIL OF THE GREEN BLAZER POCKETMAAR",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days THE WATCHMAN CHAUKIDAAR",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days DODU",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days ENGINE TROUBLE KAHANI ENGINE KI",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Jai Lava Kusa",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Jai Lava Kusa",
+    "sim": 1
+  },
+  {
+    "title": "Malgudi Days CAT WITHIN PAAP KA GHADA",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days THE ANTIDOTE ANDHAVISHWAS",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days ANNAMALAI PART 2",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "FCUK: Father Chitti Umaa Kaarthik",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "FCUK: Father Chitti Umaa Kaarthik",
+    "sim": 1
+  },
+  {
+    "title": "Malgudi Days ANNAMALAI PART 1",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days A WILLING SLAVE AAYA",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days AN ASTROLOGERS DAY",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days A HORSE AND TWO GOATS",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days A HERO",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days SWAMI AND FRIENDS 8",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days SWAMI AND FRIENDS 7",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days SWAMI AND FRIENDS 6",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days SWAMI AND FRIENDS 5",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days SWAMI AND FRIENDS 4",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days SWAMI AND FRIENDS 3",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days SWAMI AND FRIENDS 2",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Malgudi Days SWAMI AND FRIENDS 1",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Khatarnak Ishq",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Chhupa Rustam: A Musical Thriller",
+    "fixed": [
+      "poster",
+      "description",
+      "rating",
+      "genre",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Chhupa Rustam: A Musical Thriller",
+    "sim": null
+  },
+  {
+    "title": "Hindustani Yodha",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Holiday",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Holiday",
+    "sim": 1
+  },
+  {
+    "title": "The Gulf",
+    "fixed": [
+      "poster",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Gulf",
+    "sim": 1
+  },
+  {
+    "title": "Aashique Mastane",
+    "fixed": [
+      "description",
+      "rating",
+      "genre"
+    ],
+    "tmdbMatch": "Aashique Mastane",
+    "sim": null
+  },
+  {
+    "title": "Gupt: The Hidden Truth",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Gupt: The Hidden Truth",
+    "sim": 1
+  },
+  {
+    "title": "Pokémon Journeys: The Series",
+    "fixed": [
+      "poster",
+      "description",
+      "rating",
+      "genre",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "Pokémon Journeys: The Series",
+    "sim": null
+  },
+  {
+    "title": "Pokémon the Movie: Diancie and the Cocoon of Destruction",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Pokémon the Movie: Diancie and the Cocoon of Destruction",
+    "sim": 1
+  },
+  {
+    "title": "Aadu 3 Part 1",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Aadu 3 Part 1",
+    "sim": 1
+  },
+  {
+    "title": "Seethamma Vakitlo Sirimalle Chettu",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Seethamma Vakitlo Sirimalle Chettu",
+    "sim": 1
+  },
+  {
+    "title": "The Lovely Dog",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Nawab Cafe",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Nawab Cafe",
+    "sim": 1
+  },
+  {
+    "title": "The Academy of Fine Arts: The Series",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Academy of Fine Arts: The Series",
+    "sim": 1
+  },
+  {
+    "title": "Who's Your Gynac",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Who's Your Gynac",
+    "sim": 1
+  },
+  {
+    "title": "Warrant Karuppu s Troubled Past",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Warrant Feared Yet Trusted",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Warrant The Honey Trap",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Memu Copulam",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Memu Copulam",
+    "sim": 1
+  },
+  {
+    "title": "Ayan",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Ayan",
+    "sim": 1
+  },
+  {
+    "title": "Warrant An Attack That Changed Karuppu s Life",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "A Man on the Inside",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "A Man on the Inside",
+    "sim": 1
+  },
+  {
+    "title": "Sesha Pratikshya",
+    "fixed": [
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "Sesha Pratikshya",
+    "sim": 1
+  },
+  {
+    "title": "Version Raw Undekha",
+    "fixed": [
+      "title_cleaned",
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "3 month premium plan",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Satan - The Dark",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Satan - The Dark",
+    "sim": 1
+  },
+  {
+    "title": "Dragon Glimpse NTR Anil Kapoor Rukmini Vasanth Ravi Basrur Prashanth Neel webm",
+    "fixed": [
+      "title_cleaned",
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Dragon Glimpse NTR Anil Kapoor Rukmini Vasanth Ravi Basrur Prashanth Neel 2160p24fps 22790 webm",
+    "fixed": [
+      "title_cleaned",
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Download using 1DM",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Eden of the East Movie I: The King of Eden",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Eden of the East Movie I: The King of Eden",
+    "sim": 1
+  },
+  {
+    "title": "Pyaar Toh Hona Hi Tha",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Permanent Discord Server Link HubNews 4KHDHub Updates",
+    "fixed": [
+      "title_cleaned"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Good Omens",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters"
+    ],
+    "tmdbMatch": "Good Omens",
+    "sim": 1
+  },
+  {
+    "title": "Dhurandhar: The Revenge",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Dhurandhar: The Revenge",
+    "sim": 1
+  },
+  {
+    "title": "Money Heist",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "totalSeasons",
+      "seasonPosters",
+      "language"
+    ],
+    "tmdbMatch": "Money Heist",
+    "sim": 1
+  },
+  {
+    "title": "Dhurandhar: The Revenge",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Dhurandhar: The Revenge",
+    "sim": 1
+  },
+  {
+    "title": "The Punisher: One Last Kill",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Punisher: One Last Kill",
+    "sim": 1
+  },
+  {
+    "title": "Bornoporichoy: Grammar Of Death",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Bornoporichoy: Grammar Of Death",
+    "sim": 1
+  },
+  {
+    "title": "Jamie Vardy",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Jamie Vardy",
+    "sim": 1
+  },
+  {
+    "title": "Imam al‑Ghazali, the Proof of Islam",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "Imam al‑Ghazali, the Proof of Islam",
+    "sim": 1
+  },
+  {
+    "title": "Project Hail Mary",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language"
+    ],
+    "tmdbMatch": "Project Hail Mary",
+    "sim": 1
+  },
+  {
+    "title": "TNT SPORTS 1 FHD",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "LIVE NOW UFC 328",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Frieren: Beyond Journey's End",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Frieren: Beyond Journey's End",
+    "sim": 1
+  },
+  {
+    "title": "24: India",
+    "fixed": [
+      "poster",
+      "description",
+      "rating",
+      "genre",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "24: India",
+    "sim": null
+  },
+  {
+    "title": "Kaathal - The Core",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Kaathal - The Core",
+    "sim": 1
+  },
+  {
+    "title": "SMASH HITZ VOL 4",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Daredevil: Born Again",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Daredevil: Born Again",
+    "sim": 1
+  },
+  {
+    "title": "The Boys",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Boys",
+    "sim": 1
+  },
+  {
+    "title": "The Boys",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Boys",
+    "sim": 1
+  },
+  {
+    "title": "Chhota Bheem and Little Singham: The Rise of Betal",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Chhota Bheem and Little Singham: The Rise of Betal",
+    "sim": 1
+  },
+  {
+    "title": "Counting Start",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "www telugumv net Biker",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "www telugumv net The Kerala Story 2",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "www telugumv net Project Y",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "The Great Indian Kapil Show",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Great Indian Kapil Show",
+    "sim": 1
+  },
+  {
+    "title": "Aata Grand Finale Chapter 1",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Kuttram 23",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Kuttram 23",
+    "sim": 1
+  },
+  {
+    "title": "Sarkaar",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Sarkaar",
+    "sim": 1
+  },
+  {
+    "title": "kingpin ka fake post sola diya",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Widow's Bay",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Widow's Bay",
+    "sim": 1
+  },
+  {
+    "title": "Criminal Record",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Criminal Record",
+    "sim": 1
+  },
+  {
+    "title": "Your Friends & Neighbors",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Your Friends & Neighbors",
+    "sim": 1
+  },
+  {
+    "title": "Batchmates What the Engineering",
+    "fixed": [
+      "title_cleaned"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Batchmates What the Engineering",
+    "fixed": [
+      "title_cleaned",
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Criminal Record",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Criminal Record",
+    "sim": 1
+  },
+  {
+    "title": "From Fray",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "18 Black Girls and Boys Ages 1-18 Who Have Arrived at the Singularity and are thus Spiritual Machines: $9 in an Edition of $97 Quadrillion",
+    "fixed": [
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "18 Black Girls and Boys Ages 1-18 Who Have Arrived at the Singularity and are thus Spiritual Machines: $9 in an Edition of $97 Quadrillion",
+    "sim": 1
+  },
+  {
+    "title": "Daredevil: Born Again",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Daredevil: Born Again",
+    "sim": 1
+  },
+  {
+    "title": "Rebel Moon - Part One: A Child of Fire",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Rebel Moon - Part One: A Child of Fire",
+    "sim": 1
+  },
+  {
+    "title": "Rebel Moon - Part Two: The Scargiver",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Rebel Moon - Part Two: The Scargiver",
+    "sim": 1
+  },
+  {
+    "title": "The Goat Life",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Goat Life",
+    "sim": 1
+  },
+  {
+    "title": "M3GAN",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language"
+    ],
+    "tmdbMatch": "M3GAN",
+    "sim": 1
+  },
+  {
+    "title": "Allari Premikudu",
+    "fixed": [
+      "poster",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Allari Premikudu",
+    "sim": 1
+  },
+  {
+    "title": "Ek Mini Katha",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Ek Mini Katha",
+    "sim": 1
+  },
+  {
+    "title": "Aata Eliminator Round Part 1",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Sarkaar",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Sarkaar",
+    "sim": 1
+  },
+  {
+    "title": "Thimmarusu: Assignment Vali",
+    "fixed": [
+      "poster",
+      "description",
+      "rating",
+      "genre",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Thimmarusu: Assignment Vali",
+    "sim": null
+  },
+  {
+    "title": "Daredevil: Born Again",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Daredevil: Born Again",
+    "sim": 1
+  },
+  {
+    "title": "O2 2022",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Hulk Hogan: Real American",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Hulk Hogan: Real American",
+    "sim": 1
+  },
+  {
+    "title": "King of Boys: The Return of the King",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "King of Boys: The Return of the King",
+    "sim": 1
+  },
+  {
+    "title": "KO 2011",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "The Inspired Unemployed (Impractical) Jokers",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Inspired Unemployed (Impractical) Jokers",
+    "sim": 1
+  },
+  {
+    "title": "The Boys from Brazil: Rise of the Bolsonaros",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Boys from Brazil: Rise of the Bolsonaros",
+    "sim": 1
+  },
+  {
+    "title": "Marvel Studios The Avengers",
+    "fixed": [
+      "title_cleaned",
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Ivan Megharoopan",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "rating",
+      "genre",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "Ivan Megharoopan",
+    "sim": null
+  },
+  {
+    "title": "www telugumv net Sabdham",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "www telugumv net Ustaad Bhagat Singh",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Sambavam Adhyayam Onnu",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Aata Contestants Compete for a Ticket to Finale",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Sarkaar",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Sarkaar",
+    "sim": 1
+  },
+  {
+    "title": "Engal Aasan",
+    "fixed": [
+      "poster",
+      "description",
+      "genre",
+      "language"
+    ],
+    "tmdbMatch": "Engal Aasan",
+    "sim": null
+  },
+  {
+    "title": "Ibn-i Sina: The Young Genius",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "Ibn-i Sina: The Young Genius",
+    "sim": 1
+  },
+  {
+    "title": "Ibn-i Sina: The Young Genius",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "Ibn-i Sina: The Young Genius",
+    "sim": 1
+  },
+  {
+    "title": "Badass Ravikumar",
+    "fixed": [
+      "poster",
+      "description",
+      "rating",
+      "genre",
+      "language"
+    ],
+    "tmdbMatch": "Badass Ravikumar",
+    "sim": null
+  },
+  {
+    "title": "The Underlings",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Ayan",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "rating",
+      "genre",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "Ayan",
+    "sim": null
+  },
+  {
+    "title": "Matka King",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Matka King",
+    "sim": 1
+  },
+  {
+    "title": "Ghostbusters",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Ghostbusters",
+    "sim": 1
+  },
+  {
+    "title": "Daredevil: Born Again",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Daredevil: Born Again",
+    "sim": 1
+  },
+  {
+    "title": "The Boys",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Boys",
+    "sim": 1
+  },
+  {
+    "title": "Daredevil: Born Again",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Daredevil: Born Again",
+    "sim": 1
+  },
+  {
+    "title": "Aap Kaise Ho?",
+    "fixed": [
+      "poster",
+      "description",
+      "rating",
+      "genre",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "Aap Kaise Ho?",
+    "sim": null
+  },
+  {
+    "title": "Merge Available",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Sarkaar",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Sarkaar",
+    "sim": 1
+  },
+  {
+    "title": "Aata Padmaja Konidela Raasi and Thiruveer",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "LIK Launch April 12",
+    "fixed": [
+      "title_cleaned",
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Strictly Pussy #2",
+    "fixed": [
+      "genre",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "Strictly Pussy #2",
+    "sim": null
+  },
+  {
+    "title": "Kachi Umar Mein",
+    "fixed": [
+      "genre",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Kachi Umar Mein",
+    "sim": null
+  },
+  {
+    "title": "Dorohedoro Golden Beetles are Rich Cute Butcher Door to the Past",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "The Incongruent Congruent Outlook of Two Insecure Teenage Boys",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "tmdbId",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Incongruent Congruent Outlook of Two Insecure Teenage Boys",
+    "sim": 1
+  },
+  {
+    "title": "XO, Kitty",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "XO, Kitty",
+    "sim": 1
+  },
+  {
+    "title": "Dorohedoro Sweet Home Shining Youth Memories Keep Circling Round and Round Come Back Home",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Invincible GIVE US A MOMENT",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Invincible THIS MUST COME AS A SHOCK",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Rooster Angry Like An Angry Person",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Fullmetal Alchemist Brotherhood The Fifth Laboratory",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Color Theories by Julio Torres. A Guide to Seeing the World",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Color Theories by Julio Torres. A Guide to Seeing the World",
+    "sim": 1
+  },
+  {
+    "title": "Rooster Release the Brown Fat",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Rooster Trousers",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Rooster White Whale",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "La unidad",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "La unidad",
+    "sim": 1
+  },
+  {
+    "title": "Invincible MAKING THE WORLD A BETTER PLACE",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Fullmetal Alchemist Brotherhood Fullmetal Alchemist",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Choran Naal Yarian",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "KGF: Marathi Spoof",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "genre",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "KGF: Marathi Spoof",
+    "sim": null
+  },
+  {
+    "title": "Thugs of Hindostan",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Thugs of Hindostan",
+    "sim": 1
+  },
+  {
+    "title": "Tillu Square",
+    "fixed": [
+      "poster",
+      "description",
+      "rating",
+      "genre",
+      "language"
+    ],
+    "tmdbMatch": "Tillu Square",
+    "sim": null
+  },
+  {
+    "title": "Few Titles Manifest Keys",
+    "fixed": [
+      "title_cleaned"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Aata",
+    "fixed": [
+      "poster",
+      "description",
+      "tmdbId",
+      "language",
+      "totalSeasons",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Aata",
+    "sim": 1
+  },
+  {
+    "title": "Pushpa 2 - The Rule",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Pushpa 2 - The Rule",
+    "sim": 1
+  },
+  {
+    "title": "Premante Thrillu Prapthirasthu",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "The Boys",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Boys",
+    "sim": 1
+  },
+  {
+    "title": "The Boys",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Boys",
+    "sim": 1
+  },
+  {
+    "title": "Daredevil: Born Again",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Daredevil: Born Again",
+    "sim": 1
+  },
+  {
+    "title": "PREMAKATHA CHITRAM",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "ALL Quality's DUMP CATALOG 1",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "ALL Quality's DUMP CATALOG 20",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Saroja Samannikkallo",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Checkout",
+    "fixed": [
+      "rating"
+    ],
+    "tmdbMatch": "Checkout",
+    "sim": 1
+  },
+  {
+    "title": "Sarkaar",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Sarkaar",
+    "sim": 1
+  },
+  {
+    "title": "Aata Kavya and Vishnu Priyas Teams",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Avatar",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language"
+    ],
+    "tmdbMatch": "Avatar",
+    "sim": 1
+  },
+  {
+    "title": "ORANGE",
+    "fixed": [
+      "title_cleaned",
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Daredevil: Born Again",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Daredevil: Born Again",
+    "sim": 1
+  },
+  {
+    "title": "Match Fixing - The Nation At Stake",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Match Fixing - The Nation At Stake",
+    "sim": 1
+  },
+  {
+    "title": "ALL Quality's DUMP CATALOG 10",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Dino Birds",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "tmdbId",
+      "genre",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Dino Birds",
+    "sim": 1
+  },
+  {
+    "title": "Lost Ladies",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Lost Ladies",
+    "sim": 1
+  },
+  {
+    "title": "TOP 55 UNPLUGGED VOL 1",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Aata Mahesh Achanta and Pranavi Arrive as",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Sarkaar",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Sarkaar",
+    "sim": 1
+  },
+  {
+    "title": "Star Wars: Episode I - The Phantom Menace",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Star Wars: Episode I - The Phantom Menace",
+    "sim": 1
+  },
+  {
+    "title": "90s",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Masthishka Maranam",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Masthishka Maranam",
+    "sim": 1
+  },
+  {
+    "title": "The Red Line",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "The Red Line",
+    "sim": 1
+  },
+  {
+    "title": "Higher Bitrate",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Pushpa 2 - The Rule",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Pushpa 2 - The Rule",
+    "sim": 1
+  },
+  {
+    "title": "LOWER BITRATES",
+    "fixed": [
+      "title_cleaned",
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Aata Kavya and Vamshis Team",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Durlabh Prasad Ki Dusri Shadi",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Durlabh Prasad Ki Dusri Shadi",
+    "sim": 1
+  },
+  {
+    "title": "Sarkaar",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Sarkaar",
+    "sim": 1
+  },
+  {
+    "title": "Kaliyugam",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Kaliyugam",
+    "sim": 1
+  },
+  {
+    "title": "Spider Mantm Far From Home",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Spider Mantm Homecoming",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "All the Best",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Spider Mantm 3",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Spider Mantm 2",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Spider Mantm",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Shubbh Mangalam",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Spider Mantm Across the Spider Verse",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Iron Man",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language"
+    ],
+    "tmdbMatch": "Iron Man",
+    "sim": 1
+  },
+  {
+    "title": "Sri Bharatha Baahubali",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Sri Bharatha Baahubali",
+    "sim": 1
+  },
+  {
+    "title": "SDDD",
+    "fixed": [
+      "poster",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "SDDD",
+    "sim": 1
+  },
+  {
+    "title": "Aata The Team of Band Melam Joins the Show",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "First Time On The Front Line",
+    "fixed": [
+      "poster",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "totalSeasons",
+      "title_canonical"
+    ],
+    "tmdbMatch": "First Time On The Front Line",
+    "sim": 1
+  },
+  {
+    "title": "Sarkaar",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Sarkaar",
+    "sim": 1
+  },
+  {
+    "title": "India vs England",
+    "fixed": [
+      "poster",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "India vs England",
+    "sim": 1
+  },
+  {
+    "title": "Sarkaar",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Sarkaar",
+    "sim": 1
+  },
+  {
+    "title": "Aata Harish Shankar and Naga Babu Join as Special Guests",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Kadaisi Ulaga Por",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Kadaisi Ulaga Por",
+    "sim": 1
+  },
+  {
+    "title": "Aata The Players Bid for Talented Dancers",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Aata The Valentines Week For Special Start",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Allegiant",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Allegiant",
+    "sim": 1
+  },
+  {
+    "title": "Insurgent",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Insurgent",
+    "sim": 1
+  },
+  {
+    "title": "Sarkaar",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Sarkaar",
+    "sim": 1
+  },
+  {
+    "title": "Formula 1: Drive to Survive",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Formula 1: Drive to Survive",
+    "sim": 1
+  },
+  {
+    "title": "Anacondas",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Hotspot 2 Much",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Hotspot 2 Much",
+    "sim": 1
+  },
+  {
+    "title": "D/O Prasad Rao: Kanabadutaledu",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "D/O Prasad Rao: Kanabadutaledu",
+    "sim": 1
+  },
+  {
+    "title": "Do Prasad Rao Kanabadutaledhu",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "The Greatest Rivalry: India vs Pakistan",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Greatest Rivalry: India vs Pakistan",
+    "sim": 1
+  },
+  {
+    "title": "Yevadu iso",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "The HousemaidNow Available",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Secrets of Palace coup d'etat. Russia, 18th century. Film №6. The Death of the Young Emperor",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "Secrets of Palace coup d'etat. Russia, 18th century. Film №6. The Death of the Young Emperor",
+    "sim": 1
+  },
+  {
+    "title": "Love Story",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Love Story",
+    "sim": 1
+  },
+  {
+    "title": "The Official Game of Thrones Podcast: A Knight of the Seven Kingdoms",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Official Game of Thrones Podcast: A Knight of the Seven Kingdoms",
+    "sim": 1
+  },
+  {
+    "title": "Jamtara – Sabka Number Ayega",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Jamtara – Sabka Number Ayega",
+    "sim": 1
+  },
+  {
+    "title": "Konchem Ishtam Konchem Kashtam",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Konchem Ishtam Konchem Kashtam",
+    "sim": 1
+  },
+  {
+    "title": "The Night Agent",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Night Agent",
+    "sim": 1
+  },
+  {
+    "title": "Parasakthi Uncensored Version",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Mahabharatham TO 50 7z",
+    "fixed": [
+      "title_cleaned",
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Ballerina",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Ballerina",
+    "sim": 1
+  },
+  {
+    "title": "Hybrid",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Hybrid",
+    "sim": 1
+  },
+  {
+    "title": "Made in India - ICC Men’s Cricket World Cup 2023",
+    "fixed": [
+      "title_cleaned",
+      "description",
+      "tmdbId",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Made in India - ICC Men’s Cricket World Cup 2023",
+    "sim": 1
+  },
+  {
+    "title": "Check here",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "The Roses",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Roses",
+    "sim": 1
+  },
+  {
+    "title": "Hybrid",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "description",
+      "tmdbId",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Hybrid",
+    "sim": 1
+  },
+  {
+    "title": "LBW: Love Beyond Wicket",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "LBW: Love Beyond Wicket",
+    "sim": 1
+  },
+  {
+    "title": "Avvai Shanmugi",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Avvai Shanmugi",
+    "sim": 1
+  },
+  {
+    "title": "Tollywood",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "LBW: Love Beyond Wicket",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "LBW: Love Beyond Wicket",
+    "sim": 1
+  },
+  {
+    "title": "LBW: Love Beyond Wicket",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "LBW: Love Beyond Wicket",
+    "sim": 1
+  },
+  {
+    "title": "The Fable",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Fable",
+    "sim": 1
+  },
+  {
+    "title": "KA 2024",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "LBW: Love Beyond Wicket",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "LBW: Love Beyond Wicket",
+    "sim": 1
+  },
+  {
+    "title": "LBW: Love Beyond Wicket",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "LBW: Love Beyond Wicket",
+    "sim": 1
+  },
+  {
+    "title": "Nadu Center",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Nadu Center",
+    "sim": 1
+  },
+  {
+    "title": "Nadu Center",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Nadu Center",
+    "sim": 1
+  },
+  {
+    "title": "Nadu Center",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Nadu Center",
+    "sim": 1
+  },
+  {
+    "title": "Nadu Center",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Nadu Center",
+    "sim": 1
+  },
+  {
+    "title": "Nadu Center",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Nadu Center",
+    "sim": 1
+  },
+  {
+    "title": "Nadu Center",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Nadu Center",
+    "sim": 1
+  },
+  {
+    "title": "Kadoma City Zombie Human Resources Center",
+    "fixed": [
+      "poster",
+      "description",
+      "tmdbId",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Kadoma City Zombie Human Resources Center",
+    "sim": 1
+  },
+  {
+    "title": "5D 2024",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Arjun Chakravarthy: Journey of an Unsung Champion",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Arjun Chakravarthy: Journey of an Unsung Champion",
+    "sim": 1
+  },
+  {
+    "title": "Shakthi Thirumagan",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Shakthi Thirumagan",
+    "sim": 1
+  },
+  {
+    "title": "Inside North Korea: The Next Leader",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Inside North Korea: The Next Leader",
+    "sim": 1
+  },
+  {
+    "title": "Sarangapani Kundali",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Hari Hara Veera Mallu: Part 1 – Sword vs Spirit",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Hari Hara Veera Mallu: Part 1 – Sword vs Spirit",
+    "sim": 1
+  },
+  {
+    "title": "Raaz Rangon Ka",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Maa Nanna Superhero",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Maa Nanna Superhero",
+    "sim": 1
+  },
+  {
+    "title": "Kamasutra 3D",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Kamasutra 3D",
+    "sim": 1
+  },
+  {
+    "title": "Kerala Crime Files",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "tmdbId",
+      "language",
+      "totalSeasons",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Kerala Crime Files",
+    "sim": 1
+  },
+  {
+    "title": "Kesari Chapter 2: The Untold Story of Jallianwala Bagh",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Kesari Chapter 2: The Untold Story of Jallianwala Bagh",
+    "sim": 1
+  },
+  {
+    "title": "Deep Bay Of Bengal",
+    "fixed": [
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Deep Bay Of Bengal",
+    "sim": 1
+  },
+  {
+    "title": "King Xians Worm Valley of Ghost Blowing Lamp",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Hai Junoon!",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Hai Junoon!",
+    "sim": 1
+  },
+  {
+    "title": "Hasratein",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Hasratein",
+    "sim": 1
+  },
+  {
+    "title": "Identity",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Identity",
+    "sim": 1
+  },
+  {
+    "title": "Touch Me Not",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Touch Me Not",
+    "sim": 1
+  },
+  {
+    "title": "Om Kali Jai Kali",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Om Kali Jai Kali",
+    "sim": 1
+  },
+  {
+    "title": "Kanneda Assin Munde Aan Punjab De",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Love Under Construction",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Love Under Construction",
+    "sim": 1
+  },
+  {
+    "title": "29th February",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "29th February",
+    "sim": 1
+  },
+  {
+    "title": "Goldmine Play Movie From PrimeVideo India By PTC",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "The Fast and the Furious",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Fast and the Furious",
+    "sim": 1
+  },
+  {
+    "title": "REMASTERED",
+    "fixed": [
+      "title_cleaned",
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "DL",
+    "fixed": [
+      "title_cleaned",
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Ku'damm 56 – Rebel with a Cause",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "type",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Ku'damm 56 – Rebel with a Cause",
+    "sim": 1
+  },
+  {
+    "title": "Peter Rabbit",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Peter Rabbit",
+    "sim": 1
+  },
+  {
+    "title": "Tribhanga",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Tribhanga",
+    "sim": 1
+  },
+  {
+    "title": "Seeking Seinfeld",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Seeking Seinfeld",
+    "sim": 1
+  },
+  {
+    "title": "Lokah The Chapter 1 Chandra",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Saripodha Sanivaram",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "How to Sell Drugs Online (Fast)",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "How to Sell Drugs Online (Fast)",
+    "sim": 1
+  },
+  {
+    "title": "The End of the F***ing World",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The End of the F***ing World",
+    "sim": 1
+  },
+  {
+    "title": "Panipat The Great Betrayal",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Nene Vasthunna",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "19 YEARS OF DHOOM 2",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "F1",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "F1",
+    "sim": 1
+  },
+  {
+    "title": "Pluribus Grenade",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Eeee Rojulloo",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Veerasivaji",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Veerasivaji",
+    "sim": 1
+  },
+  {
+    "title": "Pluribus We Is Us",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "The Railway Men - The Untold Story of Bhopal 1984",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Railway Men - The Untold Story of Bhopal 1984",
+    "sim": 1
+  },
+  {
+    "title": "Shadowhunters The Mortal Instruments",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "FIRSTONNET",
+    "fixed": [
+      "title_cleaned",
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "She",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Mai: A Mother's Rage",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Mai: A Mother's Rage",
+    "sim": 1
+  },
+  {
+    "title": "Taxi Driver iso",
+    "fixed": [
+      "title_cleaned",
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Salaar TWBS 5402 iso",
+    "fixed": [
+      "title_cleaned",
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "You",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "I Love LA",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "I Love LA",
+    "sim": 1
+  },
+  {
+    "title": "Amazon Prime ISM",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "MCU DISNEY",
+    "fixed": [
+      "title_cleaned"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "On The Red Carpet Presents: \"Percy Jackson\"",
+    "fixed": [
+      "poster",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "On The Red Carpet Presents: \"Percy Jackson\"",
+    "sim": 1
+  },
+  {
+    "title": "Baahubali: The Lost Legends",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Baahubali: The Lost Legends",
+    "sim": 1
+  },
+  {
+    "title": "Odum Kuthira Chadum Kuthira",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Odum Kuthira Chadum Kuthira",
+    "sim": 1
+  },
+  {
+    "title": "House of Secrets: The Burari Deaths",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "House of Secrets: The Burari Deaths",
+    "sim": 1
+  },
+  {
+    "title": "M3GAN",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language"
+    ],
+    "tmdbMatch": "M3GAN",
+    "sim": 1
+  },
+  {
+    "title": "Four More Shots Please!",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Four More Shots Please!",
+    "sim": 1
+  },
+  {
+    "title": "The Great Indian Kapil Show",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Great Indian Kapil Show",
+    "sim": 1
+  },
+  {
+    "title": "3 Roses",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters"
+    ],
+    "tmdbMatch": "3 Roses",
+    "sim": 1
+  },
+  {
+    "title": "Sully",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Sully",
+    "sim": 1
+  },
+  {
+    "title": "Brotherhood of Blades II: The Infernal Battlefield",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "Brotherhood of Blades II: The Infernal Battlefield",
+    "sim": 1
+  },
+  {
+    "title": "One Last Adventure: The Making of Stranger Things 5",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "One Last Adventure: The Making of Stranger Things 5",
+    "sim": 1
+  },
+  {
+    "title": "Quality Good",
+    "fixed": [
+      "title_cleaned"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Shruti Madhur",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Sada Golap",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "One Last Adventure: The Making of Stranger Things 5",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "One Last Adventure: The Making of Stranger Things 5",
+    "sim": 1
+  },
+  {
+    "title": "My Friend Dahmer",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "My Friend Dahmer",
+    "sim": 1
+  },
+  {
+    "title": "These Are My Friends!",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "These Are My Friends!",
+    "sim": 1
+  },
+  {
+    "title": "TVDL",
+    "fixed": [
+      "title_cleaned"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "www telugumv sbs VARANASI to the WORLD",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "LIV 6 Month E Gift Voucher",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Actual Price 4000rs Now It's Absolutely Free",
+    "fixed": [
+      "title_cleaned"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "One Last Adventure: The Making of Stranger Things 5",
+    "fixed": [
+      "title_cleaned",
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "One Last Adventure: The Making of Stranger Things 5",
+    "sim": 1
+  },
+  {
+    "title": "One Last Adventure: The Making of Stranger Things 5",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "One Last Adventure: The Making of Stranger Things 5",
+    "sim": 1
+  },
+  {
+    "title": "The Tiger",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "The Tiger",
+    "sim": 1
+  },
+  {
+    "title": "Kuttram Purindhavan",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Kuttram Purindhavan",
+    "sim": 1
+  },
+  {
+    "title": "Drunken Slug Registration Open 29 11",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "I Put a Spell on You: The Sanderson Sisters Break the Internet",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "tmdbId",
+      "genre",
+      "language",
+      "title_canonical"
+    ],
+    "tmdbMatch": "I Put a Spell on You: The Sanderson Sisters Break the Internet",
+    "sim": 1
+  },
+  {
+    "title": "Apple Cider Vinegar",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Apple Cider Vinegar",
+    "sim": 1
+  },
+  {
+    "title": "KathaSudha WS Ego",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "One Baattle After Another",
+    "fixed": [
+      "language"
+    ],
+    "tmdbMatch": null,
+    "sim": null
+  },
+  {
+    "title": "Putulnacher Itikatha",
+    "fixed": [
+      "None"
+    ],
+    "reason": "No TMDB/OMDB match"
+  },
+  {
+    "title": "Beckenbauer. Der letzte Kaiser",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "totalSeasons",
+      "seasonPosters",
+      "title_canonical",
+      "language"
+    ],
+    "tmdbMatch": "Beckenbauer. Der letzte Kaiser",
+    "sim": 1
+  },
+  {
+    "title": "Boss Engira Baskaran",
+    "fixed": [
+      "poster",
+      "backdrop",
+      "description",
+      "rating",
+      "tmdbId",
+      "genre",
+      "language",
+      "type",
+      "title_canonical"
+    ],
+    "tmdbMatch": "Boss Engira Baskaran",
+    "sim": 1
+  }
+]

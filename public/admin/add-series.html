@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Series - XLOOP Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <aside class="admin-sidebar">
+      <div class="admin-logo">XLOOP Admin</div>
+      <nav class="admin-nav">
+        <a href="/admin/dashboard.html">Dashboard</a>
+        <a href="/admin/add-movie.html">+ Add Movie</a>
+        <a href="/admin/add-series.html" class="active">+ Add Series</a>
+        <a href="/admin/fix-posters.html"> Fix Posters</a>
+        <a href="/admin/scraper.html"> Scraper</a>
+      <a href="/admin/orchestrator.html"> Orchestrator</a>
+        <a href="/" target="_blank" style="margin-top:auto; border-top:1px solid var(--border); border-radius:0; padding-top:16px;">View Site ↗</a>
+        <a href="#" onclick="logout()" style="color:var(--red);">Logout</a>
+      </nav>
+    </aside>
+    
+    <main class="admin-content">
+      <h1 class="admin-page-title">Add New Series</h1>
+
+      <!-- QUICK PASTE SECTION -->
+      <div class="form-card" style="margin-bottom:20px; border: 1px solid var(--accent);">
+        <h2 style="font-size:1.1rem; font-weight:600; margin-bottom:10px; color:var(--text);"> Quick Paste Auto-Import</h2>
+        <p style="font-size:0.85rem; color:var(--text2); margin-bottom:12px;">
+          Paste text exactly as you would send it on Telegram (filename + URL). The system will automatically detect the series, fetch TMDB posters, and publish it immediately.
+        </p>
+        <textarea id="quick-paste-text" rows="5" class="form-input" placeholder="Citadel.Honey.Bunny.S01E01.1080p.mkv&#10;https://gdflix.com/..."></textarea>
+        <div style="margin-top:12px; display:flex; align-items:center; gap:15px;">
+          <button type="button" class="btn-primary" onclick="submitQuickPaste()"> Auto Process & Publish</button>
+          <span id="quick-paste-status" style="font-size:0.85rem; font-weight:600;"></span>
+        </div>
+      </div>
+
+      <h2 style="font-size:1.1rem; font-weight:600; margin-bottom:15px; color:var(--text);"> Manual Entry (Overrides)</h2>
+
+      <form class="form-card" id="seriesForm">
+        <div class="form-grid">
+          <div class="form-group full">
+            <label class="form-label">Series Title</label>
+            <input type="text" id="title" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Poster URL</label>
+            <input type="url" id="poster" class="form-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Backdrop URL</label>
+            <input type="url" id="backdrop" class="form-input">
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Description</label>
+            <textarea id="description" class="form-textarea"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Genres (comma separated)</label>
+            <input type="text" id="genre" class="form-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Year</label>
+            <input type="number" id="year" class="form-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rating (0-10)</label>
+            <input type="number" step="0.1" id="rating" class="form-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select id="status" class="form-select">
+              <option value="Ongoing">Ongoing</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
+          <div class="form-group full" style="display:flex; gap:20px; align-items:center; margin-top:10px;">
+            <label class="form-toggle">
+              <div class="toggle" id="isFeatured"></div> Featured
+            </label>
+            <label class="form-toggle">
+              <div class="toggle" id="isTrending"></div> Trending
+            </label>
+          </div>
+        </div>
+        <div style="margin-top: 24px;">
+          <button type="submit" class="btn-primary">Create Series</button>
+        </div>
+      </form>
+
+      <hr style="border-color:var(--border); margin:40px 0;">
+
+      <h2 style="font-size:1.2rem; margin-bottom:20px;">Add Episode to Existing Series</h2>
+      
+      <form class="form-card" id="episodeForm">
+        <div class="form-grid">
+          <div class="form-group full">
+            <label class="form-label">Select Series</label>
+            <select id="seriesId" class="form-select" required>
+              <option value="">Loading series...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Season Number</label>
+            <input type="number" id="epSeason" class="form-input" value="1" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Episode Number</label>
+            <input type="number" id="epNumber" class="form-input" value="1" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Episode Title (Optional)</label>
+            <input type="text" id="epTitle" class="form-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stream Embed URL</label>
+            <input type="url" id="epStreamEmbed" class="form-input">
+          </div>
+        </div>
+
+        <h3 style="margin:24px 0 12px; font-size:1rem;">Episode Download Links (JSON Format)</h3>
+        <div class="form-group full">
+          <textarea id="epDownloadsJson" class="form-textarea" style="font-family:monospace; min-height:150px;"></textarea>
+        </div>
+
+        <div style="margin-top: 24px;">
+          <button type="submit" class="btn-primary">Add Episode</button>
+        </div>
+      </form>
+    </main>
+  </div>
+  
+  <div class="toast" id="toast">Message here</div>
+  <script src="/js/admin.js"></script>
+  <script>
+    checkAuth();
+    
+    // Toggles
+    let isFeatured = false; let isTrending = false;
+    document.getElementById('isFeatured').addEventListener('click', function() { isFeatured = !isFeatured; this.classList.toggle('on', isFeatured); });
+    document.getElementById('isTrending').addEventListener('click', function() { isTrending = !isTrending; this.classList.toggle('on', isTrending); });
+
+    // Load series for dropdown
+    async function loadSeriesDropdown() {
+      try {
+        const res = await fetch('/api/series?limit=100');
+        const data = await res.json();
+        const select = document.getElementById('seriesId');
+        select.innerHTML = '<option value="">Select a Series...</option>' + 
+          data.series.map(s => `<option value="${s._id}">${s.title}</option>`).join('');
+      } catch (err) { console.error('Failed to load series for dropdown'); }
+    }
+    loadSeriesDropdown();
+
+    // Create Series
+    document.getElementById('seriesForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const genreStr = document.getElementById('genre').value;
+      const genres = genreStr ? genreStr.split(',').map(s => s.trim()) : [];
+      
+      const payload = {
+        title: document.getElementById('title').value,
+        poster: document.getElementById('poster').value,
+        backdrop: document.getElementById('backdrop').value,
+        description: document.getElementById('description').value,
+        genre: genres,
+        year: parseInt(document.getElementById('year').value) || null,
+        rating: parseFloat(document.getElementById('rating').value) || 0,
+        status: document.getElementById('status').value,
+        isFeatured,
+        isTrending
+      };
+
+      try {
+        await apiFetch('/api/series', { method: 'POST', body: JSON.stringify(payload) });
+        showToast('Series created successfully!');
+        e.target.reset();
+        document.getElementById('isFeatured').classList.remove('on');
+        document.getElementById('isTrending').classList.remove('on');
+        isFeatured = false; isTrending = false;
+        loadSeriesDropdown();
+      } catch (err) { showToast(err.message, true); }
+    });
+
+    // Add Episode
+    document.getElementById('episodeForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const seriesId = document.getElementById('seriesId').value;
+      
+      let downloads = [];
+      const dlVal = document.getElementById('epDownloadsJson').value.trim();
+      if (dlVal) {
+        try { downloads = JSON.parse(dlVal); } 
+        catch (err) { return showToast('Invalid JSON in downloads field', true); }
+      }
+
+      const payload = {
+        season: parseInt(document.getElementById('epSeason').value),
+        episode: parseInt(document.getElementById('epNumber').value),
+        title: document.getElementById('epTitle').value,
+        streamEmbed: document.getElementById('epStreamEmbed').value,
+        downloads
+      };
+
+      try {
+        await apiFetch(`/api/series/${seriesId}/episodes`, { method: 'POST', body: JSON.stringify(payload) });
+        showToast('Episode added successfully!');
+        // clear partial form
+        document.getElementById('epNumber').value = parseInt(document.getElementById('epNumber').value) + 1;
+        document.getElementById('epTitle').value = '';
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+
+    // Quick Paste Auto-Import function
+    async function submitQuickPaste() {
+      const text = document.getElementById('quick-paste-text').value.trim();
+      const statusEl = document.getElementById('quick-paste-status');
+      if (!text) {
+        statusEl.textContent = 'Paste some text first!';
+        statusEl.style.color = 'var(--red)';
+        return;
+      }
+
+      const tmdbKey = localStorage.getItem('tmdb_key');
+      const omdbKey = localStorage.getItem('omdb_key');
+      
+      statusEl.textContent = '⏳ Processing...';
+      statusEl.style.color = 'var(--text2)';
+
+      try {
+        const data = await apiFetch('/api/import/bulk', {
+          method: 'POST',
+          body: JSON.stringify({ messages: [{ text }], tmdbKey, omdbKey })
+        });
+        
+        if (data.errors && data.errors.length > 0) {
+          statusEl.textContent = data.errors[0];
+          statusEl.style.color = 'var(--red)';
+        } else {
+          statusEl.textContent = ' Imported & Published successfully!';
+          statusEl.style.color = '#10b981';
+          document.getElementById('quick-paste-text').value = '';
+        }
+      } catch (err) {
+        statusEl.textContent = err.message;
+        statusEl.style.color = 'var(--red)';
+      }
+    }
+  </script>
+</body>
+</html>

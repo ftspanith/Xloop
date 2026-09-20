@@ -1,0 +1,30 @@
+{
+  "enabled": true,
+  "members": [
+    {
+      "name": "Member 1",
+      "token": "eeae6d1c51fdbc167df4b89ca1b04231",
+      "used": false
+    },
+    {
+      "name": "Member 2",
+      "token": "10d8361454873a7ddfc85b50e25b25f4",
+      "used": false
+    },
+    {
+      "name": "Member 3",
+      "token": "10c7f3cfcd9009e2d657e9913eec8782",
+      "used": false
+    },
+    {
+      "name": "Member 4",
+      "token": "4de5c5bb9f4d17ee0bbbcaf115492b72",
+      "used": false
+    },
+    {
+      "name": "Member 5",
+      "token": "8d8da35dfa90bfcfbc432fd8eb80faa5",
+      "used": false
+    }
+  ]
+}
