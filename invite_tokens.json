@@ -2,28 +2,28 @@
   "enabled": true,
   "members": [
     {
-      "name": "Member 1",
-      "token": "eeae6d1c51fdbc167df4b89ca1b04231",
+      "name": "Guest 1",
+      "token": "TEMP-INVITE-01",
       "used": false
     },
     {
-      "name": "Member 2",
-      "token": "10d8361454873a7ddfc85b50e25b25f4",
+      "name": "Guest 2",
+      "token": "TEMP-INVITE-02",
       "used": false
     },
     {
-      "name": "Member 3",
-      "token": "10c7f3cfcd9009e2d657e9913eec8782",
+      "name": "Guest 3",
+      "token": "TEMP-INVITE-03",
       "used": false
     },
     {
-      "name": "Member 4",
-      "token": "4de5c5bb9f4d17ee0bbbcaf115492b72",
+      "name": "Guest 4",
+      "token": "TEMP-INVITE-04",
       "used": false
     },
     {
-      "name": "Member 5",
-      "token": "8d8da35dfa90bfcfbc432fd8eb80faa5",
+      "name": "Guest 5",
+      "token": "TEMP-INVITE-05",
       "used": false
     }
   ]
