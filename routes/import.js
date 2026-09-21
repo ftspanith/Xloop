@@ -347,7 +347,57 @@ async function fetchOMDB(parsed, omdbKey) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  MASTER META FETCHER — TMDB + OMDB cross-validation
+//  IMDB SUGGESTION API (Fallback when TMDB/OMDB fail to find a poster)
+// ═══════════════════════════════════════════════════════════════
+async function fetchIMDB(parsed) {
+  try {
+    const title = cleanTitleForApi(parsed.title);
+    const query = title.toLowerCase().trim().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, '+');
+    const firstLet = query[0] || 'a';
+    const url = `https://v2.sg.media-imdb.com/suggestion/${firstLet}/${encodeURIComponent(query)}.json`;
+
+    const r = await axios.get(url, {
+      timeout: 15000,
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+
+    const results = (r.data.d || [])
+      .filter(item => item.qid === 'movie' || item.qid === 'tvSeries' || item.qid === 'tvMiniSeries')
+      .map(item => ({
+        imdbId:   item.id,
+        title:    item.l,
+        year:     item.y || null,
+        poster:   item.i?.imageUrl ? item.i.imageUrl.replace(/\._V1_.*$/, '._V1_SX1000.jpg') : '',
+        type:     item.qid === 'movie' ? 'movie' : 'series',
+      }));
+
+    if (results.length === 0) return null;
+
+    let best = results[0];
+    if (parsed.year) {
+      const yearMatches = results.filter(r => r.year && Math.abs(r.year - parsed.year) <= 2);
+      if (yearMatches.length > 0) best = yearMatches[0];
+    }
+    
+    if (!best.poster) return null; // We only care if it has a poster
+
+    return {
+      imdbId: best.imdbId,
+      title: best.title,
+      year: best.year,
+      poster: best.poster,
+      type: best.type,
+      confidence: 50,
+      confidenceReasons: ['Fallback to IMDB Suggestion API'],
+      description: '', rating: 0, genre: [], duration: ''
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MASTER META FETCHER — TMDB + OMDB + IMDB cross-validation
 // ═══════════════════════════════════════════════════════════════
 
 async function fetchMeta(parsed, tmdbKey, omdbKey) {
@@ -358,23 +408,35 @@ async function fetchMeta(parsed, tmdbKey, omdbKey) {
 
   // Both found: cross-validate poster/year consistency
   if (tmdb && omdb) {
-    // If years are wildly different, trust the higher-confidence one
     if (tmdb.year && omdb.year && Math.abs(tmdb.year - omdb.year) > 2) {
       console.log(`[CrossCheck] Year conflict: TMDB=${tmdb.year} vs OMDB=${omdb.year} for "${parsed.title}". Trusting TMDB.`);
     }
-    // Merge: TMDB primary, OMDB fills gaps
     if (!tmdb.poster   && omdb.poster)      tmdb.poster      = omdb.poster;
     if (!tmdb.rating   && omdb.rating)      tmdb.rating      = omdb.rating;
     if (!tmdb.description && omdb.description) tmdb.description = omdb.description;
     if (!tmdb.duration && omdb.duration)    tmdb.duration    = omdb.duration;
     if (!tmdb.genre?.length && omdb.genre?.length) tmdb.genre = omdb.genre;
     if (omdb.imdbId)   tmdb.imdbId = omdb.imdbId;
-    return tmdb;
   }
 
-  if (tmdb) return tmdb;
-  if (omdb) return { ...omdb, tmdbId: '' };
-  return {};
+  let finalMeta = tmdb || (omdb ? { ...omdb, tmdbId: '' } : null);
+
+  // 3-Tier Fallback: If we still don't have a poster, hit IMDB Suggestion API!
+  if (!finalMeta || !finalMeta.poster) {
+    const imdbFallback = await fetchIMDB(parsed);
+    if (imdbFallback) {
+      if (!finalMeta) {
+        finalMeta = { ...imdbFallback, tmdbId: '' };
+      } else {
+        finalMeta.poster = imdbFallback.poster;
+        if (!finalMeta.imdbId) finalMeta.imdbId = imdbFallback.imdbId;
+        finalMeta.confidenceReasons = [...(finalMeta.confidenceReasons || []), 'Poster scraped via IMDB Fallback'];
+      }
+      console.log(`[TMDB] 🚀 IMDB Fallback Scraper rescued poster for "${parsed.title}"!`);
+    }
+  }
+
+  return finalMeta || {};
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -597,9 +659,15 @@ router.post('/fetch-meta', auth, async (req, res) => {
     tmdb = await fetchTMDB({ ...parsed, year: null }, tmdbKey);
   }
 
+  // 3-Tier Fallback for manual poster fix
+  let imdbFallback = null;
+  if (!(tmdb && tmdb.poster) && !(omdb && omdb.poster)) {
+    imdbFallback = await fetchIMDB(parsed);
+  }
+
   // Build the best combined result
-  if (!tmdb && !omdb) {
-    return res.status(404).json({ message: `No results found for "${title}" on TMDB or OMDB` });
+  if (!tmdb && !omdb && !imdbFallback) {
+    return res.status(404).json({ message: `No results found for "${title}" on TMDB, OMDB, or IMDB` });
   }
 
   // Merge: TMDB is primary (has backdrop), OMDB fills gaps
@@ -616,15 +684,20 @@ router.post('/fetch-meta', auth, async (req, res) => {
     imdbId:      (omdb?.imdbId    || ''),
     type:        (tmdb?.type      || omdb?.type      || 'movie'),
     confidence:  (tmdb?.confidence || 0),
-    // If TMDB has no poster, try OMDB poster as backup
+    // If TMDB has no poster, try OMDB poster as backup, then IMDB fallback
     posterSources: {
       tmdb: tmdb?.poster   || '',
       omdb: omdb?.poster   || '',
+      imdb: imdbFallback?.poster || '',
     },
     backdropSources: {
       tmdb: tmdb?.backdrop || '',
     },
   };
+  
+  if (!result.poster) {
+    result.poster = imdbFallback?.poster || '';
+  }
 
   res.json(result);
 });
