@@ -548,13 +548,32 @@ router.post('/bulk', auth, async (req, res) => {
 
       let updated = false;
       for (const newDl of downloads) {
-        const existingDl = existing.downloads.find(d => d.filename && d.filename === newDl.filename && d.size === newDl.size);
+        // 1. Check if the URL already exists anywhere in this movie
+        const newUrl = newDl.links[0]?.url;
+        const hasUrl = existing.downloads.some(d => d.links?.some(l => l.url === newUrl));
+        
+        if (hasUrl) {
+          // Link already exists, skip it entirely
+          continue;
+        }
+
+        // 2. If it's a new URL, try to group it with an existing download by filename/size
+        const existingDl = existing.downloads.find(d => 
+          (d.filename && newDl.filename && d.filename === newDl.filename) || 
+          (d.size && newDl.size && d.size === newDl.size) ||
+          (d.quality === newDl.quality && d.language === newDl.language)
+        );
+
         if (existingDl) {
           for (const link of newDl.links) {
-            if (!existingDl.links.find(l => l.url === link.url)) { existingDl.links.push(link); updated = true; }
+            if (!existingDl.links.find(l => l.url === link.url)) {
+              existingDl.links.push(link);
+              updated = true;
+            }
           }
         } else {
-          existing.downloads.push(newDl); updated = true;
+          existing.downloads.push(newDl);
+          updated = true;
         }
       }
       if (msgObj.id) {
@@ -784,10 +803,25 @@ router.post('/manual-add', auth, async (req, res) => {
   if (!existing) existing = await Movie.findOne({ title: { $regex: `^${finalTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } });
 
   if (existing && !overwrite) {
-    for (const dl of downloads) {
-      const dup = existing.downloads.find(d => d.filename && d.filename === dl.filename);
-      if (!dup) existing.downloads.push(dl);
-      else for (const lnk of dl.links) { if (!dup.links.find(l => l.url === lnk.url)) dup.links.push(lnk); }
+    for (const newDl of downloads) {
+      const newUrl = newDl.links[0]?.url;
+      const hasUrl = existing.downloads.some(d => d.links?.some(l => l.url === newUrl));
+      if (hasUrl) continue; // exact URL already exists
+
+      const existingDl = existing.downloads.find(d => 
+        (d.filename && newDl.filename && d.filename === newDl.filename) ||
+        (d.quality === newDl.quality && d.language === newDl.language)
+      );
+
+      if (existingDl) {
+        for (const link of newDl.links) {
+          if (!existingDl.links.find(l => l.url === link.url)) {
+            existingDl.links.push(link);
+          }
+        }
+      } else {
+        existing.downloads.push(newDl);
+      }
     }
     await existing.save();
     return res.json({ message: `Updated existing: ${existing.title}`, movie: existing });
