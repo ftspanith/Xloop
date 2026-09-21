@@ -615,7 +615,15 @@ async function loadEpisodes(downloads, fallbackImg, language, type, id) {
   window.selectSeasonPack = (s) => {
     const sd = seasons[s];
     if (!sd || !sd.packs || !sd.packs.length) return;
-    const dlSection = document.getElementById('downloadSection');
+    
+    let dlSection = document.getElementById('downloadSection');
+    if (!dlSection) {
+      dlSection = document.createElement('div');
+      dlSection.id = 'downloadSection';
+      dlSection.className = 'wp-inline-downloads';
+      document.getElementById('episodeSection').after(dlSection);
+    }
+    
     dlSection.style.display = 'block';
     const html = buildDownloadSection(sd.packs, language, type);
     dlSection.innerHTML = `
@@ -630,7 +638,14 @@ async function loadEpisodes(downloads, fallbackImg, language, type, id) {
     renderEpisodes();
     
     const epData = seasons[s].eps[e];
-    const dlSection = document.getElementById('downloadSection');
+    let dlSection = document.getElementById('downloadSection');
+    if (!dlSection) {
+      dlSection = document.createElement('div');
+      dlSection.id = 'downloadSection';
+      dlSection.className = 'wp-inline-downloads';
+      document.getElementById('episodeSection').after(dlSection);
+    }
+    
     dlSection.style.display = 'block';
     const html = buildDownloadSection(epData.downloads, language, type);
     dlSection.innerHTML = `
