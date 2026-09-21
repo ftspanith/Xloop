@@ -44,11 +44,29 @@ function sortMoviesByTmdbOrder(movies, tmdbIds) {
   });
 }
 
+// Helper to prevent duplicates on the homepage (same tmdbId or title)
+function isDuplicate(m, arr) {
+  return arr.some(existing => 
+    (existing.tmdbId && m.tmdbId && existing.tmdbId === m.tmdbId) || 
+    (existing.title && m.title && existing.title.toLowerCase() === m.title.toLowerCase())
+  );
+}
+
+// Helper to filter out duplicates from a raw mongoose array
+function uniqueMovies(movies) {
+  const uniq = [];
+  for (const m of movies) {
+    if (!isDuplicate(m, uniq)) uniq.push(m);
+  }
+  return uniq;
+}
+
 // ── GET /api/movies/featured ──────────────────────────────────────────────────
 router.get('/featured', async (req, res) => {
   try {
-    let movies = await Movie.find({ type: 'movie', isFeatured: true, backdrop: { $ne: '' } })
-      .sort({ createdAt: -1 }).limit(6).select('-__v -downloads');
+    let rawMovies = await Movie.find({ type: 'movie', isFeatured: true, backdrop: { $ne: '' } })
+      .sort({ createdAt: -1 }).limit(15).select('-__v -downloads');
+    let movies = uniqueMovies(rawMovies).slice(0, 6);
     
     // Cross-reference with real-world TMDB Popular if manual featured is empty
     if (movies.length < 6) {
@@ -56,17 +74,20 @@ router.get('/featured', async (req, res) => {
       if (popularIds.length > 0) {
         const tmdbMovies = await Movie.find({ tmdbId: { $in: popularIds }, backdrop: { $ne: '' } })
           .select('-__v -downloads');
-        const sortedTmdb = sortMoviesByTmdbOrder(tmdbMovies, popularIds).slice(0, 6 - movies.length);
-        movies = [...movies, ...sortedTmdb];
+        const sortedTmdb = uniqueMovies(sortMoviesByTmdbOrder(tmdbMovies, popularIds));
+        
+        for (const m of sortedTmdb) {
+          if (!isDuplicate(m, movies)) movies.push(m);
+          if (movies.length >= 6) break;
+        }
       }
     }
 
     if (movies.length < 6) {
       const fallback = await Movie.find({ type: 'movie', backdrop: { $ne: '' }, rating: { $gte: 6.5 } })
-        .sort({ views: -1, createdAt: -1 }).limit(6).select('-__v -downloads');
-      // merge without duplicates
+        .sort({ views: -1, createdAt: -1 }).limit(20).select('-__v -downloads');
       for (const f of fallback) {
-        if (!movies.find(m => m._id.equals(f._id))) movies.push(f);
+        if (!isDuplicate(f, movies)) movies.push(f);
         if (movies.length >= 6) break;
       }
     }
@@ -80,30 +101,29 @@ router.get('/featured', async (req, res) => {
 // ── GET /api/movies/trending ──────────────────────────────────────────────────
 router.get('/trending', async (req, res) => {
   try {
-    let movies = await Movie.find({ type: 'movie', isTrending: true, poster: { $ne: '' } })
-      .sort({ views: -1 }).limit(15).select('-__v -downloads');
+    let rawMovies = await Movie.find({ type: 'movie', isTrending: true, poster: { $ne: '' } })
+      .sort({ views: -1 }).limit(30).select('-__v -downloads');
+    let movies = uniqueMovies(rawMovies).slice(0, 15);
     
     if (movies.length < 15) {
       const trendingIds = await getTmdbIds('trending/movie/week', 'trending');
       if (trendingIds.length > 0) {
         const tmdbMovies = await Movie.find({ tmdbId: { $in: trendingIds }, poster: { $ne: '' } })
           .select('-__v -downloads');
-        const sortedTmdb = sortMoviesByTmdbOrder(tmdbMovies, trendingIds).slice(0, 15 - movies.length);
+        const sortedTmdb = uniqueMovies(sortMoviesByTmdbOrder(tmdbMovies, trendingIds));
         
-        // Merge without duplicates
         for (const m of sortedTmdb) {
-          if (!movies.find(existing => existing._id.equals(m._id))) {
-            movies.push(m);
-          }
+          if (!isDuplicate(m, movies)) movies.push(m);
+          if (movies.length >= 15) break;
         }
       }
     }
 
-    if (movies.length < 5) {
+    if (movies.length < 15) {
       const fallback = await Movie.find({ type: 'movie', poster: { $ne: '' }, rating: { $gte: 6.5 } })
-        .sort({ views: -1, rating: -1 }).limit(15).select('-__v -downloads');
+        .sort({ views: -1, rating: -1 }).limit(30).select('-__v -downloads');
       for (const f of fallback) {
-        if (!movies.find(m => m._id.equals(f._id))) movies.push(f);
+        if (!isDuplicate(f, movies)) movies.push(f);
         if (movies.length >= 15) break;
       }
     }
@@ -117,12 +137,17 @@ router.get('/trending', async (req, res) => {
 // ── GET /api/movies/latest ────────────────────────────────────────────────────
 router.get('/latest', async (req, res) => {
   try {
-    // Only show decent quality stuff in latest to prevent bulk garbage from dominating
-    let movies = await Movie.find({ type: 'movie', poster: { $ne: '' }, rating: { $gte: 5 } })
-      .sort({ createdAt: -1 }).limit(15).select('-__v -downloads');
-    if (movies.length < 5) {
-      movies = await Movie.find({ type: 'movie', poster: { $ne: '' } })
-        .sort({ createdAt: -1 }).limit(15).select('-__v -downloads');
+    let rawMovies = await Movie.find({ type: 'movie', poster: { $ne: '' }, rating: { $gte: 5 } })
+      .sort({ createdAt: -1 }).limit(30).select('-__v -downloads');
+    let movies = uniqueMovies(rawMovies).slice(0, 15);
+    
+    if (movies.length < 15) {
+      let fallback = await Movie.find({ type: 'movie', poster: { $ne: '' } })
+        .sort({ createdAt: -1 }).limit(30).select('-__v -downloads');
+      for (const f of fallback) {
+        if (!isDuplicate(f, movies)) movies.push(f);
+        if (movies.length >= 15) break;
+      }
     }
     res.json(movies);
   } catch (err) {
@@ -138,14 +163,14 @@ router.get('/top-rated', async (req, res) => {
     if (topRatedIds.length > 0) {
       const tmdbMovies = await Movie.find({ tmdbId: { $in: topRatedIds }, poster: { $ne: '' } })
         .select('-__v -downloads');
-      movies = sortMoviesByTmdbOrder(tmdbMovies, topRatedIds).slice(0, 15);
+      movies = uniqueMovies(sortMoviesByTmdbOrder(tmdbMovies, topRatedIds)).slice(0, 15);
     }
     
-    if (movies.length < 5) {
+    if (movies.length < 15) {
       const fallback = await Movie.find({ type: 'movie', poster: { $ne: '' }, rating: { $gte: 7 } })
-        .sort({ views: -1, rating: -1 }).limit(15).select('-__v -downloads');
+        .sort({ views: -1, rating: -1 }).limit(30).select('-__v -downloads');
       for (const f of fallback) {
-        if (!movies.find(m => m._id.equals(f._id))) movies.push(f);
+        if (!isDuplicate(f, movies)) movies.push(f);
         if (movies.length >= 15) break;
       }
     }
@@ -159,20 +184,26 @@ router.get('/top-rated', async (req, res) => {
 router.get('/this-year', async (req, res) => {
   try {
     const currentYear = new Date().getFullYear();
-    // Prioritize high rating recent movies
-    let movies = await Movie.find({ type: 'movie', year: currentYear, poster: { $ne: '' }, rating: { $gte: 5.5 } })
-      .sort({ rating: -1, createdAt: -1 }).limit(15).select('-__v -downloads');
+    let rawMovies = await Movie.find({ type: 'movie', year: currentYear, poster: { $ne: '' }, rating: { $gte: 5.5 } })
+      .sort({ rating: -1, createdAt: -1 }).limit(30).select('-__v -downloads');
+    let movies = uniqueMovies(rawMovies).slice(0, 15);
     
-    // fallback: this year any rating
-    if (movies.length < 5) {
-      movies = await Movie.find({ type: 'movie', year: currentYear, poster: { $ne: '' } })
-        .sort({ createdAt: -1 }).limit(15).select('-__v -downloads');
+    if (movies.length < 15) {
+      let fallback = await Movie.find({ type: 'movie', year: currentYear, poster: { $ne: '' } })
+        .sort({ createdAt: -1 }).limit(30).select('-__v -downloads');
+      for (const f of fallback) {
+        if (!isDuplicate(f, movies)) movies.push(f);
+        if (movies.length >= 15) break;
+      }
     }
     
-    // fallback: last 2 years high rated
-    if (movies.length < 5) {
-      movies = await Movie.find({ type: 'movie', year: { $gte: currentYear - 1 }, poster: { $ne: '' }, rating: { $gte: 6 } })
-        .sort({ rating: -1, createdAt: -1 }).limit(15).select('-__v -downloads');
+    if (movies.length < 15) {
+      let fallback = await Movie.find({ type: 'movie', year: { $gte: currentYear - 1 }, poster: { $ne: '' }, rating: { $gte: 6 } })
+        .sort({ rating: -1, createdAt: -1 }).limit(30).select('-__v -downloads');
+      for (const f of fallback) {
+        if (!isDuplicate(f, movies)) movies.push(f);
+        if (movies.length >= 15) break;
+      }
     }
     res.json(movies);
   } catch (err) {
