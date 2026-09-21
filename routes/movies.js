@@ -214,8 +214,9 @@ router.get('/this-year', async (req, res) => {
 // ── GET /api/movies/by-genre/:genre ──────────────────────────────────────────
 router.get('/by-genre/:genre', async (req, res) => {
   try {
-    const movies = await Movie.find({ genre: { $in: [req.params.genre] }, poster: { $ne: '' } })
-      .sort({ rating: -1, createdAt: -1 }).limit(15).select('-__v -downloads');
+    const rawMovies = await Movie.find({ genre: { $in: [req.params.genre] }, poster: { $ne: '' } })
+      .sort({ rating: -1, createdAt: -1 }).limit(30).select('-__v -downloads');
+    const movies = uniqueMovies(rawMovies).slice(0, 15);
     res.json(movies);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -226,7 +227,7 @@ router.get('/by-genre/:genre', async (req, res) => {
 router.get('/by-language/:lang', async (req, res) => {
   try {
     const langRegex = new RegExp(req.params.lang, 'i');
-    const movies = await Movie.find({
+    const rawMovies = await Movie.find({
       $or: [
         { originalLanguage: langRegex },
         { language: langRegex },
@@ -234,7 +235,8 @@ router.get('/by-language/:lang', async (req, res) => {
         { 'downloads.language': langRegex },
       ],
       poster: { $ne: '' },
-    }).sort({ createdAt: -1 }).limit(15).select('-__v -downloads');
+    }).sort({ createdAt: -1 }).limit(30).select('-__v -downloads');
+    const movies = uniqueMovies(rawMovies).slice(0, 15);
     res.json(movies);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
