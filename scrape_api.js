@@ -27,8 +27,9 @@ const path               = require('path');
 require('dotenv').config();
 
 // ── Config ───────────────────────────────────────────────────
-const EXPORT_FILE    = path.join(__dirname, 'telegram_export.json');
-const PROGRESS_FILE  = path.join(__dirname, '.scrape_progress.json');
+const os = require('os');
+const EXPORT_FILE    = process.env.VERCEL ? path.join(os.tmpdir(), 'telegram_export.json') : path.join(__dirname, 'telegram_export.json');
+const PROGRESS_FILE  = process.env.VERCEL ? path.join(os.tmpdir(), '.scrape_progress.json') : path.join(__dirname, '.scrape_progress.json');
 const BATCH_SIZE     = 100;
 const PARALLEL_LIMIT = 3;      // max concurrent channels
 const INTER_BATCH_DELAY  = 300;   // ms between batches in same channel

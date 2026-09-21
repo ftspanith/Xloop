@@ -14,7 +14,8 @@ const { cleanTitleForApi, stripEmojis } = require('./utils/parser');
 
 const TMDB_KEY = process.env.TMDB_API_KEY || process.env.TMDB_KEY;
 const OMDB_KEY = process.env.OMDB_API_KEY || process.env.OMDB_KEY;
-const REPORT   = path.join(__dirname, 'healing_report.json');
+const os = require('os');
+const REPORT   = path.join(os.tmpdir(), 'healing_report.json');
 const DELAY_MS = 260; // stay under TMDB rate limit
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));

@@ -12,7 +12,8 @@ const fs       = require('fs');
 
 const ROOT          = path.join(__dirname, '..');
 const SCRAPE_SCRIPT = path.join(ROOT, 'scrape_api.js');
-const EXPORT_FILE   = path.join(ROOT, 'telegram_export.json');
+const os = require('os');
+const EXPORT_FILE   = process.env.VERCEL ? path.join(os.tmpdir(), 'telegram_export.json') : path.join(ROOT, 'telegram_export.json');
 
 // ── GET /api/scrape/channels — return channel list ──────────
 router.get('/channels', (req, res) => {
