@@ -271,7 +271,6 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
         results = results.filter(r => r.media_type === 'movie' || r.media_type === 'tv');
       }
       if (results.length === 0) {
-        console.log(`  ⬜ [TMDB] No results for "${params.query}" (${endpoint}${params.year ? ' y='+params.year : ''})`);
         return null;
       }
 
@@ -338,12 +337,10 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       // Hard year-gap guard: large year mismatch needs very high title similarity
       const yearDiff = (hintYear && best.rYear) ? Math.abs(hintYear - best.rYear) : 0;
       if (yearDiff > 3 && titleSim < 0.80) {
-        console.log(`  ❌ [TMDB] Year mismatch (${yearDiff}yr) + low sim (${titleSim.toFixed(2)}) for "${best.rTitle}" ← searched "${cleanTitle}" (${endpoint})`);
         return null;
       }
 
       if (best.score < minScore || titleSim < minTitleSim) {
-        console.log(`  ❌ [TMDB] Rejected "${best.rTitle}" (${best.rYear||'?'}) score=${best.score.toFixed(0)} sim=${titleSim.toFixed(2)} ← "${cleanTitle}" (${endpoint}${params.year ? ' y='+params.year : ''})`);
         return null;
       }
 
