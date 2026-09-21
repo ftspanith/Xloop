@@ -573,10 +573,12 @@ async function loadEpisodes(downloads, fallbackImg, language, type, id) {
     }
 
     // Show individual episode buttons
+    let hasButtons = false;
     for (let i = 1; i <= totalEps; i++) {
       const isAvailable = !!sd.eps[i];
       if (!isAvailable) continue; // Skip rendering unavailable episodes completely
       
+      hasButtons = true;
       const delay = ((i-1) * 0.03).toFixed(2);
       const key = `${currentSeason}_${i}`;
       const isActive = activeEpKey === key ? 'active' : '';
@@ -585,6 +587,10 @@ async function loadEpisodes(downloads, fallbackImg, language, type, id) {
       <button class="ep-btn ${isActive}" style="animation-delay:${delay}s" onclick="selectEpisode(${currentSeason}, ${i})">
         Episode ${i}
       </button>`;
+    }
+    
+    if (!hasButtons && (!sd.packs || sd.packs.length === 0)) {
+       html = '<p style="padding: 20px; color: var(--text2); font-size: 0.9em; text-align: center; width: 100%;">No download links have been uploaded for this season yet.</p>';
     }
     
     episodeGrid.innerHTML = html;
@@ -653,9 +659,17 @@ async function loadSimilar(type, currentId) {
       const simRes  = await fetch(simUrl);
       const simData = await simRes.json();
       const simArr  = simData.results || simData.movies || simData.series || [];
-      // Exclude self, then filter by language for regional content
+      const seenIds = new Set();
+      
+      // Exclude self, filter duplicates, then filter by language for regional content
       similarItems = simArr
         .filter(i => String(i._id) !== selfId)
+        .filter(i => {
+          const key = i.tmdbId ? String(i.tmdbId) : (i.title || '').toLowerCase();
+          if (seenIds.has(key)) return false;
+          seenIds.add(key);
+          return true;
+        })
         .filter(i => {
           if (!isRegional) return true;
           const itemLang = (i.language || '').toLowerCase();
@@ -665,16 +679,21 @@ async function loadSimilar(type, currentId) {
         });
     } catch(_) {}
 
-    // Fetch latest (always show as filler)
     let latestItems = [];
     try {
       const latUrl  = `/api/search?type=${encodeURIComponent(type)}&limit=20`;
       const latRes  = await fetch(latUrl);
       const latData = await latRes.json();
       const latArr  = latData.results || latData.movies || latData.series || [];
-      latestItems   = latArr.filter(i =>
-        String(i._id) !== String(currentId) && !similarItems.find(s => String(s._id) === String(i._id))
-      );
+      const seenIds = new Set(similarItems.map(i => i.tmdbId ? String(i.tmdbId) : (i.title || '').toLowerCase()));
+      
+      latestItems   = latArr.filter(i => {
+        if (String(i._id) === String(currentId)) return false;
+        const key = i.tmdbId ? String(i.tmdbId) : (i.title || '').toLowerCase();
+        if (seenIds.has(key)) return false;
+        seenIds.add(key);
+        return true;
+      });
     } catch(_) {}
 
     function makeCard(item) {
