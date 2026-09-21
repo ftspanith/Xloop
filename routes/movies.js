@@ -124,7 +124,7 @@ router.get('/scan-all', auth, async (req, res) => {
 // ── GET /api/movies  (list + filters + pagination) ───────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const { genre, year, quality, type, sort = 'createdAt', page = 1, limit = 20 } = req.query;
+    const { genre, year, quality, type, search, sort = 'createdAt', page = 1, limit = 20 } = req.query;
     const filter = {};
 
     // type filter: 'all' returns everything, otherwise default to 'movie'
@@ -134,6 +134,17 @@ router.get('/', async (req, res) => {
     if (genre)   filter.genre   = { $in: [genre] };
     if (year)    filter.year    = parseInt(year);
     if (quality) filter.quality = quality;
+    
+    if (search) {
+      const s = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // escape regex
+      filter.$or = [
+        { title: { $regex: s, $options: 'i' } },
+        { originalTitle: { $regex: s, $options: 'i' } },
+        { language: { $regex: s, $options: 'i' } },
+        { languages: { $regex: s, $options: 'i' } },
+        { genre: { $regex: s, $options: 'i' } }
+      ];
+    }
 
     const sortObj = sort === 'updatedAt'  ? { updatedAt: -1 }
                   : sort === 'rating'     ? { rating: -1 }
