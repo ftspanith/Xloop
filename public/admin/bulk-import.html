@@ -40,8 +40,13 @@
           </div>
           
           <div class="form-group full">
-            <label class="form-label">Upload JSON Export</label>
+            <label class="form-label">Upload JSON Export <span style="color:var(--text3)">(or use Quick Paste below)</span></label>
             <input type="file" id="fileUpload" accept=".json" class="form-input" style="padding: 6px;">
+          </div>
+          
+          <div class="form-group full" style="margin-top: 10px;">
+            <label class="form-label">Quick Paste Raw Text <span style="color:var(--text3)">(fast way to add a few movies/links manually)</span></label>
+            <textarea id="rawTextPaste" class="form-input" rows="6" placeholder="Paste your message blocks here (e.g. Title, Quality, Links). Leave a blank line between different movies..."></textarea>
           </div>
 
           <div class="form-group" style="margin-top: 8px;">
@@ -114,13 +119,61 @@
       document.getElementById('progressLabel').textContent = `Batch ${current} of ${total}`;
     }
 
+    async function processTextBlocks(textBlocks, tmdbKey, omdbKey) {
+      const BATCH_SIZE = 20;
+      const totalBatches = Math.ceil(textBlocks.length / BATCH_SIZE);
+      log(`${textBlocks.length} usable messages → ${totalBatches} batches of ${BATCH_SIZE}`);
+      statusText.textContent = `Importing ${textBlocks.length} messages in ${totalBatches} batches...`;
+
+      let resumeBatch = parseInt(document.getElementById('resumeBatch').value);
+      let startBatch = 0;
+      if (!isNaN(resumeBatch) && resumeBatch > 1) {
+        startBatch = resumeBatch - 1;
+        log(`Resuming from batch ${resumeBatch}...`);
+      }
+
+      let totalSuccess = 0, totalUpdated = 0, totalSkipped = 0;
+
+      for (let b = startBatch; b < totalBatches; b++) {
+        const batch = textBlocks.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+        updateProgress(b + 1, totalBatches);
+        log(`Batch ${b + 1}/${totalBatches} — processing ${batch.length} messages...`);
+
+        try {
+          const res = await apiFetch('/api/import/bulk', {
+            method: 'POST',
+            body: JSON.stringify({ messages: batch, tmdbKey, omdbKey })
+          });
+          totalSuccess  += res.successCount  || 0;
+          totalUpdated  += res.updatedCount   || 0;
+          totalSkipped  += res.skippedCount   || 0;
+          log(res.message);
+          if (res.errors && res.errors.length > 0) {
+            res.errors.forEach(err => log(`  Error: ${err}`, true));
+          }
+        } catch (err) {
+          log(`Batch ${b + 1} failed: ${err.message}`, true);
+        }
+
+        // Rate limit pause between batches
+        await new Promise(r => setTimeout(r, 800));
+      }
+
+      updateProgress(totalBatches, totalBatches);
+      statusText.textContent = 'Import Complete!';
+      log('');
+      log(`DONE — Added: ${totalSuccess} | Updated: ${totalUpdated} | Skipped: ${totalSkipped}`);
+      showToast(`Import complete! ${totalSuccess} added, ${totalUpdated} updated`);
+    }
+
     importBtn.addEventListener('click', async () => {
       const file = document.getElementById('fileUpload').files[0];
+      const pastedText = document.getElementById('rawTextPaste').value.trim();
       const tmdbKey = document.getElementById('tmdbKey').value.trim();
       const omdbKey = document.getElementById('omdbKey').value.trim();
       const wipeFirst = document.getElementById('wipeFirst').checked;
 
-      if (!file) return showToast('Please select a JSON file first', true);
+      if (!file && !pastedText) return showToast('Please upload a JSON file or paste text first', true);
 
       if (tmdbKey) localStorage.setItem('tmdb_key', tmdbKey);
       if (omdbKey) localStorage.setItem('omdb_key', omdbKey);
@@ -134,121 +187,87 @@
       importBtn.disabled = true;
       importBtn.style.opacity = '0.5';
       document.getElementById('progressWrap').style.display = 'block';
-      statusText.textContent = 'Reading file...';
-      log('Reading JSON file...');
-
-      const reader = new FileReader();
-      reader.onload = async (e) => {
+      
+      //  Wipe DB if requested 
+      if (wipeFirst) {
+        log('Wiping entire database...');
+        statusText.textContent = 'Wiping database...';
         try {
-          const data = JSON.parse(e.target.result);
-
-          // Support both our internal format and raw Telegram Desktop export
-          let rawMessages = [];
-          if (data.messages && Array.isArray(data.messages)) {
-            rawMessages = data.messages;
-          } else {
-            throw new Error("No 'messages' array found in JSON. Make sure it's either a Telegram export or telegram_export.json.");
-          }
-
-          //  Wipe DB if requested 
-          if (wipeFirst) {
-            log('Wiping entire database...');
-            statusText.textContent = 'Wiping database...';
-            try {
-              const wipeRes = await apiFetch('/api/import/wipe-all', { method: 'DELETE' });
-              log(`Database wiped: ${wipeRes.message}`);
-            } catch (err) {
-              log(`Wipe failed: ${err.message}`, true);
-              throw new Error('DB wipe failed, import aborted.');
-            }
-          }
-
-          log(`Found ${rawMessages.length} raw messages. Filtering...`);
-          statusText.textContent = 'Filtering messages...';
-
-          // Build text blocks — support both our scraped format and raw Telegram Desktop
-          let textBlocks = [];
-          rawMessages.forEach(msg => {
-            if (msg.type && msg.type !== 'message') return;
-
-            let fullText = '';
-
-            // Our scrape_api.js format: { id, text, channel_name, date }
-            if (typeof msg.text === 'string' && msg.channel_id) {
-              fullText = msg.text;
-            }
-            // Raw Telegram Desktop format: text is string or array
-            else if (Array.isArray(msg.text)) {
-              fullText = msg.text.map(t => {
-                if (typeof t === 'string') return t;
-                if (t.type === 'text_link') return t.text + '\n' + t.href; // extract inline links
-                return t.text || '';
-              }).join('');
-            } else if (typeof msg.text === 'string') {
-              fullText = msg.text;
-            }
-
-            if (fullText.trim().length > 0) {
-              textBlocks.push({ id: msg.id, text: fullText.trim() });
-            }
-          });
-
-          const BATCH_SIZE = 20;
-          const totalBatches = Math.ceil(textBlocks.length / BATCH_SIZE);
-          log(`${textBlocks.length} usable messages → ${totalBatches} batches of ${BATCH_SIZE}`);
-          statusText.textContent = `Importing ${textBlocks.length} messages in ${totalBatches} batches...`;
-
-          let resumeBatch = parseInt(document.getElementById('resumeBatch').value);
-          let startBatch = 0;
-          if (!isNaN(resumeBatch) && resumeBatch > 1) {
-            startBatch = resumeBatch - 1;
-            log(`Resuming from batch ${resumeBatch}...`);
-          }
-
-          let totalSuccess = 0, totalUpdated = 0, totalSkipped = 0;
-
-          for (let b = startBatch; b < totalBatches; b++) {
-            const batch = textBlocks.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
-            updateProgress(b + 1, totalBatches);
-            log(`Batch ${b + 1}/${totalBatches} — processing ${batch.length} messages...`);
-
-            try {
-              const res = await apiFetch('/api/import/bulk', {
-                method: 'POST',
-                body: JSON.stringify({ messages: batch, tmdbKey, omdbKey })
-              });
-              totalSuccess  += res.successCount  || 0;
-              totalUpdated  += res.updatedCount   || 0;
-              totalSkipped  += res.skippedCount   || 0;
-              log(res.message);
-              if (res.errors && res.errors.length > 0) {
-                res.errors.forEach(err => log(`  Error: ${err}`, true));
-              }
-            } catch (err) {
-              log(`Batch ${b + 1} failed: ${err.message}`, true);
-            }
-
-            // Rate limit pause between batches
-            await new Promise(r => setTimeout(r, 800));
-          }
-
-          updateProgress(totalBatches, totalBatches);
-          statusText.textContent = 'Import Complete!';
-          log('');
-          log(`DONE — Added: ${totalSuccess} | Updated: ${totalUpdated} | Skipped: ${totalSkipped}`);
-          showToast(`Import complete! ${totalSuccess} added, ${totalUpdated} updated`);
-
+          const wipeRes = await apiFetch('/api/import/wipe-all', { method: 'DELETE' });
+          log(`Database wiped: ${wipeRes.message}`);
         } catch (err) {
-          log(`Error: ${err.message}`, true);
-          statusText.textContent = 'Failed!';
-          showToast(err.message, true);
-        } finally {
+          log(`Wipe failed: ${err.message}`, true);
           importBtn.disabled = false;
           importBtn.style.opacity = '1';
+          return showToast('DB wipe failed, import aborted.', true);
         }
-      };
+      }
 
-      reader.readAsText(file);
+      try {
+        if (pastedText) {
+          log('Processing Quick Paste text...');
+          statusText.textContent = 'Preparing text...';
+          // Wrap it into the format the backend expects
+          const textBlocks = [{ id: null, text: pastedText }];
+          await processTextBlocks(textBlocks, tmdbKey, omdbKey);
+          importBtn.disabled = false;
+          importBtn.style.opacity = '1';
+        } else if (file) {
+          statusText.textContent = 'Reading file...';
+          log('Reading JSON file...');
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+            try {
+              const data = JSON.parse(e.target.result);
+              let rawMessages = [];
+              if (data.messages && Array.isArray(data.messages)) {
+                rawMessages = data.messages;
+              } else {
+                throw new Error("No 'messages' array found in JSON. Make sure it's either a Telegram export or telegram_export.json.");
+              }
+
+              log(`Found ${rawMessages.length} raw messages. Filtering...`);
+              statusText.textContent = 'Filtering messages...';
+
+              let textBlocks = [];
+              rawMessages.forEach(msg => {
+                if (msg.type && msg.type !== 'message') return;
+                let fullText = '';
+                if (typeof msg.text === 'string' && msg.channel_id) {
+                  fullText = msg.text;
+                } else if (Array.isArray(msg.text)) {
+                  fullText = msg.text.map(t => {
+                    if (typeof t === 'string') return t;
+                    if (t.type === 'text_link') return t.text + '\n' + t.href; 
+                    return t.text || '';
+                  }).join('');
+                } else if (typeof msg.text === 'string') {
+                  fullText = msg.text;
+                }
+                if (fullText.trim().length > 0) {
+                  textBlocks.push({ id: msg.id, text: fullText.trim() });
+                }
+              });
+
+              await processTextBlocks(textBlocks, tmdbKey, omdbKey);
+            } catch (err) {
+              log(`Error: ${err.message}`, true);
+              statusText.textContent = 'Failed!';
+              showToast(err.message, true);
+            } finally {
+              importBtn.disabled = false;
+              importBtn.style.opacity = '1';
+            }
+          };
+          reader.readAsText(file);
+        }
+      } catch (err) {
+        log(`Error: ${err.message}`, true);
+        statusText.textContent = 'Failed!';
+        showToast(err.message, true);
+        importBtn.disabled = false;
+        importBtn.style.opacity = '1';
+      }
     });
   </script>
 </body>
