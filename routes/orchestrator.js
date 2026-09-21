@@ -34,6 +34,17 @@ function broadcast(message) {
   });
 }
 
+function isProcessAlive(proc) {
+  if (!proc) return false;
+  if (proc.killed || proc.exitCode !== null) return false;
+  try {
+    process.kill(proc.pid, 0);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 function runScript(scriptCmd, scriptArgs, startMessage, finishMessage) {
   broadcast(startMessage);
   activeProcess = spawn(scriptCmd, scriptArgs, { cwd: path.join(__dirname, '..') });
@@ -90,6 +101,9 @@ router.get('/status', (req, res) => {
 
 // ── Start (auth required) ────────────────────────────────────────────────────
 router.post('/start', auth, (req, res) => {
+  if (activeProcess && !isProcessAlive(activeProcess)) {
+    activeProcess = null;
+  }
   if (activeProcess) {
     return res.status(400).json({ error: 'Process is already running' });
   }
@@ -108,6 +122,9 @@ router.post('/start', auth, (req, res) => {
 
 // ── Heal Only (auth required) ────────────────────────────────────────────────
 router.post('/heal', auth, (req, res) => {
+  if (activeProcess && !isProcessAlive(activeProcess)) {
+    activeProcess = null;
+  }
   if (activeProcess) {
     return res.status(400).json({ error: 'Process is already running' });
   }
@@ -132,6 +149,9 @@ router.post('/stop', auth, (req, res) => {
 
 // ── Wipe (auth required) ─────────────────────────────────────────────────────
 router.post('/wipe', auth, (req, res) => {
+  if (activeProcess && !isProcessAlive(activeProcess)) {
+    activeProcess = null;
+  }
   if (activeProcess) {
     return res.status(400).json({ error: 'Process is already running' });
   }
