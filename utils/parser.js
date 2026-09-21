@@ -284,6 +284,8 @@ function cleanTitleForApi(title) {
   if (!title) return '';
   const rawClean = stripEmojis(title);
   let cleaned = rawClean
+    // ── Normalize Ampersands ──────────────────────────────────────────
+    .replace(/\s*&\s*/g, ' and ')
     // ── Strip leading numbered lists (e.g. "1. ", "1) ") ─────────────────
     .replace(/^\s*\d+[\)\.]\s*/g, '')
     // ── Strip Website URLs (e.g. www.telugumv.sbs) ────────────────────────

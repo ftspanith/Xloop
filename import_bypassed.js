@@ -300,8 +300,13 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
           else if (diff === 1) score += 15;
           else if (diff <= 2)  score += 5;
           else                 score -= 20;
-        } else if (!hintYear && !rYear) {
-          score += 5; // both unknown — neutral
+        } else if (!hintYear || !rYear) {
+          score += 10; // one or both unknown — neutral positive baseline
+        }
+        
+        // Exact match boost
+        if (titleSim >= 0.90) {
+          score += 15;
         }
 
         // Type scoring
