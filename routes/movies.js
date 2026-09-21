@@ -2,18 +2,73 @@ const router = require('express').Router();
 const Movie  = require('../models/Movie');
 const auth   = require('../middleware/auth');
 
+const axios  = require('axios');
+
+// TMDB Memory Cache
+const tmdbCache = {
+  featured: { data: null, expires: 0 },
+  trending: { data: null, expires: 0 },
+  topRated: { data: null, expires: 0 }
+};
+
+const TMDB_KEY = process.env.TMDB_API_KEY || 'ad2813b9d2a7cf1e33a4d3cc46cbe01d';
+
+async function getTmdbIds(endpoint, cacheKey) {
+  if (tmdbCache[cacheKey].data && Date.now() < tmdbCache[cacheKey].expires) {
+    return tmdbCache[cacheKey].data;
+  }
+  try {
+    const res = await axios.get(`https://api.themoviedb.org/3/${endpoint}`, {
+      params: { api_key: TMDB_KEY, language: 'en-US', page: 1 }
+    });
+    const res2 = await axios.get(`https://api.themoviedb.org/3/${endpoint}`, {
+      params: { api_key: TMDB_KEY, language: 'en-US', page: 2 }
+    });
+    const ids = [...res.data.results, ...res2.data.results].map(m => m.id.toString());
+    tmdbCache[cacheKey] = { data: ids, expires: Date.now() + 1000 * 60 * 60 * 4 }; // cache for 4 hours
+    return ids;
+  } catch (err) {
+    console.error('TMDB API Error:', err.message);
+    return [];
+  }
+}
+
+// Helper to preserve TMDB array order when fetching from MongoDB
+function sortMoviesByTmdbOrder(movies, tmdbIds) {
+  const idMap = new Map();
+  tmdbIds.forEach((id, index) => idMap.set(id, index));
+  return movies.sort((a, b) => {
+    const idxA = idMap.has(a.tmdbId) ? idMap.get(a.tmdbId) : 999;
+    const idxB = idMap.has(b.tmdbId) ? idMap.get(b.tmdbId) : 999;
+    return idxA - idxB;
+  });
+}
+
 // ── GET /api/movies/featured ──────────────────────────────────────────────────
 router.get('/featured', async (req, res) => {
   try {
     let movies = await Movie.find({ type: 'movie', isFeatured: true, backdrop: { $ne: '' } })
       .sort({ createdAt: -1 }).limit(6).select('-__v -downloads');
+    
+    // Cross-reference with real-world TMDB Popular if manual featured is empty
     if (movies.length < 6) {
-      movies = await Movie.find({ type: 'movie', poster: { $ne: '' }, backdrop: { $ne: '' }, rating: { $gte: 6 } })
-        .sort({ rating: -1, createdAt: -1 }).limit(6).select('-__v -downloads');
+      const popularIds = await getTmdbIds('movie/popular', 'featured');
+      if (popularIds.length > 0) {
+        const tmdbMovies = await Movie.find({ tmdbId: { $in: popularIds }, backdrop: { $ne: '' } })
+          .select('-__v -downloads');
+        const sortedTmdb = sortMoviesByTmdbOrder(tmdbMovies, popularIds).slice(0, 6 - movies.length);
+        movies = [...movies, ...sortedTmdb];
+      }
     }
-    if (movies.length === 0) {
-      movies = await Movie.find({ type: 'movie', backdrop: { $ne: '' } })
-        .sort({ createdAt: -1 }).limit(6).select('-__v -downloads');
+
+    if (movies.length < 6) {
+      const fallback = await Movie.find({ type: 'movie', backdrop: { $ne: '' }, rating: { $gte: 6.5 } })
+        .sort({ views: -1, createdAt: -1 }).limit(6).select('-__v -downloads');
+      // merge without duplicates
+      for (const f of fallback) {
+        if (!movies.find(m => m._id.equals(f._id))) movies.push(f);
+        if (movies.length >= 6) break;
+      }
     }
     res.json(movies);
   } catch (err) {
@@ -27,10 +82,30 @@ router.get('/trending', async (req, res) => {
   try {
     let movies = await Movie.find({ type: 'movie', isTrending: true, poster: { $ne: '' } })
       .sort({ views: -1 }).limit(15).select('-__v -downloads');
+    
+    if (movies.length < 15) {
+      const trendingIds = await getTmdbIds('trending/movie/week', 'trending');
+      if (trendingIds.length > 0) {
+        const tmdbMovies = await Movie.find({ tmdbId: { $in: trendingIds }, poster: { $ne: '' } })
+          .select('-__v -downloads');
+        const sortedTmdb = sortMoviesByTmdbOrder(tmdbMovies, trendingIds).slice(0, 15 - movies.length);
+        
+        // Merge without duplicates
+        for (const m of sortedTmdb) {
+          if (!movies.find(existing => existing._id.equals(m._id))) {
+            movies.push(m);
+          }
+        }
+      }
+    }
+
     if (movies.length < 5) {
-      // If not enough manual trending, mix with top rated recent movies
-      movies = await Movie.find({ type: 'movie', poster: { $ne: '' }, rating: { $gte: 6.5 } })
-        .sort({ rating: -1, views: -1 }).limit(15).select('-__v -downloads');
+      const fallback = await Movie.find({ type: 'movie', poster: { $ne: '' }, rating: { $gte: 6.5 } })
+        .sort({ views: -1, rating: -1 }).limit(15).select('-__v -downloads');
+      for (const f of fallback) {
+        if (!movies.find(m => m._id.equals(f._id))) movies.push(f);
+        if (movies.length >= 15) break;
+      }
     }
     res.json(movies);
   } catch (err) {
@@ -58,11 +133,21 @@ router.get('/latest', async (req, res) => {
 // ── GET /api/movies/top-rated ─────────────────────────────────────────────────
 router.get('/top-rated', async (req, res) => {
   try {
-    let movies = await Movie.find({ type: 'movie', poster: { $ne: '' }, rating: { $gte: 6 } })
-      .sort({ rating: -1 }).limit(15).select('-__v -downloads');
-    if (movies.length === 0) {
-      movies = await Movie.find({ type: 'movie', poster: { $ne: '' } })
-        .sort({ rating: -1 }).limit(15).select('-__v -downloads');
+    let movies = [];
+    const topRatedIds = await getTmdbIds('movie/top_rated', 'topRated');
+    if (topRatedIds.length > 0) {
+      const tmdbMovies = await Movie.find({ tmdbId: { $in: topRatedIds }, poster: { $ne: '' } })
+        .select('-__v -downloads');
+      movies = sortMoviesByTmdbOrder(tmdbMovies, topRatedIds).slice(0, 15);
+    }
+    
+    if (movies.length < 5) {
+      const fallback = await Movie.find({ type: 'movie', poster: { $ne: '' }, rating: { $gte: 7 } })
+        .sort({ views: -1, rating: -1 }).limit(15).select('-__v -downloads');
+      for (const f of fallback) {
+        if (!movies.find(m => m._id.equals(f._id))) movies.push(f);
+        if (movies.length >= 15) break;
+      }
     }
     res.json(movies);
   } catch (err) {
