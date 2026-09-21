@@ -20,7 +20,11 @@ const axios    = require('axios');
 const Movie    = require('./models/Movie');
 const { cleanTitleForApi, detectHost } = require('./utils/parser');
 
-const BYPASSED_FILE = './bypassed_links.json';
+const path = require('path');
+const isVercel = !!process.env.VERCEL;
+const getPath = (file) => isVercel ? path.join('/tmp', file) : path.join(__dirname, file);
+
+const BYPASSED_FILE = getPath('bypassed_links.json');
 const TMDB_KEY      = process.env.TMDB_API_KEY || '';
 const OMDB_KEY      = process.env.OMDB_API_KEY  || '';
 

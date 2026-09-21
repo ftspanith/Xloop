@@ -16,11 +16,14 @@ const fs   = require('fs');
 const path = require('path');
 const { parseMessageBlock, classifyUrl, isJunkTitle } = require('./utils/parser');
 
-const EXPORT_FILE       = path.join(__dirname, 'telegram_export.json');
-const OUTPUT_FILE       = path.join(__dirname, 'links_for_bypasser.json');
-const MISSING_LANG_FILE = path.join(__dirname, 'missing_languages_report.json');
-const SHORTLINKS_FILE   = path.join(__dirname, 'shortlinks_report.json');
-const UNKNOWN_FILE      = path.join(__dirname, 'unknown_links_report.json');
+const isVercel = !!process.env.VERCEL;
+const getPath = (file) => isVercel ? path.join('/tmp', file) : path.join(__dirname, file);
+
+const EXPORT_FILE       = path.join(__dirname, 'telegram_export.json'); // Always read from bundled source
+const OUTPUT_FILE       = getPath('links_for_bypasser.json');
+const MISSING_LANG_FILE = getPath('missing_languages_report.json');
+const SHORTLINKS_FILE   = getPath('shortlinks_report.json');
+const UNKNOWN_FILE      = getPath('unknown_links_report.json');
 
 if (!fs.existsSync(EXPORT_FILE)) {
   console.error('❌  No telegram_export.json found!');

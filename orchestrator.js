@@ -1,6 +1,10 @@
 const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+
+const isVercel = !!process.env.VERCEL;
+const getPath = (file) => isVercel ? path.join('/tmp', file) : path.join(__dirname, file);
 
 const runCommand = (cmd, name, opts = {}) => {
   return new Promise((resolve, reject) => {
@@ -67,13 +71,13 @@ async function startOrchestrator() {
     }
 
     // Step 2: Bypass Links (DISABLED PER USER REQUEST - IMPORT DIRECTLY)
-    if (fs.existsSync(path.join(__dirname, 'links_for_bypasser.json'))) {
-      const data = fs.readFileSync(path.join(__dirname, 'links_for_bypasser.json'), 'utf8');
+    if (fs.existsSync(getPath('links_for_bypasser.json'))) {
+      const data = fs.readFileSync(getPath('links_for_bypasser.json'), 'utf8');
       const parsed = JSON.parse(data);
       if (parsed.length > 0) {
         console.log('⏭️ [ORCHESTRATOR] Bypasser disabled. Skipping Telegram Bot bypass and importing links directly as requested.');
         // Copy the links to the expected bypassed file name so the importer can pick them up
-        fs.copyFileSync(path.join(__dirname, 'links_for_bypasser.json'), path.join(__dirname, 'bypassed_links.json'));
+        fs.writeFileSync(getPath('bypassed_links.json'), data);
       } else {
         console.log('⚠️ [ORCHESTRATOR] No links to bypass, skipping bypasser.');
       }
@@ -82,8 +86,8 @@ async function startOrchestrator() {
     }
 
     // Step 3: Import Bypassed Links
-    if (fs.existsSync(path.join(__dirname, 'bypassed_links.json'))) {
-      const data = fs.readFileSync(path.join(__dirname, 'bypassed_links.json'), 'utf8');
+    if (fs.existsSync(getPath('bypassed_links.json'))) {
+      const data = fs.readFileSync(getPath('bypassed_links.json'), 'utf8');
       const parsed = JSON.parse(data);
       if (parsed.length > 0) {
         // Run importer with extra heap to avoid OOM kills on large datasets
