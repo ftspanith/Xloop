@@ -227,32 +227,32 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   const hintYear = year || postYear;
   const isShort = cleanTitle.trim().split(/\s+/).length <= 2;
 
+  const titleVariants = cleanTitle.split(/\s+aka\s+|\s+a\.k\.a\.?\s+|\s*\(\s*(?:aka\s+)?/i).map(t => t.replace(/\)+$/, '').trim()).filter(Boolean);
+  if (!titleVariants.length) titleVariants.push(cleanTitle);
+
   // Build ordered search strategies
   const strategies = [];
-
-  // Strategy 1 & 2: Type-specific endpoint (most accurate — no cross-type noise)
   const typeEndpoint = isSeries ? 'tv' : 'movie';
-  if (hintYear) {
-    strategies.push({ endpoint: typeEndpoint, params: { query: cleanTitle, year: hintYear } });
-    // ±1 year window in case release year is off by one
-    strategies.push({ endpoint: typeEndpoint, params: { query: cleanTitle, year: hintYear - 1 } });
-    strategies.push({ endpoint: typeEndpoint, params: { query: cleanTitle, year: hintYear + 1 } });
-  }
-  // Strategy 3: Type-specific without year
-  strategies.push({ endpoint: typeEndpoint, params: { query: cleanTitle } });
-
-  // Strategy 4: Multi-search (catches cases where type was mis-detected)
-  if (hintYear) {
-    strategies.push({ endpoint: 'multi', params: { query: cleanTitle, year: hintYear } });
-  }
-  strategies.push({ endpoint: 'multi', params: { query: cleanTitle } });
-
-  // Strategy 5: Opposite type (series might be stored as movie and vice-versa)
   const otherEndpoint = isSeries ? 'movie' : 'tv';
-  if (hintYear) {
-    strategies.push({ endpoint: otherEndpoint, params: { query: cleanTitle, year: hintYear } });
+
+  for (const t of titleVariants) {
+    if (hintYear) {
+      strategies.push({ endpoint: typeEndpoint, params: { query: t, year: hintYear } });
+      strategies.push({ endpoint: typeEndpoint, params: { query: t, year: hintYear - 1 } });
+      strategies.push({ endpoint: typeEndpoint, params: { query: t, year: hintYear + 1 } });
+    }
+    strategies.push({ endpoint: typeEndpoint, params: { query: t } });
   }
-  strategies.push({ endpoint: otherEndpoint, params: { query: cleanTitle } });
+
+  for (const t of titleVariants) {
+    if (hintYear) strategies.push({ endpoint: 'multi', params: { query: t, year: hintYear } });
+    strategies.push({ endpoint: 'multi', params: { query: t } });
+  }
+
+  for (const t of titleVariants) {
+    if (hintYear) strategies.push({ endpoint: otherEndpoint, params: { query: t, year: hintYear } });
+    strategies.push({ endpoint: otherEndpoint, params: { query: t } });
+  }
 
   for (const { endpoint, params } of strategies) {
     const result = await fetchWithRetry(async () => {
@@ -325,10 +325,14 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
 
       // ── Confidence thresholds (stricter than before to prevent wrong matches) ─
       const minScore    = isShort ? 65 : 58;          // raised: was 62/52
-      const titleSim    = Math.max(
-        stringSimilarity(cleanTitleForApi(best.rTitle), cleanTitle),
-        stringSimilarity(cleanTitleForApi(best.rOrig),  cleanTitle)
-      );
+      let titleSim = 0;
+      for (const t of titleVariants) {
+        const sim = Math.max(
+          stringSimilarity(cleanTitleForApi(best.rTitle), t),
+          stringSimilarity(cleanTitleForApi(best.rOrig),  t)
+        );
+        if (sim > titleSim) titleSim = sim;
+      }
       const minTitleSim = isShort ? 0.70 : 0.55;     // raised: was 0.65/0.40
 
       // Hard year-gap guard: large year mismatch needs very high title similarity
