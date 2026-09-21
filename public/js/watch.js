@@ -583,27 +583,21 @@ async function loadEpisodes(downloads, fallbackImg, language, type, id) {
     let hasButtons = false;
     for (let i = 1; i <= totalEps; i++) {
       const isAvailable = !!sd.eps[i];
+      if (!isAvailable) continue;
       
+      hasButtons = true;
       const delay = ((i-1) * 0.03).toFixed(2);
       const key = `${currentSeason}_${i}`;
       const isActive = activeEpKey === key ? 'active' : '';
 
-      if (isAvailable) {
-        hasButtons = true;
-        html += `
-        <button class="ep-btn ${isActive}" style="animation-delay:${delay}s" onclick="selectEpisode(${currentSeason}, ${i})">
-          Episode ${i}
-        </button>`;
-      } else {
-        html += `
-        <button class="ep-btn" style="animation-delay:${delay}s; opacity:0.4; cursor:not-allowed;" title="No links uploaded for this episode yet" onclick="alert('No download links have been uploaded for Episode ${i} yet.')">
-          Episode ${i}
-        </button>`;
-      }
+      html += `
+      <button class="ep-btn ${isActive}" style="animation-delay:${delay}s" onclick="selectEpisode(${currentSeason}, ${i})">
+        Episode ${i}
+      </button>`;
     }
     
     if (!hasButtons && (!sd.packs || sd.packs.length === 0)) {
-       html = '<p style="padding: 20px; color: var(--text2); font-size: 0.9em; text-align: center; width: 100%;">No download links have been uploaded for this season yet.</p>' + html;
+       html = '<p style="padding: 20px; color: var(--text2); font-size: 0.9em; text-align: center; width: 100%;">No download links have been uploaded for this season yet.</p>';
     }
     
     episodeGrid.innerHTML = html;
