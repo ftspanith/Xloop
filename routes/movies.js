@@ -5,14 +5,14 @@ const auth   = require('../middleware/auth');
 // ── GET /api/movies/featured ──────────────────────────────────────────────────
 router.get('/featured', async (req, res) => {
   try {
-    let movies = await Movie.find({ type: 'movie', isFeatured: true, poster: { $ne: '' } })
+    let movies = await Movie.find({ type: 'movie', isFeatured: true, backdrop: { $ne: '' } })
       .sort({ createdAt: -1 }).limit(6).select('-__v -downloads');
-    if (movies.length === 0) {
-      movies = await Movie.find({ type: 'movie', poster: { $ne: '' }, backdrop: { $ne: '' }, rating: { $gte: 5 } })
-        .sort({ rating: -1 }).limit(6).select('-__v -downloads');
+    if (movies.length < 6) {
+      movies = await Movie.find({ type: 'movie', poster: { $ne: '' }, backdrop: { $ne: '' }, rating: { $gte: 6 } })
+        .sort({ rating: -1, createdAt: -1 }).limit(6).select('-__v -downloads');
     }
     if (movies.length === 0) {
-      movies = await Movie.find({ type: 'movie', poster: { $ne: '' } })
+      movies = await Movie.find({ type: 'movie', backdrop: { $ne: '' } })
         .sort({ createdAt: -1 }).limit(6).select('-__v -downloads');
     }
     res.json(movies);
@@ -27,9 +27,10 @@ router.get('/trending', async (req, res) => {
   try {
     let movies = await Movie.find({ type: 'movie', isTrending: true, poster: { $ne: '' } })
       .sort({ views: -1 }).limit(15).select('-__v -downloads');
-    if (movies.length === 0) {
-      movies = await Movie.find({ type: 'movie', poster: { $ne: '' } })
-        .sort({ views: -1, createdAt: -1 }).limit(15).select('-__v -downloads');
+    if (movies.length < 5) {
+      // If not enough manual trending, mix with top rated recent movies
+      movies = await Movie.find({ type: 'movie', poster: { $ne: '' }, rating: { $gte: 6.5 } })
+        .sort({ rating: -1, views: -1 }).limit(15).select('-__v -downloads');
     }
     res.json(movies);
   } catch (err) {
@@ -41,8 +42,13 @@ router.get('/trending', async (req, res) => {
 // ── GET /api/movies/latest ────────────────────────────────────────────────────
 router.get('/latest', async (req, res) => {
   try {
-    const movies = await Movie.find({ type: 'movie', poster: { $ne: '' } })
+    // Only show decent quality stuff in latest to prevent bulk garbage from dominating
+    let movies = await Movie.find({ type: 'movie', poster: { $ne: '' }, rating: { $gte: 5 } })
       .sort({ createdAt: -1 }).limit(15).select('-__v -downloads');
+    if (movies.length < 5) {
+      movies = await Movie.find({ type: 'movie', poster: { $ne: '' } })
+        .sort({ createdAt: -1 }).limit(15).select('-__v -downloads');
+    }
     res.json(movies);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -68,12 +74,20 @@ router.get('/top-rated', async (req, res) => {
 router.get('/this-year', async (req, res) => {
   try {
     const currentYear = new Date().getFullYear();
-    let movies = await Movie.find({ type: 'movie', year: currentYear, poster: { $ne: '' } })
-      .sort({ createdAt: -1 }).limit(15).select('-__v -downloads');
-    // fallback: last 2 years if this year has nothing
-    if (movies.length === 0) {
-      movies = await Movie.find({ type: 'movie', year: { $gte: currentYear - 1 }, poster: { $ne: '' } })
+    // Prioritize high rating recent movies
+    let movies = await Movie.find({ type: 'movie', year: currentYear, poster: { $ne: '' }, rating: { $gte: 5.5 } })
+      .sort({ rating: -1, createdAt: -1 }).limit(15).select('-__v -downloads');
+    
+    // fallback: this year any rating
+    if (movies.length < 5) {
+      movies = await Movie.find({ type: 'movie', year: currentYear, poster: { $ne: '' } })
         .sort({ createdAt: -1 }).limit(15).select('-__v -downloads');
+    }
+    
+    // fallback: last 2 years high rated
+    if (movies.length < 5) {
+      movies = await Movie.find({ type: 'movie', year: { $gte: currentYear - 1 }, poster: { $ne: '' }, rating: { $gte: 6 } })
+        .sort({ rating: -1, createdAt: -1 }).limit(15).select('-__v -downloads');
     }
     res.json(movies);
   } catch (err) {
