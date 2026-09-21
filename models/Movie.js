@@ -59,5 +59,6 @@ MovieSchema.index({ type: 1, views:     -1 });   // trending
 MovieSchema.index({ type: 1, year:      -1 });   // year filter
 MovieSchema.index({ tmdbId: 1 });                 // importer dedup lookups
 MovieSchema.index({ title: 1 });                  // importer title dedup lookups
+MovieSchema.index({ type: 1, updatedAt: -1 });    // dashboard recent content query
 
 module.exports = mongoose.model('Movie', MovieSchema);

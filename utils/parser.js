@@ -287,7 +287,8 @@ function cleanTitleForApi(title) {
     // ── Normalize Ampersands ──────────────────────────────────────────
     .replace(/\s*&\s*/g, ' and ')
     // ── Strip leading numbered lists (e.g. "1. ", "1) ") ─────────────────
-    .replace(/^\s*\d+[\)\.]\s*/g, '')
+    // IMPORTANT: Do NOT strip if the number is followed by letters (could be title like "300 Spartans")
+    .replace(/^\s*(\d+)[\).}]\s+(?=\w)/g, '')
     // ── Strip Website URLs (e.g. www.telugumv.sbs) ────────────────────────
     .replace(/\b(?:www\.)?[a-zA-Z0-9-]+\.[a-zA-Z]{2,6}\b/gi, '')
     .replace(/\b(?:www|sbs|telugumv)\b/gi, '')
@@ -322,7 +323,6 @@ function cleanTitleForApi(title) {
     .replace(/\bSeason\s*\d+\b/gi,'')
     .replace(/\.(mkv|mp4|avi|mov|ts|m2ts|zip|rar)\b/gi,'')
     .replace(/v\d+|reloaded|uncut|extended/gi,'')
-    .replace(/(\[.*?\]|\(.*?\))/g,'')
     .replace(/#[a-zA-Z0-9_]+/g,'')
     // ── Final stray digit pairs and cleanup ───────────────────────────────
     .replace(/\b\d\s+\d\b/g, '')
@@ -413,7 +413,16 @@ function isJunkTitle(title) {
   if (!title || title.length < 2) return true;
   const c = stripEmojis(title).trim();
   if (!c || c.length < 2) return true;
-  if (/^\d+$/.test(c)) return true;                          // pure number
+  // Pure number check — but allow short numeric titles like "300", "9", "1917", "1408"
+  // A valid numeric title is either:
+  //   a) NOT in the 4-digit year range 1900-2099 (e.g. "300", "9", "10000")
+  //   b) IN the year range BUT has more context (handled via numericFallback later)
+  // A standalone 4-digit number in year range (1900-2099) = junk (it's a year, not a title)
+  if (/^\d+$/.test(c)) {
+    const n = parseInt(c, 10);
+    if (n >= 1900 && n <= 2099) return true; // standalone year = junk
+    return false; // "300", "9", etc. = valid numeric titles
+  }
   if (/^@/.test(c)) return true;                             // Telegram @handle
   if (/^[,\s\-_.:|•►▶◆★✓✔×#]+$/.test(c)) return true;    // punctuation only
   if (/^\d{4}\s*(&|and|ISO|\+|FHD|HFR|BRD|CBR)\b/i.test(c)) return true; // year + tech spec
@@ -469,17 +478,41 @@ function extractAudioTracks(text) {
 
 // ─── YEAR ────────────────────────────────────────────────────────────────────
 // Priority 1: year inside brackets/parens → most explicit: (2023) or [2023]
-// Priority 2: year in technical filename context → Movie.Name.2023.1080p
+// Priority 2a: LAST year in dot-separated filename (the release year, not title part)
+//              e.g. "2018.Everyone.Is.A.Hero.2023.1080p" → 2023
+// Priority 2b: year preceded by separator → Movie.Name.2023.1080p
 // Priority 3: year at end of string before extension
-// Priority 4: any year found anywhere (last resort)
+// Priority 4: any year found (last resort)
 function extractYear(sources) {
-  // P1: bracketed year — most reliable
+  // P1: bracketed year — most reliable signal in Telegram posts like "Title (2023)"
   for (const s of sources) {
     if (!s) continue;
     const m = s.match(/[\[({]\s*(19\d{2}|20[012]\d)\s*[\])}]/);
     if (m) return parseInt(m[1], 10);
   }
-  // P2: year embedded between dots/underscores/dashes — technical filename context
+  // P2a: For dot-separated filenames, collect ALL separator-bounded years and
+  //       return the LAST one BEFORE a quality/codec token.
+  //       This handles: "2018.Everyone.2023.1080p" → 2023 (not 2018 which is the title)
+  for (const s of sources) {
+    if (!s) continue;
+    if (!(/[._]/.test(s))) continue; // only applies to dot/underscore filenames
+    const QUALITY_RE = /\b(2160p|1080p|720p|480p|360p|4[Kk]|UHD|WEB[-_.]?DL|WEBRip|HDRip|BluRay|BDRip|REMUX|HEVC|x265|x264|AVC|AV1|AMZN|NF|DSNP|ZEE5|SUNNXT|JIOHS|AHA|HMAX|HOTSTAR|CRKL|PCOK|DPLS)\b/i;
+    const qualMatch = QUALITY_RE.exec(s);
+    const searchIn = qualMatch ? s.substring(0, qualMatch.index) : s;
+    // Find ALL years in the pre-quality section
+    const allYears = [];
+    const yearRE = /[._\-\s](19\d{2}|20[012]\d)[._\-\s]/g;
+    let ym;
+    while ((ym = yearRE.exec(searchIn)) !== null) {
+      allYears.push(parseInt(ym[1], 10));
+    }
+    if (allYears.length > 0) {
+      // If multiple years found (e.g. title starts with year + release year),
+      // return the LAST year (the release year)
+      return allYears[allYears.length - 1];
+    }
+  }
+  // P2b: year embedded between dots/underscores/dashes — single year case
   for (const s of sources) {
     if (!s) continue;
     const m = s.match(/[._\-](19\d{2}|20[012]\d)[._\-\s]/);
@@ -599,15 +632,18 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 
   // ── Extract master title — 4 strategies ──────────────────────────────────
   // Strategy 1: first line that is not URL / promo / metadata and has a meaningful clean title
+  // Skip codec/quality-ONLY single-line titles (AV1, 4K, HEVC, etc.)
+  const TECH_ONLY_RE = /^\s*(AV1|HEVC|AVC|4K|UHD|2160p|1080p|720p|480p|360p|HDR|HDR10|DV|HLG|SDR|4K\.\.\.+)\s*$/i;
   let masterTitle='';
   for (const line of lines) {
     if (isUrl(line)||isPromo(line)||isMetadataLine(line)) continue;
+    if (TECH_ONLY_RE.test(line)) continue; // Skip standalone tech tags like "AV1", "4K......"
     const c=cleanTitleForApi(line);
     if (c.length>=3&&!isJunkTitle(line)) { masterTitle=line; break; }
   }
 
   const firstFn=pairs[0]?.rawFilename||'';
-  if (!masterTitle||isJunkTitle(masterTitle)) {
+  if (!masterTitle||isJunkTitle(masterTitle)||TECH_ONLY_RE.test(masterTitle)) {
     masterTitle=firstFn;
   } else if (firstFn) {
     const fnSeries=/\bs\d{1,2}e\d{1,3}\b|\bs\d{1,2}\b/i.test(firstFn);
@@ -701,7 +737,28 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     .replace(/[\(\[\-\u2013\u2014\s]+$/,'').trim();
 
   cleanedTitle=stripEmojis(cleanedTitle).trim();
-  if (!cleanedTitle||cleanedTitle.length<2||isJunkTitle(cleanedTitle)) cleanedTitle='';
+  // Final guard: if cleaned title is empty or junk, but the rawTitle starts with a
+  // pure-number that is NOT a 4-digit release year (like "300", "9", "1917"), use that number as title.
+  // This handles movies whose entire title IS a number (300, 1917, 1408, etc.).
+  let _usedNumericFallback = false;
+  if (!cleanedTitle || cleanedTitle.length < 2 || isJunkTitle(cleanedTitle)) {
+    const _numericM = (masterTitle || '').trim().match(/^(\d{1,4})(?:[\s._(\[|])/);
+    if (_numericM) {
+      const _n = parseInt(_numericM[1], 10);
+      if (_n < 1900 || _n > 2099) {
+        cleanedTitle = String(_n); _usedNumericFallback = true; // e.g. "300", "9"
+      } else if (year && year !== _n) {
+        cleanedTitle = String(_n); _usedNumericFallback = true; // e.g. "1917" (released 2019)
+      }
+    }
+  }
+  // Do NOT wipe a valid numeric-fallback title via isJunkTitle
+  // Single-letter title fallback: movies titled with just one letter (e.g. "V" 2020 Telugu)
+  if ((!cleanedTitle || cleanedTitle.length < 2) && year) {
+    const _slM = (masterTitle || '').trim().match(/^([A-Z])(?:\s+\(|\s+\[|\.|\s+\d{4})/);
+    if (_slM) { cleanedTitle = _slM[1]; _usedNumericFallback = true; }
+  }
+  if (!_usedNumericFallback && (!cleanedTitle || cleanedTitle.length < 1 || isJunkTitle(cleanedTitle))) cleanedTitle = '';
 
   // Language detection — multi-source
   const audioLang=extractAudioTracks(emojiStripped);

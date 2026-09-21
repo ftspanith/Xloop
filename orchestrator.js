@@ -1,4 +1,4 @@
-const { exec } = require('child_process');
+const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -6,11 +6,12 @@ const os = require('os');
 const isVercel = !!process.env.VERCEL;
 const getPath = (file) => isVercel ? path.join('/tmp', file) : path.join(__dirname, file);
 
-const runCommand = (cmd, name, opts = {}) => {
+const runCommand = (cmdStr, name, opts = {}) => {
   return new Promise((resolve, reject) => {
     console.log(`\n🚀 [ORCHESTRATOR] Starting: ${name}`);
     console.log(`----------------------------------------`);
-    const child = exec(cmd, { cwd: __dirname, ...opts });
+    const parts = cmdStr.split(' ');
+    const child = spawn(parts[0], parts.slice(1), { cwd: __dirname, ...opts, stdio: 'pipe' });
 
     child.stdout.on('data', data => process.stdout.write(data));
     child.stderr.on('data', data => process.stderr.write(data));
