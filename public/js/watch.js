@@ -518,7 +518,14 @@ async function loadEpisodes(downloads, fallbackImg, language, type, id) {
 
   const seasonTabs  = document.getElementById('seasonTabs');
   const episodeGrid = document.getElementById('episodeGrid');
-  let currentSeason = Object.keys(seasons).sort((a,b) => a-b)[0];
+  const sortedSeasons = Object.keys(seasons).sort((a, b) => a - b);
+  let currentSeason = sortedSeasons[0];
+  for (const s of sortedSeasons) {
+    if (Object.keys(seasons[s].eps).length > 0 || seasons[s].packs.length > 0) {
+      currentSeason = s;
+      break;
+    }
+  }
   let activeEpKey   = null;
 
   function updateEpCountBadge() {
