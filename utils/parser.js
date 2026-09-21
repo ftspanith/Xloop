@@ -284,6 +284,11 @@ function cleanTitleForApi(title) {
   if (!title) return '';
   const rawClean = stripEmojis(title);
   let cleaned = rawClean
+    // ── Strip leading numbered lists (e.g. "1. ", "1) ") ─────────────────
+    .replace(/^\s*\d+[\)\.]\s*/g, '')
+    // ── Strip Website URLs (e.g. www.telugumv.sbs) ────────────────────────
+    .replace(/\b(?:www\.)?[a-zA-Z0-9-]+\.[a-zA-Z]{2,6}\b/gi, '')
+    .replace(/\b(?:www|sbs|telugumv)\b/gi, '')
     // ── Strip leading @channel handles first ──────────────────────────────
     .replace(/^@[A-Za-z0-9_]+\s*/g, '')
     // ── Strip Hoichoi/brand watermark suffixes ────────────────────────
