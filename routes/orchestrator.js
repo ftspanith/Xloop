@@ -5,6 +5,18 @@ const readline  = require('readline');
 const path      = require('path');
 const auth      = require('../middleware/auth');
 
+// Force Vercel's Node File Trace (NFT) to bundle these scripts
+// because they are spawned dynamically via child_process
+try {
+  require.resolve('../orchestrator.js');
+  require.resolve('../extract_links.js');
+  require.resolve('../scrape_links.js');
+  require.resolve('../heal_db.js');
+  require.resolve('../wipe_db.js');
+  require.resolve('../pipeline.js');
+  require.resolve('../pipeline_full.js');
+} catch (e) {}
+
 let clients       = [];   // active SSE connections
 let activeProcess = null; // currently running child process
 let logBuffer     = [];   // in-memory log history buffer (last 500 lines)
