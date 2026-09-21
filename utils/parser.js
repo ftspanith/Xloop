@@ -318,7 +318,7 @@ function cleanTitleForApi(title) {
     .replace(/\bS\d{1,2}\s*E\d{1,3}\b/gi,'')
     .replace(/\b(?:EP|EPISODE|EPISODES)\s*\d{1,3}\b/gi,'')
     .replace(/\bE\d{1,3}\b/gi,'')
-    .replace(/\bS\d{1,2}\b(?!\d)/gi,'')
+    .replace(/\bS\s*\d{1,2}\b(?!\d)/gi,'')
     .replace(/\bSeason\s*\d+\b/gi,'')
     .replace(/\.(mkv|mp4|avi|mov|ts|m2ts|zip|rar)\b/gi,'')
     .replace(/v\d+|reloaded|uncut|extended/gi,'')
@@ -328,7 +328,8 @@ function cleanTitleForApi(title) {
     .replace(/\b\d\s+\d\b/g, '')
     .replace(/[^a-zA-Z0-9 \-']/g,' ')
     .replace(/\s+/g,' ')
-    .trim();
+    .trim()
+    .replace(/\s+s$/i, ''); // strip trailing 'S' often left behind
 
   const JUNK_WORDS = new Set(['audio', 'video', 'track', 'tracks', 'hdr10', 'h265', 'h264', 's01', 'e04', 'cbr', 'vbr', 'mkv', 'mp4']);
   if (!cleaned || cleaned.length < 2 || JUNK_WORDS.has(cleaned.toLowerCase())) {

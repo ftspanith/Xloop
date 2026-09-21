@@ -86,10 +86,19 @@ function scoreMatch(parsed, tmdbResult) {
 
   // 1. Title similarity
   const cleanParsed = cleanTitleForApi(parsed.title);
-  const cleanTmdb   = cleanTitleForApi(tmdbResult.title || '');
+  const cleanTmdb   = cleanTitleForApi(tmdbResult.title || tmdbResult.name || '');
   const titleSim    = stringSimilarity(cleanParsed, cleanTmdb);
   score += titleSim * 50; // up to 50 points
   reasons.push(`Title match: ${Math.round(titleSim * 100)}%`);
+
+  const isPerfect = titleSim >= 0.95;
+  if (isPerfect) {
+    score += 25;
+    reasons.push('Perfect title match boost (+25)');
+  } else if (titleSim >= 0.90) {
+    score += 15;
+    reasons.push('Near perfect title match boost (+15)');
+  }
 
   // 2. Year match
   if (parsed.year && tmdbResult.year) {
@@ -105,9 +114,16 @@ function scoreMatch(parsed, tmdbResult) {
 
   // 3. Content type match
   const parsedType = parsed.isSeries ? 'tv' : 'movie';
-  const tmdbType   = tmdbResult.type === 'series' ? 'tv' : 'movie';
-  if (parsedType === tmdbType) { score += 20; reasons.push('Type match (movie/series)'); }
-  else                         { score -= 20; reasons.push('Type mismatch!'); }
+  const tmdbType   = tmdbResult.type === 'series' || tmdbResult.media_type === 'tv' ? 'tv' : 'movie';
+  if (parsedType === tmdbType) { 
+    score += 20; 
+    reasons.push('Type match (movie/series)'); 
+  } else if (!isPerfect) { 
+    score -= 20; 
+    reasons.push('Type mismatch penalty'); 
+  } else {
+    reasons.push('Type mismatch forgiven due to perfect title');
+  }
 
   return { score: Math.round(score), reasons };
 }

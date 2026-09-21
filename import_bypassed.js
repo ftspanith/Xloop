@@ -288,9 +288,18 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
           : (endpoint === 'tv' ? 'series' : 'movie');
 
         // Title similarity — also check original title (handles romanized names)
-        const simClean = stringSimilarity(cleanTitleForApi(rTitle), cleanTitle);
-        const simOrig  = stringSimilarity(cleanTitleForApi(rOrig),  cleanTitle);
+        const simClean = stringSimilarity(cleanTitleForApi(rTitle), params.query);
+        const simOrig  = stringSimilarity(cleanTitleForApi(rOrig),  params.query);
         let score = Math.max(simClean, simOrig) * 60; // up to 60 pts for title
+
+        const isPerfect = Math.max(simClean, simOrig) >= 0.95;
+
+        // Exact match boost
+        if (isPerfect) {
+          score += 25; // Massive boost for perfect/near-perfect matches
+        } else if (Math.max(simClean, simOrig) >= 0.90) {
+          score += 15;
+        }
 
         // Year scoring — use hintYear (includes post date fallback)
         if (hintYear && rYear) {
@@ -302,15 +311,14 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
         } else if (!hintYear || !rYear) {
           score += 10; // one or both unknown — neutral positive baseline
         }
-        
-        // Exact match boost
-        if (titleSim >= 0.90) {
-          score += 15;
-        }
 
         // Type scoring
         const parsedType = isSeries ? 'series' : 'movie';
-        if (parsedType === rType) score += 15; else score -= 10;
+        if (parsedType === rType) {
+          score += 15;
+        } else if (!isPerfect) {
+          score -= 10; // Only penalize type mismatch if the title isn't a perfect match
+        }
 
         // Popularity boost (TMDB popularity — avoids obscure wrong matches)
         if (r.popularity > 50)  score += 5;
