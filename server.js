@@ -64,9 +64,9 @@ app.use('/api/', (req, res, next) => {
 });
 
 // ── HTTP caching headers for public API routes ────────────────────────────────
-// Reduces repeat DB hits from same user (browser caches API responses)
+// Only caches successful 2xx responses — errors are always no-store
+// This prevents a cached 503 from blocking the movies page after a cold start
 app.use('/api/', (req, res, next) => {
-  // Never cache auth, admin, or write operations
   const noCache = req.method !== 'GET'
     || req.path.startsWith('/auth')
     || req.path.startsWith('/import')
@@ -76,10 +76,22 @@ app.use('/api/', (req, res, next) => {
 
   if (noCache) {
     res.setHeader('Cache-Control', 'no-store');
-  } else {
-    // Public read routes: cache in browser for 60s, CDN for 30s
-    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=30, stale-while-revalidate=120');
+    return next();
   }
+
+  // Intercept res.json to check status before setting cache headers
+  const origJson = res.json.bind(res);
+  res.json = function (body) {
+    const status = res.statusCode;
+    if (status >= 200 && status < 300) {
+      // Success: cache in browser 60s, CDN 30s, serve stale while revalidating
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=30, stale-while-revalidate=120');
+    } else {
+      // Error responses are NEVER cached
+      res.setHeader('Cache-Control', 'no-store');
+    }
+    return origJson(body);
+  };
   next();
 });
 

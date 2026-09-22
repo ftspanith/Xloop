@@ -33,7 +33,17 @@ body {
   line-height: 1.5;
   overflow-x: hidden;
   animation: pageFadeIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  /* Sticky footer: body is full-height flex column */
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
+/* Page content grows to push footer to bottom */
+.page-header + .filters + .shows-stats + section,
+.page-header ~ section,
+body > section:last-of-type,
+.content-wrap { flex: 1 0 auto; }
+footer.footer { flex-shrink: 0; margin-top: auto; }
 
 @keyframes pageFadeIn {
   from { opacity: 0; transform: translateY(8px); }
@@ -921,7 +931,7 @@ ul { list-style: none; }
 /* ─── FOOTER ─────────────────────────────────────────────── */
 .footer {
   background: var(--bg2); border-top: 1px solid var(--border);
-  padding: 28px 32px; margin-top: 24px;
+  padding: 28px 32px; margin-top: auto;
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; gap: 12px;
 }
@@ -1353,7 +1363,8 @@ ul { list-style: none; }
 .promo-text p { color: var(--text2); line-height: 1.6; margin-bottom: 24px; max-width: 400px; }
 .promo-text button { width: auto; padding: 12px 32px; }
 
-.footer { padding: 60px 48px; background: var(--bg2); border-top: 1px solid var(--border); }
+/* homepage footer uses extended layout — overrides base .footer padding only */
+.footer-extended { padding: 60px 48px; flex-direction: column; align-items: flex-start; }
 .footer-top { display: flex; justify-content: space-between; margin-bottom: 60px; }
 .footer-brand p { font-size: 1.2rem; margin-bottom: 24px; }
 .newsletter { display: flex; gap: 8px; }
@@ -1677,17 +1688,9 @@ ul { list-style: none; }
   animation: fadeInUp 0.45s cubic-bezier(0.2,0.8,0.2,1) both;
 }
 
-/* ── Footer alignment fix ──────────────────────────────── */
-.footer {
-  align-items: center;
-  gap: 16px;
-}
-.footer-logo {
-  animation: fadeInLeft 0.5s ease both;
-}
-.footer-copy {
-  animation: fadeInRight 0.5s ease both;
-}
+/* ── Footer entry animations ──────────────────────────────── */
+.footer-logo { animation: fadeInLeft 0.5s ease both; }
+.footer-copy  { animation: fadeInRight 0.5s ease both; }
 
 /* ── Watch page alignment fixes ────────────────────────── */
 .watch-title {
