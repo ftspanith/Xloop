@@ -7,19 +7,19 @@
  <link rel="stylesheet" href="/css/style.css">
  <style>
  .orch-modes {
- display: grid;
- grid-template-columns: 1fr 1fr;
- gap: 12px;
- margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
  }
  .orch-mode-card {
- background: rgba(255,255,255,0.04);
- border: 2px solid rgba(255,255,255,0.08);
- border-radius: 14px;
- padding: 18px 20px;
- cursor: pointer;
- transition: all 0.2s ease;
- position: relative;
+  background: rgba(255,255,255,0.04);
+  border: 2px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 18px 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
  }
  .orch-mode-card:hover { border-color: rgba(229,9,20,0.4); transform: translateY(-2px); }
  .orch-mode-card.selected { border-color: #E50914; background: rgba(229,9,20,0.07); }
@@ -27,30 +27,30 @@
  .orch-mode-card .mode-title { font-size: 0.95rem; font-weight: 700; color: #fff; margin-bottom: 4px; }
  .orch-mode-card .mode-desc { font-size: 0.78rem; color: rgba(255,255,255,0.45); line-height: 1.5; }
  .orch-mode-card .mode-badge {
- position: absolute; top: 12px; right: 12px;
- background: #E50914; color: #fff;
- font-size: 0.6rem; font-weight: 800; padding: 2px 8px; border-radius: 20px;
+  position: absolute; top: 12px; right: 12px;
+  background: #E50914; color: #fff;
+  font-size: 0.6rem; font-weight: 800; padding: 2px 8px; border-radius: 20px;
  }
  .orch-stats {
- display: grid;
- grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
- gap: 10px;
- margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
  }
  .orch-stat {
- background: rgba(255,255,255,0.04);
- border: 1px solid rgba(255,255,255,0.07);
- border-radius: 10px;
- padding: 14px;
- text-align: center;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
  }
  .orch-stat-val { font-size: 1.5rem; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
  .orch-stat-lbl { font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.07em; margin-top: 4px; }
  .orch-actions { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
  .orch-btn {
- flex: 1; min-width: 140px; padding: 14px 20px; border: none; border-radius: 10px;
- font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: all 0.2s;
- display: flex; align-items: center; justify-content: center; gap: 8px; letter-spacing: 0.03em;
+  flex: 1; min-width: 140px; padding: 14px 20px; border: none; border-radius: 10px;
+  font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px; letter-spacing: 0.03em;
  }
  .orch-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
  .orch-btn-start { background: #E50914; color: #fff; }
@@ -60,9 +60,9 @@
  .orch-btn-wipe { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
  .orch-btn-wipe:hover:not(:disabled) { background: rgba(245,158,11,0.22); transform: translateY(-2px); }
  #orchStatus {
- display: inline-flex; align-items: center; gap: 6px;
- font-size: 0.8rem; font-weight: 700; padding: 5px 14px; border-radius: 20px;
- background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5); letter-spacing: 0.04em; transition: all 0.3s;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.8rem; font-weight: 700; padding: 5px 14px; border-radius: 20px;
+  background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5); letter-spacing: 0.04em; transition: all 0.3s;
  }
  #orchStatus .status-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.3); transition: all 0.3s; }
  #orchStatus.running { background: rgba(59,130,246,0.15); color: #60a5fa; }
@@ -74,32 +74,32 @@
  @keyframes pulse-dot { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(1.4);opacity:0.7;} }
  .log-wrap { background: #0a0a0a; border-radius: 12px; border: 1px solid rgba(255,255,255,0.07); overflow: hidden; }
  .log-header-bar {
- background: rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.07);
- padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.07);
+  padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
  }
  .log-dots { display: flex; gap: 6px; }
  .log-dots span { width: 11px; height: 11px; border-radius: 50%; }
  .log-dots span:nth-child(1){background:#ff5f57;} .log-dots span:nth-child(2){background:#febc2e;} .log-dots span:nth-child(3){background:#28c840;}
  .log-title-bar { font-size: 0.75rem; color: rgba(255,255,255,0.3); font-family: monospace; }
  #logBox {
- padding: 16px 20px; font-family: 'Fira Mono','Courier New',monospace; font-size: 0.77rem; color: #7a8399;
- height: 420px; overflow-y: auto; line-height: 1.65; white-space: pre-wrap; word-break: break-word;
+  padding: 16px 20px; font-family: 'Fira Mono','Courier New',monospace; font-size: 0.77rem; color: #7a8399;
+  height: 420px; overflow-y: auto; line-height: 1.65; white-space: pre-wrap; word-break: break-word;
  }
  #logBox::-webkit-scrollbar{width:5px;} #logBox::-webkit-scrollbar-track{background:transparent;} #logBox::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:3px;}
  .log-line{display:block;padding:0.5px 0;}
  .log-ok{color:#4ade80;} .log-err{color:#f87171;} .log-warn{color:#fb923c;}
  .log-head{color:#60a5fa;font-weight:600;} .log-add{color:#a78bfa;} .log-merge{color:#f59e0b;} .log-skip{color:rgba(255,255,255,0.25);}
  #doneBanner {
- display:none; margin-top:16px; background:rgba(34,197,94,0.08);
- border:1px solid rgba(34,197,94,0.25); border-radius:12px; padding:20px 24px; text-align:center;
+  display:none; margin-top:16px; background:rgba(34,197,94,0.08);
+  border:1px solid rgba(34,197,94,0.25); border-radius:12px; padding:20px 24px; text-align:center;
  }
  #doneBanner.visible{display:block;}
  #doneBanner h4{color:#4ade80;margin:0 0 6px;font-size:1.05rem;}
  #doneBanner p{margin:4px 0;font-size:0.82rem;color:rgba(255,255,255,0.55);}
  #doneBanner a{color:#E50914;text-decoration:none;font-weight:600;}
  .modal-overlay {
- display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8);
- backdrop-filter:blur(6px); z-index:9999; align-items:center; justify-content:center;
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8);
+  backdrop-filter:blur(6px); z-index:9999; align-items:center; justify-content:center;
  }
  .modal-overlay.visible{display:flex;}
  .modal-box { background:#151515; border:1px solid rgba(245,158,11,0.3); border-radius:16px; padding:32px; max-width:380px; width:90%; text-align:center; }
@@ -112,258 +112,338 @@
  .modal-cancel:hover{background:rgba(255,255,255,0.14);}
  .modal-confirm-wipe{background:#f59e0b;color:#000;}
  .modal-confirm-wipe:hover{background:#fbbf24;transform:translateY(-1px);}
+
+ /* ── Mobile responsive ──────────────────────────── */
+ @media (max-width: 680px) {
+  .orch-modes { grid-template-columns: 1fr; }
+  .orch-actions { flex-direction: column; }
+  .orch-btn { flex: none; width: 100%; min-width: unset; }
+  #logBox { height: 280px; font-size: 0.7rem; }
+  .orch-stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .orch-stat { padding: 10px 8px; }
+  .orch-stat-val { font-size: 1.15rem; }
+ }
  </style>
 </head>
 <body>
 <div class="admin-layout">
- <aside class="admin-sidebar">
- <div class="admin-logo">XLOOP Admin</div>
- <nav class="admin-nav">
- <a href="/admin/dashboard.html">Dashboard</a>
- <a href="/admin/add-movie.html">+ Add Movie</a>
- <a href="/admin/add-series.html">+ Add Series</a>
- <a href="/admin/bulk-import.html">Bulk Import</a>
- <a href="/admin/scraper.html">Scraper</a>
- <a href="/admin/orchestrator.html" class="active">Orchestrator</a>
- <a href="/" target="_blank" style="margin-top:auto;border-top:1px solid var(--border);border-radius:0;padding-top:16px;">View Site ↗</a>
- <a href="#" onclick="logout()" style="color:var(--red);">Logout</a>
- </nav>
+ <aside class="admin-sidebar" id="adminSidebar">
+  <div class="admin-logo">
+   XLOOP Admin
+   <button class="sidebar-close-btn" id="sidebarCloseBtn" onclick="closeMobileSidebar()" aria-label="Close menu">✕</button>
+  </div>
+  <nav class="admin-nav">
+  <a href="/admin/dashboard.html">Dashboard</a>
+  <a href="/admin/add-movie.html">+ Add Movie</a>
+  <a href="/admin/add-series.html">+ Add Series</a>
+  <a href="/admin/bulk-import.html">Bulk Import</a>
+  <a href="/admin/manager.html">Content Manager</a>
+  <a href="/admin/fix-posters.html">Fix Posters</a>
+  <a href="/admin/scraper.html">Scraper</a>
+  <a href="/admin/orchestrator.html" class="active">Orchestrator</a>
+  <a href="/" target="_blank" style="margin-top:auto;border-top:1px solid var(--border);border-radius:0;padding-top:16px;">View Site ↗</a>
+  <a href="#" onclick="logout()" style="color:var(--red);">Logout</a>
+  </nav>
  </aside>
+ <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeMobileSidebar()"></div>
 
  <main class="admin-content">
- <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
- <h1 class="admin-page-title" style="margin:0;">Master Orchestrator</h1>
- <span id="orchStatus"><span class="status-dot"></span> IDLE</span>
- </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+   <div style="display:flex;align-items:center;gap:12px;">
+    <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="openMobileSidebar()" aria-label="Open menu">☰</button>
+    <h1 class="admin-page-title" style="margin:0;">Master Orchestrator</h1>
+   </div>
+   <span id="orchStatus"><span class="status-dot"></span> IDLE</span>
+  </div>
 
- <div class="orch-stats">
- <div class="orch-stat"><div class="orch-stat-val" id="statExtracted">—</div><div class="orch-stat-lbl">Links Extracted</div></div>
- <div class="orch-stat"><div class="orch-stat-val" id="statMovies">—</div><div class="orch-stat-lbl">Movies</div></div>
- <div class="orch-stat"><div class="orch-stat-val" id="statPacks">—</div><div class="orch-stat-lbl">Season Packs</div></div>
- <div class="orch-stat"><div class="orch-stat-val" id="statAdded">0</div><div class="orch-stat-lbl">DB Added</div></div>
- <div class="orch-stat"><div class="orch-stat-val" id="statUpdated">0</div><div class="orch-stat-lbl">DB Updated</div></div>
- <div class="orch-stat"><div class="orch-stat-val" id="statGroups">—</div><div class="orch-stat-lbl">Title Groups</div></div>
- </div>
+  <div class="orch-stats">
+  <div class="orch-stat"><div class="orch-stat-val" id="statExtracted">—</div><div class="orch-stat-lbl">Links Extracted</div></div>
+  <div class="orch-stat"><div class="orch-stat-val" id="statMovies">—</div><div class="orch-stat-lbl">Movies</div></div>
+  <div class="orch-stat"><div class="orch-stat-val" id="statPacks">—</div><div class="orch-stat-lbl">Season Packs</div></div>
+  <div class="orch-stat"><div class="orch-stat-val" id="statAdded">0</div><div class="orch-stat-lbl">DB Added</div></div>
+  <div class="orch-stat"><div class="orch-stat-val" id="statUpdated">0</div><div class="orch-stat-lbl">DB Updated</div></div>
+  <div class="orch-stat"><div class="orch-stat-val" id="statGroups">—</div><div class="orch-stat-lbl">Title Groups</div></div>
+  </div>
 
- <div class="orch-modes" id="modeCards">
- <div class="orch-mode-card selected" onclick="selectMode(false)" id="modeCard-full">
- <div class="mode-icon">
- <div class="mode-title">Full Pipeline</div>
- <div class="mode-desc">Scrape Telegram → Extract Links → Import → Heal DB. Best for a fresh run.</div>
- <span class="mode-badge">FULL</span>
- </div>
- <div class="orch-mode-card" onclick="selectMode(true)" id="modeCard-skip">
- <div class="mode-icon">
- <div class="mode-title">Skip Scraper</div>
- <div class="mode-desc">Use existing <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:3px;">telegram_export.json</code> — skips Telegram API scraping.</div>
- <span class="mode-badge">FAST</span>
- </div>
- </div>
+  <div class="orch-modes" id="modeCards">
+  <div class="orch-mode-card selected" onclick="selectMode(false)" id="modeCard-full">
+   <div class="mode-icon">🚀</div>
+   <div class="mode-title">Full Pipeline</div>
+   <div class="mode-desc">Scrape Telegram → Extract Links → Import → Heal DB. Best for a fresh run.</div>
+   <span class="mode-badge">FULL</span>
+  </div>
+  <div class="orch-mode-card" onclick="selectMode(true)" id="modeCard-skip">
+   <div class="mode-icon">⚡</div>
+   <div class="mode-title">Skip Scraper</div>
+   <div class="mode-desc">Use existing <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:3px;">telegram_export.json</code> — skips Telegram API scraping.</div>
+   <span class="mode-badge">FAST</span>
+  </div>
+  </div>
 
- <div class="orch-actions">
- <button class="orch-btn orch-btn-start" id="startBtn" onclick="startPipeline()">
- <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
- Run Orchestrator
- </button>
- <button class="orch-btn orch-btn-stop" id="stopBtn" onclick="stopPipeline()" disabled>
- <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
- Stop
- </button>
- <button class="orch-btn orch-btn-wipe" id="wipeBtn" onclick="showWipeConfirm()">
- <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>
- Wipe Database
- </button>
- </div>
+  <div class="orch-actions">
+  <button class="orch-btn orch-btn-start" id="startBtn" onclick="startPipeline()">
+   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+   Run Orchestrator
+  </button>
+  <button class="orch-btn orch-btn-stop" id="stopBtn" onclick="stopPipeline()" disabled>
+   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
+   Stop
+  </button>
+  <button class="orch-btn orch-btn-wipe" id="wipeBtn" onclick="showWipeConfirm()">
+   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>
+   Wipe Database
+  </button>
+  </div>
 
- <div class="log-wrap">
- <div class="log-header-bar">
- <div class="log-dots"><span></span><span></span><span></span></div>
- <span class="log-title-bar">xloop — orchestrator live output</span>
- <button onclick="clearLog()" style="background:transparent;border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.35);padding:3px 10px;border-radius:6px;font-size:0.7rem;cursor:pointer;">Clear</button>
- </div>
- <div id="logBox"><span class="log-skip">Waiting for pipeline to start...</span></div>
- </div>
+  <div class="log-wrap">
+  <div class="log-header-bar">
+   <div class="log-dots"><span></span><span></span><span></span></div>
+   <span class="log-title-bar">xloop — orchestrator live output</span>
+   <button onclick="clearLog()" style="background:transparent;border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.35);padding:3px 10px;border-radius:6px;font-size:0.7rem;cursor:pointer;">Clear</button>
+  </div>
+  <div id="logBox"><span class="log-skip">Waiting for pipeline to start...</span></div>
+  </div>
 
- <div id="doneBanner">
- <h4>Pipeline Complete!</h4>
- <p id="doneSummary">All steps finished successfully.</p>
- <p style="margin-top:10px;"><a href="/admin/manager.html">→ Open Content Manager</a> &nbsp;|&nbsp; <a href="/admin/fix-posters.html">→ Fix Missing Posters</a></p>
- </div>
+  <div id="doneBanner">
+  <h4>🎉 Pipeline Complete!</h4>
+  <p id="doneSummary">All steps finished successfully.</p>
+  <p style="margin-top:10px;"><a href="/admin/manager.html">→ Open Content Manager</a> &nbsp;|&nbsp; <a href="/admin/fix-posters.html">→ Fix Missing Posters</a></p>
+  </div>
  </main>
 </div>
 
+<!-- Wipe Confirm Modal -->
 <div class="modal-overlay" id="wipeModal">
  <div class="modal-box">
- <div class="modal-icon">
- <h3>Wipe Entire Database?</h3>
- <p>This will <strong>permanently delete</strong> all movies and series from MongoDB. This <strong>cannot be undone</strong>. Make sure you have a backup.</p>
- <div class="modal-btns">
- <button class="modal-cancel" onclick="closeWipeConfirm()">Cancel</button>
- <button class="modal-confirm-wipe" onclick="confirmWipe()">Yes, Wipe DB</button>
- </div>
+  <div class="modal-icon">🗑️</div>
+  <h3>Wipe Entire Database?</h3>
+  <p>This will <strong>permanently delete</strong> all movies and series from MongoDB. This <strong>cannot be undone</strong>. Make sure you have a backup.</p>
+  <div class="modal-btns">
+   <button class="modal-cancel" onclick="closeWipeConfirm()">Cancel</button>
+   <button class="modal-confirm-wipe" onclick="confirmWipe()">Yes, Wipe DB</button>
+  </div>
  </div>
 </div>
 
 <div class="toast" id="toast">Message</div>
 <script src="/js/admin.js"></script>
 <script>
+ // ── State ────────────────────────────────────────────────
  let skipScraper = false, isRunning = false, eventSource = null;
  let cAdded = 0, cUpdated = 0;
 
- function selectMode(skip) {
- skipScraper = skip;
- document.getElementById('modeCard-full').classList.toggle('selected', !skip);
- document.getElementById('modeCard-skip').classList.toggle('selected', skip);
+ // ── Mobile sidebar ───────────────────────────────────────
+ function openMobileSidebar() {
+  document.getElementById('adminSidebar').classList.add('open');
+  document.getElementById('sidebarBackdrop').classList.add('visible');
+  document.body.style.overflow = 'hidden';
+ }
+ function closeMobileSidebar() {
+  document.getElementById('adminSidebar').classList.remove('open');
+  document.getElementById('sidebarBackdrop').classList.remove('visible');
+  document.body.style.overflow = '';
  }
 
+ // ── Mode select ──────────────────────────────────────────
+ function selectMode(skip) {
+  skipScraper = skip;
+  document.getElementById('modeCard-full').classList.toggle('selected', !skip);
+  document.getElementById('modeCard-skip').classList.toggle('selected', skip);
+ }
+
+ // ── Log helpers ──────────────────────────────────────────
  function appendLog(text) {
- const box = document.getElementById('logBox');
- const span = document.createElement('span');
- span.className = 'log-line ' + classifyLine(text);
- span.textContent = text;
- box.appendChild(span);
- box.scrollTop = box.scrollHeight;
- parseStat(text);
+  const box = document.getElementById('logBox');
+  const span = document.createElement('span');
+  span.className = 'log-line ' + classifyLine(text);
+  span.textContent = text;
+  box.appendChild(span);
+  box.scrollTop = box.scrollHeight;
+  parseStat(text);
  }
 
  function classifyLine(t) {
- if (/|completed successfully|/i.test(t)) return 'log-ok';
- if (/|ERROR:|failed with code [^0]/i.test(t)) return 'log-err';
- if (/|warning|missing|unknown/i.test(t)) return 'log-warn';
- if (/|\[ORCHESTRATOR\]/i.test(t)) return 'log-head';
- if (/^ Added:/i.test(t)) return 'log-add';
- if (/^ Merged/i.test(t)) return 'log-merge';
- if (/^⏭|skipping/i.test(t)) return 'log-skip';
- return '';
+  if (/✅|completed successfully/i.test(t))          return 'log-ok';
+  if (/❌|ERROR:|failed with code [^0]/i.test(t))    return 'log-err';
+  if (/⚠️|warning|missing|unknown/i.test(t))         return 'log-warn';
+  if (/🚀|\[ORCHESTRATOR\]/i.test(t))                return 'log-head';
+  if (/^➕ Added:/i.test(t))                         return 'log-add';
+  if (/^🔗 Merged/i.test(t))                         return 'log-merge';
+  if (/^⏭|skipping/i.test(t))                       return 'log-skip';
+  return '';
  }
 
  function parseStat(t) {
- let m;
- if ((m = t.match(/Extracted\s+([\d,]+)\s+direct/i))) setStat('statExtracted', m[1]);
- if ((m = t.match(/ Movies\s*:\s*([\d,]+)/i))) setStat('statMovies', m[1]);
- if ((m = t.match(/ Season Packs\s*:\s*([\d,]+)/i))) setStat('statPacks', m[1]);
- if ((m = t.match(/Unique title groups:\s*([\d,]+)/i))) setStat('statGroups', m[1]);
- if (/^ Added:/i.test(t)) { cAdded++; document.getElementById('statAdded').textContent = cAdded.toLocaleString(); }
- if (/^ Updated:/i.test(t)) { cUpdated++; document.getElementById('statUpdated').textContent = cUpdated.toLocaleString(); }
+  let m;
+  if ((m = t.match(/Extracted\s+([\d,]+)\s+direct/i)))       setStat('statExtracted', m[1]);
+  if ((m = t.match(/🎬 Movies\s*:\s*([\d,]+)/i)))            setStat('statMovies', m[1]);
+  if ((m = t.match(/📦 Season Packs\s*:\s*([\d,]+)/i)))      setStat('statPacks', m[1]);
+  if ((m = t.match(/Unique title groups:\s*([\d,]+)/i)))      setStat('statGroups', m[1]);
+  if (/^➕ Added:/i.test(t)) { cAdded++; document.getElementById('statAdded').textContent = cAdded.toLocaleString(); }
+  if (/^🔄 Updated:/i.test(t)) { cUpdated++; document.getElementById('statUpdated').textContent = cUpdated.toLocaleString(); }
  }
 
  function setStat(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
  function clearLog() {
- document.getElementById('logBox').innerHTML = '<span class="log-skip">Log cleared.</span>';
- cAdded = 0; cUpdated = 0;
- ['statExtracted','statMovies','statPacks','statGroups'].forEach(id => setStat(id, '—'));
- document.getElementById('statAdded').textContent = '0';
- document.getElementById('statUpdated').textContent = '0';
+  document.getElementById('logBox').innerHTML = '<span class="log-skip">Log cleared.</span>';
+  cAdded = 0; cUpdated = 0;
+  ['statExtracted','statMovies','statPacks','statGroups'].forEach(id => setStat(id, '—'));
+  document.getElementById('statAdded').textContent = '0';
+  document.getElementById('statUpdated').textContent = '0';
  }
 
  function setStatus(state, label) {
- const el = document.getElementById('orchStatus');
- el.className = state;
- el.innerHTML = `<span class="status-dot"></span> ${label}`;
+  const el = document.getElementById('orchStatus');
+  el.className = state;
+  el.innerHTML = `<span class="status-dot"></span> ${label}`;
  }
 
+ // ── SSE stream helpers ───────────────────────────────────
+ function connectStream(onMessage) {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+  eventSource = new EventSource('/api/orchestrator/stream');
+  eventSource.onmessage = (e) => {
+   try {
+    const ev = JSON.parse(e.data);
+    const text = ev.text || '';
+    if (text) onMessage(text);
+   } catch(_) {}
+  };
+  eventSource.onerror = () => {
+   if (isRunning) appendLog('⚠️ Connection lost — attempting to reconnect...');
+  };
+ }
+
+ // ── Start pipeline ───────────────────────────────────────
  async function startPipeline() {
- if (isRunning) return;
- isRunning = true; cAdded = 0; cUpdated = 0;
- document.getElementById('logBox').innerHTML = '';
- document.getElementById('doneBanner').classList.remove('visible');
- document.getElementById('startBtn').disabled = true;
- document.getElementById('stopBtn').disabled = false;
- document.getElementById('wipeBtn').disabled = true;
- document.getElementById('modeCards').style.opacity = '0.5';
- document.getElementById('modeCards').style.pointerEvents = 'none';
- setStatus('running', 'RUNNING');
+  if (isRunning) return;
+  isRunning = true; cAdded = 0; cUpdated = 0;
+  document.getElementById('logBox').innerHTML = '';
+  document.getElementById('doneBanner').classList.remove('visible');
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('stopBtn').disabled = false;
+  document.getElementById('wipeBtn').disabled = true;
+  document.getElementById('modeCards').style.opacity = '0.5';
+  document.getElementById('modeCards').style.pointerEvents = 'none';
+  setStatus('running', 'RUNNING');
 
- if (eventSource) eventSource.close();
- eventSource = new EventSource('/api/orchestrator/stream');
- eventSource.onmessage = (e) => {
- try {
- const ev = JSON.parse(e.data);
- const text = ev.text || '';
- appendLog(text);
- if (/Pipeline finished/i.test(text) || //.test(text)) onFinished(text);
- } catch(_) {}
- };
- eventSource.onerror = () => { if (isRunning) appendLog(' Connection to server lost.'); };
+  connectStream((text) => {
+   appendLog(text);
+   if (/🎉 Pipeline finished successfully|Pipeline finished/i.test(text)) onFinished(text);
+   if (/💥 Pipeline stopped due to an error/i.test(text)) onFinished(text, true);
+  });
 
- try {
- const res = await fetch('/api/orchestrator/start', {
- method: 'POST',
- headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('gp_token')}` },
- body: JSON.stringify({ skipScraper })
- });
- if (!res.ok) {
- const d = await res.json();
- appendLog(`ERROR: ${d.error || 'Failed to start pipeline'}`);
- onFinished('', true);
- }
- } catch(e) {
- appendLog(`ERROR: ${e.message}`);
- onFinished('', true);
- }
+  try {
+   const res = await fetch('/api/orchestrator/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+    body: JSON.stringify({ skipScraper })
+   });
+   if (!res.ok) {
+    const d = await res.json();
+    appendLog(`❌ ERROR: ${d.error || d.message || 'Failed to start pipeline'}`);
+    onFinished('', true);
+   } else {
+    appendLog('✅ API accepted start request. Streaming logs...');
+   }
+  } catch(e) {
+   appendLog(`❌ ERROR: ${e.message}`);
+   onFinished('', true);
+  }
  }
 
+ // ── Stop pipeline ────────────────────────────────────────
  async function stopPipeline() {
- try {
- await fetch('/api/orchestrator/stop', {
- method: 'POST',
- headers: { 'Authorization': `Bearer ${localStorage.getItem('gp_token')}` }
- });
- } catch(e) { appendLog(`ERROR: ${e.message}`); }
- onFinished('', true);
+  try {
+   await fetch('/api/orchestrator/stop', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${getToken()}` }
+   });
+   appendLog('🛑 Stop command sent.');
+  } catch(e) { appendLog(`❌ ERROR: ${e.message}`); }
+  onFinished('', true);
  }
 
+ // ── Finished handler ─────────────────────────────────────
  function onFinished(lastLine, failed = false) {
- isRunning = false;
- if (eventSource) { eventSource.close(); eventSource = null; }
- document.getElementById('startBtn').disabled = false;
- document.getElementById('stopBtn').disabled = true;
- document.getElementById('wipeBtn').disabled = false;
- document.getElementById('modeCards').style.opacity = '1';
- document.getElementById('modeCards').style.pointerEvents = '';
- if (failed || /exit code [^0]/.test(lastLine)) {
- setStatus('fail', 'FAILED');
- } else {
- setStatus('done', 'DONE');
- document.getElementById('doneBanner').classList.add('visible');
- document.getElementById('doneSummary').textContent = `Added ${cAdded.toLocaleString()} new · Updated ${cUpdated.toLocaleString()} records`;
- }
+  isRunning = false;
+  if (eventSource) { eventSource.close(); eventSource = null; }
+  document.getElementById('startBtn').disabled = false;
+  document.getElementById('stopBtn').disabled = true;
+  document.getElementById('wipeBtn').disabled = false;
+  document.getElementById('modeCards').style.opacity = '1';
+  document.getElementById('modeCards').style.pointerEvents = '';
+  if (failed || /exit code [^0]/.test(lastLine)) {
+   setStatus('fail', 'FAILED');
+  } else {
+   setStatus('done', 'DONE');
+   document.getElementById('doneBanner').classList.add('visible');
+   document.getElementById('doneSummary').textContent = `Added ${cAdded.toLocaleString()} new · Updated ${cUpdated.toLocaleString()} records`;
+  }
  }
 
+ // ── Wipe DB ──────────────────────────────────────────────
  function showWipeConfirm() { document.getElementById('wipeModal').classList.add('visible'); }
  function closeWipeConfirm() { document.getElementById('wipeModal').classList.remove('visible'); }
 
  async function confirmWipe() {
- closeWipeConfirm();
- if (isRunning) return showToast('Stop the pipeline first!', true);
- isRunning = true;
- document.getElementById('logBox').innerHTML = '';
- document.getElementById('startBtn').disabled = true;
- document.getElementById('stopBtn').disabled = false;
- document.getElementById('wipeBtn').disabled = true;
- setStatus('running', 'WIPING DB...');
+  closeWipeConfirm();
+  if (isRunning) return showToast('Stop the pipeline first!', true);
+  isRunning = true;
+  document.getElementById('logBox').innerHTML = '';
+  document.getElementById('doneBanner').classList.remove('visible');
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('stopBtn').disabled = false;
+  document.getElementById('wipeBtn').disabled = true;
+  setStatus('running', 'WIPING DB...');
 
- if (eventSource) eventSource.close();
- eventSource = new EventSource('/api/orchestrator/stream');
- eventSource.onmessage = (e) => {
- try {
- const ev = JSON.parse(e.data);
- const text = ev.text || '';
- appendLog(text);
- if (/Wipe finished/i.test(text) || //.test(text)) { onFinished(text); showToast('Database wiped!'); }
- } catch(_) {}
- };
+  connectStream((text) => {
+   appendLog(text);
+   if (/Wipe finished/i.test(text)) { onFinished(text); showToast('✅ Database wiped!'); }
+   if (/exit code [^0]/i.test(text)) { onFinished(text, true); }
+  });
 
- try {
- await fetch('/api/orchestrator/wipe', {
- method: 'POST',
- headers: { 'Authorization': `Bearer ${localStorage.getItem('gp_token')}` }
- });
- } catch(e) { appendLog(`ERROR: ${e.message}`); onFinished('', true); }
+  try {
+   const res = await fetch('/api/orchestrator/wipe', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${getToken()}` }
+   });
+   if (!res.ok) {
+    const d = await res.json();
+    appendLog(`❌ ERROR: ${d.error || d.message || 'Wipe failed'}`);
+    onFinished('', true);
+   } else {
+    appendLog('✅ API accepted wipe request. Streaming logs...');
+   }
+  } catch(e) { appendLog(`❌ ERROR: ${e.message}`); onFinished('', true); }
  }
 
- checkAuth();
+ // ── Page load: check if pipeline already running ─────────
+ async function initOrchestrator() {
+  await checkAuth();
+  try {
+   const res = await fetch('/api/orchestrator/status');
+   if (!res.ok) return;
+   const { running } = await res.json();
+   if (running) {
+    isRunning = true;
+    setStatus('running', 'RUNNING');
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('stopBtn').disabled = false;
+    document.getElementById('wipeBtn').disabled = true;
+    appendLog('📡 Pipeline already running — reconnecting to stream...');
+    connectStream((text) => {
+     appendLog(text);
+     if (/🎉 Pipeline finished successfully|Pipeline finished/i.test(text)) onFinished(text);
+     if (/💥 Pipeline stopped due to an error/i.test(text)) onFinished(text, true);
+     if (/Wipe finished/i.test(text)) { onFinished(text); showToast('✅ Database wiped!'); }
+    });
+   }
+  } catch(_) {}
+ }
+
+ initOrchestrator();
 </script>
 </body>
 </html>

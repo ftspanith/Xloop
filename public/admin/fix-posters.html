@@ -142,8 +142,8 @@
 </head>
 <body>
   <div class="admin-layout">
-    <aside class="admin-sidebar">
-      <div class="admin-logo">XLOOP Admin</div>
+    <aside class="admin-sidebar" id="adminSidebar">
+      <div class="admin-logo"><button class="sidebar-close-btn" onclick="closeMobileSidebar()" aria-label="Close menu">✕</button></div>
       <nav class="admin-nav">
         <a href="/admin/dashboard.html">Dashboard</a>
         <a href="/admin/add-movie.html">+ Add Movie</a>
@@ -158,7 +158,8 @@
     </aside>
 
     <main class="admin-content">
-      <h1 class="admin-page-title">Fix Broken Posters</h1>
+      <button class="mobile-menu-btn" onclick="openMobileSidebar()" aria-label="Open menu">☰</button>
+    Fix Broken Posters</h1>
 
       <div class="form-card" style="margin-bottom:20px;">
         <p style="font-size:0.85rem; color:var(--text2); margin-bottom:12px;">

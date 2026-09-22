@@ -797,6 +797,18 @@ async function deleteMovie() {
 //  Init 
 addLinkRow();
 loadSearch();
+
+  // ── Mobile sidebar ────────────────────────────────────────
+  function openMobileSidebar() {
+    document.getElementById('adminSidebar').classList.add('open');
+    document.getElementById('sidebarBackdrop').classList.add('visible');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeMobileSidebar() {
+    document.getElementById('adminSidebar').classList.remove('open');
+    document.getElementById('sidebarBackdrop').classList.remove('visible');
+    document.body.style.overflow = '';
+  }
 </script>
 </body>
 </html>

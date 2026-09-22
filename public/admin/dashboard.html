@@ -360,8 +360,11 @@
 </head>
 <body>
 <div class="admin-layout">
-  <aside class="admin-sidebar">
-    <div class="admin-logo">XLOOP Admin</div>
+  <aside class="admin-sidebar" id="adminSidebar">
+    <div class="admin-logo">
+      XLOOP Admin
+      <button class="sidebar-close-btn" id="sidebarCloseBtn" onclick="closeMobileSidebar()" aria-label="Close menu">✕</button>
+    </div>
     <nav class="admin-nav">
       <a href="/admin/dashboard.html" class="active">Dashboard</a>
       <a href="/admin/add-movie.html">+ Add Movie</a>
@@ -375,9 +378,13 @@
       <a href="#" onclick="logout()" style="color:var(--red);">Logout</a>
     </nav>
   </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeMobileSidebar()"></div>
 
   <main class="admin-content">
-    <h1 class="admin-page-title">Dashboard</h1>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:0;">
+      <button class="mobile-menu-btn" onclick="openMobileSidebar()" aria-label="Open menu">&#9776;</button>
+      <h1 class="admin-page-title">Dashboard</h1>
+    </div>
 
     <!-- ── Stats ── -->
     <div class="dash-stats">
@@ -769,6 +776,18 @@
       setInterval(syncOrchestratorStatus, 5000);
     }
   });
+
+  // ── Mobile sidebar ─────────────────────────────────────────────────────────
+  function openMobileSidebar() {
+    document.getElementById('adminSidebar').classList.add('open');
+    document.getElementById('sidebarBackdrop').classList.add('visible');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeMobileSidebar() {
+    document.getElementById('adminSidebar').classList.remove('open');
+    document.getElementById('sidebarBackdrop').classList.remove('visible');
+    document.body.style.overflow = '';
+  }
 </script>
 </body>
 </html>
