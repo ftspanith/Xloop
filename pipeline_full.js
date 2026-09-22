@@ -36,15 +36,17 @@ const argv        = process.argv.slice(2);
 const NO_WIPE     = argv.includes('--no-wipe');
 const NO_HEAL     = argv.includes('--no-heal');
 const NO_BYPASS   = argv.includes('--no-bypass');
+const RESUME      = argv.includes('--resume');   // resume from checkpoint after crash
 const CONCURRENCY = parseInt((argv.find(a => a.startsWith('--concurrency=')) || '').replace('--concurrency=', '') || '3', 10);
 const IMPORT_SRC  = (argv.find(a => a.startsWith('--import-source=')) || '').replace('--import-source=', '') || null;
 
-const ROOT            = __dirname;
-const LINKS_FILE      = path.join(ROOT, 'links_for_bypasser.json');
-const SHORTLINKS_FILE = path.join(ROOT, 'shortlinks_report.json');
-const BYPASSED_FILE   = path.join(ROOT, 'bypassed_links.json');
-const TMDB_KEY        = process.env.TMDB_API_KEY || '';
-const OMDB_KEY        = process.env.OMDB_API_KEY  || '';
+const ROOT             = __dirname;
+const LINKS_FILE       = path.join(ROOT, 'links_for_bypasser.json');
+const SHORTLINKS_FILE  = path.join(ROOT, 'shortlinks_report.json');
+const BYPASSED_FILE    = path.join(ROOT, 'bypassed_links.json');
+const CHECKPOINT_FILE  = path.join(ROOT, 'import_checkpoint.json'); // tracks processed title groups
+const TMDB_KEY         = process.env.TMDB_API_KEY || '';
+const OMDB_KEY         = process.env.OMDB_API_KEY  || '';
 
 // ─── Terminal colors ──────────────────────────────────────────────────────────
 const C = {
@@ -456,7 +458,7 @@ async function phaseImport(allEntries) {
 
   let added = 0, updated = 0, skipped = 0, noMeta = 0;
 
-  // Group by title+year for TMDB efficiency
+  // ── Group by title+year for TMDB efficiency ───────────────────────────────────────
   const groups = {};
   for (const item of valid) {
     const key = `${(item.title || '').toLowerCase().trim()}__${item.year || ''}`;
@@ -464,9 +466,29 @@ async function phaseImport(allEntries) {
     if (item.date && (!groups[key].msgDate || item.date < groups[key].msgDate)) groups[key].msgDate = item.date;
     groups[key].items.push(item);
   }
-  console.log(`  Unique title groups: ${Object.keys(groups).length}\n`);
+  console.log(`  Unique title groups: ${Object.keys(groups).length}`);
 
-  const groupEntries = Object.entries(groups);
+  // ── Checkpoint: load already-processed groups for --resume ────────────────────────
+  let processedKeys = new Set();
+  if (RESUME && fs.existsSync(CHECKPOINT_FILE)) {
+    try {
+      processedKeys = new Set(JSON.parse(fs.readFileSync(CHECKPOINT_FILE, 'utf8')));
+      console.log(`  ⏭️  Resuming: ${processedKeys.size} groups already done — skipping them`);
+    } catch(_) { warn('Could not read checkpoint file — starting fresh'); }
+  } else if (!RESUME && fs.existsSync(CHECKPOINT_FILE)) {
+    // Clean checkpoint on fresh run
+    try { fs.unlinkSync(CHECKPOINT_FILE); } catch(_) {}
+  }
+
+  const groupEntries = Object.entries(groups).filter(([key]) => !processedKeys.has(key));
+  console.log(`  Processing: ${groupEntries.length} groups\n`);
+
+  // Save checkpoint every N groups so crashes can resume from near where they stopped
+  const CHECKPOINT_EVERY = 50;
+  function saveCheckpoint(processedSoFar) {
+    try { fs.writeFileSync(CHECKPOINT_FILE, JSON.stringify([...processedKeys, ...processedSoFar])); }
+    catch(_) {}
+  }
 
   async function processGroup([, group]) {
     const rep   = group.items[0];
@@ -609,20 +631,29 @@ async function phaseImport(allEntries) {
 
   let gi = 0;
   const active2 = [];
+  const batchDoneKeys = [];
   for (const entry of groupEntries) {
     if (active2.length >= 2) await Promise.race(active2);
-    const p = processGroup(entry).finally(() => active2.splice(active2.indexOf(p), 1));
+    const p = processGroup(entry).finally(() => {
+      active2.splice(active2.indexOf(p), 1);
+      batchDoneKeys.push(entry[0]);
+      // Checkpoint: save every CHECKPOINT_EVERY groups
+      if (batchDoneKeys.length % CHECKPOINT_EVERY === 0) saveCheckpoint(batchDoneKeys);
+    });
     active2.push(p); gi++;
     if (gi % 100 === 0) process.stdout.write(`\r   Importing: ${gi}/${groupEntries.length}...`);
     await sleep(50);
   }
   await Promise.all(active2);
+  saveCheckpoint(batchDoneKeys); // final checkpoint save
   process.stdout.write(`\r   Importing: ${groupEntries.length}/${groupEntries.length} — Done!         \n`);
 
   console.log(`\n  ${C.green}➕ Added   : ${added}${C.reset}`);
   console.log(`  ${C.cyan}🔄 Updated : ${updated}${C.reset}`);
   console.log(`  ${C.gray}⏭️  Skipped : ${skipped}${C.reset}`);
   if (noMeta) console.log(`  ${C.yellow}❓ No meta : ${noMeta}${C.reset}`);
+  // Clean checkpoint on full success
+  try { if (fs.existsSync(CHECKPOINT_FILE)) fs.unlinkSync(CHECKPOINT_FILE); } catch(_) {}
 }
 
 // ─── Spawn child script ───────────────────────────────────────────────────────
@@ -703,10 +734,40 @@ async function main() {
     for (const e of allEntries) { if (!e.bypassedUrl && bmap.has(e.url)) e.bypassedUrl = bmap.get(e.url); }
   }
 
-  // STEP 3: MongoDB
+  // STEP 3: MongoDB — connect with retry + keepAlive to survive long runs
   sep();
   log('STEP 3 — Connecting to MongoDB...');
-  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/xloop');
+  const MONGO_OPTS = {
+    serverSelectionTimeoutMS: 15_000,
+    connectTimeoutMS:         15_000,
+    socketTimeoutMS:          60_000,
+    heartbeatFrequencyMS:     10_000,
+    family:                   4,       // IPv4 only — prevents IPv6 DNS hangs
+    maxPoolSize:              5,
+    minPoolSize:              1,
+    retryWrites:              true,
+  };
+  // Retry MongoDB connection up to 5 times (handles transient DNS blips)
+  let mongoConnected = false;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/xloop', MONGO_OPTS);
+      mongoConnected = true;
+      break;
+    } catch (err) {
+      warn(`MongoDB connect attempt ${attempt}/5 failed: ${err.message}`);
+      if (attempt < 5) { console.log(`  Retrying in ${attempt * 5}s...`); await sleep(attempt * 5000); }
+    }
+  }
+  if (!mongoConnected) { fail('Could not connect to MongoDB after 5 attempts. Aborting.'); process.exit(1); }
+  // Auto-reconnect on disconnect (handles mid-run DNS drops)
+  mongoose.connection.on('disconnected', async () => {
+    warn('MongoDB disconnected mid-run — attempting reconnect...');
+    for (let i = 1; i <= 5; i++) {
+      try { await sleep(i * 3000); await mongoose.connect(process.env.MONGODB_URI, MONGO_OPTS); console.log('  MongoDB reconnected.'); break; }
+      catch(_) { warn(`Reconnect attempt ${i}/5 failed`); }
+    }
+  });
   ok('MongoDB connected');
 
   // STEP 4: Import
@@ -714,7 +775,7 @@ async function main() {
   log('STEP 4 — Importing all entries (direct + bypassed) → MongoDB...');
   await phaseImport(allEntries);
   ok('Import complete');
-  await mongoose.disconnect();
+  try { await mongoose.disconnect(); } catch(_) {}
 
   // STEP 5: Heal
   sep();

@@ -108,16 +108,23 @@ router.post('/start', auth, (req, res) => {
     return res.status(400).json({ error: 'Process is already running' });
   }
 
-  const { startDate, endDate, channels, skipScraper } = req.body || {};
-  const scriptPath = path.join(__dirname, '..', 'orchestrator.js');
-  const args = [scriptPath];
-  if (startDate) args.push(`--start-date=${startDate}`);
-  if (endDate)   args.push(`--end-date=${endDate}`);
-  if (channels && channels.length) args.push(`--channels=${channels.join(',')}`);
-  if (skipScraper) args.push('--skip-scraper');
+  const { skipScraper, resume } = req.body || {};
 
-  runScript('node', args, '🚀 Starting Master Orchestrator Pipeline...', 'Pipeline finished with');
-  res.json({ message: 'Pipeline started' });
+  // Always use pipeline_full.js — it handles extract + bypass + import + heal
+  // skipScraper=true  → --no-bypass --no-wipe  (use existing links, skip shortlinks)
+  // skipScraper=false → full pipeline (extract fresh, bypass shortlinks, import, heal)
+  // resume=true       → --resume  (continue from checkpoint after a crash)
+  const scriptPath = path.join(__dirname, '..', 'pipeline_full.js');
+  const args = [scriptPath];
+  if (skipScraper) {
+    args.push('--no-bypass');  // skip dead shortlinks
+    args.push('--no-wipe');    // keep existing DB entries
+  }
+  if (resume) args.push('--resume'); // continue from checkpoint
+
+  const label = skipScraper ? 'Skip Scraper (no-bypass)' : 'Full Pipeline';
+  runScript('node', args, `🚀 Starting ${label}...`, 'Pipeline finished with');
+  res.json({ message: `${label} started` });
 });
 
 // ── Heal Only (auth required) ────────────────────────────────────────────────
