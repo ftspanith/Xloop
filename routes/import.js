@@ -196,8 +196,7 @@ async function fetchTMDB(parsed, tmdbKey, retries = 2) {
           } catch (_) {}
         }
 
-        console.log(`[TMDB] ✅ Direct ID match: "${d.title || d.name}" via ${parsed.tmdbIdHint ? 'TMDB' : 'IMDB'} ID`);
-        return {
+                return {
           tmdbId:            String(d.id),
           type:              isTv ? 'series' : 'movie',
           totalSeasons:      d.number_of_seasons || 0,
@@ -219,8 +218,7 @@ async function fetchTMDB(parsed, tmdbKey, retries = 2) {
         };
       }
     } catch (e) {
-      console.log(`[TMDB] Direct ID lookup failed: ${e.message}`);
-    }
+          }
   }
 
   // ── FUZZY SEARCH FALLBACK ────────────────────────────────────────────────────
@@ -261,8 +259,7 @@ async function fetchTMDB(parsed, tmdbKey, retries = 2) {
         const minTitleSim = isShortTitle ? 0.70 : 0.50;
 
         if (best.score < minScore || titleSim < minTitleSim) {
-          console.log(`[TMDB] Rejected "${parsed.title}" → "${best.r.title || best.r.name}" (score=${best.score}, sim=${Math.round(titleSim*100)}%, short=${isShortTitle})`);
-          break; // try next search strategy
+                    break; // try next search strategy
         }
 
         // Fetch full details
@@ -425,8 +422,7 @@ async function fetchMeta(parsed, tmdbKey, omdbKey) {
   // Both found: cross-validate poster/year consistency
   if (tmdb && omdb) {
     if (tmdb.year && omdb.year && Math.abs(tmdb.year - omdb.year) > 2) {
-      console.log(`[CrossCheck] Year conflict: TMDB=${tmdb.year} vs OMDB=${omdb.year} for "${parsed.title}". Trusting TMDB.`);
-    }
+          }
     if (!tmdb.poster   && omdb.poster)      tmdb.poster      = omdb.poster;
     if (!tmdb.rating   && omdb.rating)      tmdb.rating      = omdb.rating;
     if (!tmdb.description && omdb.description) tmdb.description = omdb.description;
@@ -448,8 +444,7 @@ async function fetchMeta(parsed, tmdbKey, omdbKey) {
         if (!finalMeta.imdbId) finalMeta.imdbId = imdbFallback.imdbId;
         finalMeta.confidenceReasons = [...(finalMeta.confidenceReasons || []), 'Poster scraped via IMDB Fallback'];
       }
-      console.log(`[TMDB] 🚀 IMDB Fallback Scraper rescued poster for "${parsed.title}"!`);
-    }
+          }
   }
 
   return finalMeta || {};

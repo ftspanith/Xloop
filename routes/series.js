@@ -94,7 +94,7 @@ router.get('/:id/tmdb-data', async (req, res) => {
     const series = await Movie.findById(req.params.id).select('tmdbId');
     if (!series?.tmdbId) return res.json({ seasons: [] });
     if (!TMDB_KEY) {
-      console.warn('[TMDB] TMDB_API_KEY is not set — cannot fetch season data');
+      /* TMDB key missing — season data unavailable */
       return res.json({ seasons: [] });
     }
     const tmdbRes = await axios.get(
@@ -109,7 +109,7 @@ router.get('/:id/tmdb-data', async (req, res) => {
     }));
     res.json({ seasons });
   } catch (err) {
-    console.error('TMDB fetch error:', err.message);
+    if (process.env.NODE_ENV !== 'production') console.error('[TMDB fetch]', err.message);
     res.json({ seasons: [] });
   }
 });
@@ -158,7 +158,7 @@ router.get('/:id', async (req, res) => {
     // Fire-and-forget views increment — catch to prevent unhandled rejections
     Movie.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } })
       .exec()
-      .catch(err => console.error('[views] series increment error:', err.message));
+      ;
     res.json(series);
   } catch (err) {
     if (err.name === 'CastError') return res.status(404).json({ message: 'Not found' });

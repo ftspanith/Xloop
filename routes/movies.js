@@ -12,6 +12,7 @@ const tmdbCache = {
 };
 
 const TMDB_KEY = process.env.TMDB_API_KEY;
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 // ── Safely escape a string for use in a RegExp ──────────────────────────────
 function escapeRegex(str) {
@@ -39,7 +40,6 @@ async function getTmdbIds(endpoint, cacheKey) {
     tmdbCache[cacheKey] = { data: ids, expires: Date.now() + 1000 * 60 * 60 * 4 }; // cache for 4 hours
     return ids;
   } catch (err) {
-    console.error('TMDB API Error:', err.message);
     return [];
   }
 }
@@ -104,7 +104,6 @@ router.get('/featured', async (req, res) => {
     }
     res.json(movies);
   } catch (err) {
-    console.error('featured error:', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -140,7 +139,7 @@ router.get('/trending', async (req, res) => {
     }
     res.json(movies);
   } catch (err) {
-    console.error('trending error:', err.message);
+    if (!IS_PROD) console.error('[movies/trending]', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -305,7 +304,7 @@ router.get('/', async (req, res) => {
 
     res.json({ movies, total, page: parseInt(page), pages: Math.ceil(total / lim) });
   } catch (err) {
-    console.error('GET /api/movies error:', err.message);
+    if (!IS_PROD) console.error('[movies/list]', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -318,7 +317,7 @@ router.get('/:id', async (req, res) => {
     // Fire-and-forget views increment — catch errors to prevent unhandled rejections
     Movie.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } })
       .exec()
-      .catch(err => console.error('[views] increment error:', err.message));
+      ;
     res.json(movie);
   } catch (err) {
     if (err.name === 'CastError') return res.status(404).json({ message: 'Not found' });
