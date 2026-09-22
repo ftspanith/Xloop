@@ -9,14 +9,15 @@ const router   = express.Router();
 const { spawn } = require('child_process');
 const path     = require('path');
 const fs       = require('fs');
+const auth     = require('../middleware/auth');
 
 const ROOT          = path.join(__dirname, '..');
 const SCRAPE_SCRIPT = path.join(ROOT, 'scrape_api.js');
 const os = require('os');
 const EXPORT_FILE   = process.env.VERCEL ? path.join(os.tmpdir(), 'telegram_export.json') : path.join(ROOT, 'telegram_export.json');
 
-// ── GET /api/scrape/channels — return channel list ──────────
-router.get('/channels', (req, res) => {
+// ── GET /api/scrape/channels — return channel list (auth required) ────────
+router.get('/channels', auth, (req, res) => {
   res.json({
     channels: [
       2121685058, 1460307412, 3854487392, 3649684713,
@@ -28,9 +29,9 @@ router.get('/channels', (req, res) => {
   });
 });
 
-// ── POST /api/scrape/start — start scraping (SSE stream) ────
+// ── POST /api/scrape/start — start scraping (SSE stream, auth required) ────
 // Body: { mode: 1|2|3|4, channels?: number[], startDate?: string, endDate?: string }
-router.post('/start', (req, res) => {
+router.post('/start', auth, (req, res) => {
   const { mode, channels, startDate, endDate } = req.body;
 
   // SSE headers

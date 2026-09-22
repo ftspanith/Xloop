@@ -1,6 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// utils/parser.js  ─ v5 ULTRA
+// utils/parser.js  ─ v6 ULTRA
 // Central Intelligent Parser — the brain of the entire pipeline.
+// v6 changes: stronger junk skip, season-range detection, numeric title
+// protection, release-group trailer stripper, O→0 S-tag normalization,
+// IMAX/Edition strip, channel-hub junk pattern, batch list detection.
 // ═══════════════════════════════════════════════════════════════════════════
 'use strict';
 
@@ -239,6 +242,9 @@ function detectContentType(text) {
     /\bs[o0]?\d{1,2}e[o0]?\d{1,3}\b/i.test(t)||/\bseason\s*\d+\b/i.test(t)||
     /\bepisode\s*\d+\b/i.test(t)||/\bep\s*\d+\b/i.test(t)||
     /\bcomplete\s*(series|season)\b/i.test(t)||
+    /\bcomplete\s+series\b/i.test(t)||
+    /\bseason\s*\d+\s*[-–to]+\s*\d+\b/i.test(t)||  // "Season 1-5", "Season 1 to 5"
+    /\bs\d{1,2}[-–]s\d{1,2}\b/i.test(t)||           // "S01-S05" pack
     /\b(web[\s-]?series|webseries)\b/i.test(t)||
     /\bs[o0]?\d{1,2}\b(?!\d)/i.test(t)||/\.s\d{2}\./.test(t)||
     /\bS[O0]\d{1,2}\b/.test(text)||
@@ -301,6 +307,8 @@ function cleanTitleForApi(title) {
     .replace(/\b(telugu|tamil|hindi|malayalam|kannada|bengali|english|marathi|japanese|korean|chinese|arabic|turkish|spanish|french|german|punjabi|dual|multi)\b/gi,'')
     // ── Resolution / quality ─────────────────────────────────────────
     .replace(/\b(2160p|1080p|720p|480p|360p|4[Kk]|UHD|WEB[\s._-]*DL|WEB[\s._-]*RIP|HDRip|HDTV|BluRay|BD[\s._-]*Rip|WEBRip|HEVC|x265|x264|H\.265|H\.264|H[\s._-]*265|H[\s._-]*264|AVC|HDR|HDR10P|DV|Remux|HLG|SDR|AV1|FLAC|AAC|DDP|DTS|Atmos|DD5|DD2)\b/gi,'')
+    // ── Edition / Cut variants ────────────────────────────────────────
+    .replace(/\b(IMAX|Remastered|Anniversary|Director.?s?\s*Cut|Extended\s*Cut|Special\s*Edition|Theatrical\s*Cut|Uncut|Unrated|Open\s*Matte|Hybrid|Fan\s*Edit|Edition)\b/gi,'')
     // ── Streaming platform codes (standalone 2-4 letter tags) ─────────────────
     .replace(/\b(AMZN|NF|DSNP|ZEE5|SUNNXT|JIOHS|AHA|ARTL|HMAX|CRKL|PCOK|DPLS|HOTSTAR|APPLETV|TVNZ|SS|TK|SLV|VOOT|ETVWIN)\b/gi,'')
     // ── Release group tags ────────────────────────────────────────────
@@ -320,6 +328,7 @@ function cleanTitleForApi(title) {
     .replace(/\b(?:EP|EPISODE|EPISODES)\s*\d{1,3}\b/gi,'')
     .replace(/\bE\d{1,3}\b/gi,'')
     .replace(/\bS\s*\d{1,2}\b(?!\d)/gi,'')
+    .replace(/\bSeason\s*\d+\s*[-–to]+\s*\d+\b/gi,'')  // strip "Season 1-5", "Season 1 to 3"
     .replace(/\bSeason\s*\d+\b/gi,'')
     .replace(/\.(mkv|mp4|avi|mov|ts|m2ts|zip|rar)\b/gi,'')
     .replace(/v\d+|reloaded|uncut|extended/gi,'')
@@ -329,6 +338,10 @@ function cleanTitleForApi(title) {
     .replace(/[^a-zA-Z0-9 \-']/g,' ')
     .replace(/\s+/g,' ')
     .trim()
+    // ── Generic release-group trailer (CamelCase or ALL-CAPS single word) ──
+    // Catches watermarks like "Benzmovies", "TamilMV", "TEAMX" at end of string
+    .replace(/\s+[A-Z][a-z]{1,3}[A-Z][a-zA-Z0-9]{2,14}$/, '')   // CamelCase: "TamilMV"
+    .replace(/\s+[A-Z]{3,12}(?:\d+[Kk]?)?$/, '')                  // ALL-CAPS: "TEAMX", "DS4K"
     .replace(/\s+s$/i, ''); // strip trailing 'S' often left behind
 
   const JUNK_WORDS = new Set(['audio', 'video', 'track', 'tracks', 'hdr10', 'h265', 'h264', 's01', 'e04', 'cbr', 'vbr', 'mkv', 'mp4']);
@@ -408,6 +421,13 @@ const JUNK_PATTERNS = [
 
   // ── Channel bot-name pattern: ALL-CAPS + numbers + release tag ───────────
   /^@?[A-Z][A-Za-z0-9_]{4,}(BOT|ZONE|STORE|DUMP|POINT|PLUS|PRO|WORLD|KING|GANG|CREW|HUB)\s*$/,
+
+  // ── Channel "Hub" / "Zone" watermark lines ───────────────────────────────
+  // e.g. "AAA Movies Hub", "Telugu Hits Zone", "HD Films World"
+  /\b(?:[A-Z]{2,}\s+)?(?:Movies?|Films?|Series|Anime|Content)\s+(?:Hub|Zone|World|Store|Channel|Group|Point|Center|Archive)\s*$/i,
+
+  // ── "Updates Channel", "Backup Channel", "Daily Updates" patterns ──────
+  /^(?:Daily|Latest|New|Hot|Top|Fresh)\s+(?:Updates?|Movies?|Releases?)\s*$/i,
 ];
 function isJunkTitle(title) {
   if (!title || title.length < 2) return true;
@@ -630,14 +650,30 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   }
   if (!pairs.length) return null;
 
-  // ── Extract master title — 4 strategies ──────────────────────────────────
+  // ── Extract master title — 5 strategies ──────────────────────────────────
+  // Strategy 0: detect numbered-list batch format and warn
+  // e.g. "1. Movie Title (2023)\nhttps://...\n2. Movie 2 (2022)\nhttps://..."
+  const numberedListLines = lines.filter(l => /^\d+[\.)\-]\s+.{5,}/.test(l) && !isUrl(l));
+  const _isBatchList = numberedListLines.length >= 2;
+  // (caller can check parsed._isBatchList to re-split if needed)
+
   // Strategy 1: first line that is not URL / promo / metadata and has a meaningful clean title
   // Skip codec/quality-ONLY single-line titles (AV1, 4K, HEVC, etc.)
+  // Also skip pure language-list lines, size lines, and channel-hub watermarks.
   const TECH_ONLY_RE = /^\s*(AV1|HEVC|AVC|4K|UHD|2160p|1080p|720p|480p|360p|HDR|HDR10|DV|HLG|SDR|4K\.\.\.+)\s*$/i;
+  // Lines that are ONLY a language list (e.g. "Telugu | Tamil | Hindi" OR just "Telugu | Tamil")
+  const LANG_ONLY_RE = /^(?:(?:Telugu|Tamil|Hindi|Malayalam|Kannada|Bengali|Marathi|English|Japanese|Korean|Chinese|Arabic|Turkish|Spanish|French|German|Punjabi|Odia|Gujarati|Urdu|Multi|Dual)[,|\s&+]+){1,}(?:Telugu|Tamil|Hindi|Malayalam|Kannada|Bengali|Marathi|English|Japanese|Korean|Chinese|Arabic|Turkish|Spanish|French|German|Punjabi|Odia|Gujarati|Urdu|Multi|Dual)\s*$/i;
+  // Single language word on its own line (e.g. just "Telugu")
+  const SINGLE_LANG_RE = /^(?:Telugu|Tamil|Hindi|Malayalam|Kannada|Bengali|Marathi|English|Japanese|Korean|Chinese|Arabic|Turkish|Spanish|French|German|Punjabi|Odia|Gujarati|Urdu|Multi|Dual)\s*$/i;
+  // Lines that look like a pure quality/platform descriptor without a real title
+  const META_ONLY_RE = /^\s*(?:\d{3,4}p|4K|UHD|HDR|WEB[-\s]?DL|WEBRip|BluRay|HEVC|x26[45])\b/i;
   let masterTitle='';
   for (const line of lines) {
     if (isUrl(line)||isPromo(line)||isMetadataLine(line)) continue;
-    if (TECH_ONLY_RE.test(line)) continue; // Skip standalone tech tags like "AV1", "4K......"
+    if (TECH_ONLY_RE.test(line)) continue;
+    if (LANG_ONLY_RE.test(line)) continue;   // skip language combo lines
+    if (SINGLE_LANG_RE.test(line)) continue; // skip lone language words
+    if (META_ONLY_RE.test(line) && line.length < 40) continue; // skip short quality-only lines
     const c=cleanTitleForApi(line);
     if (c.length>=3&&!isJunkTitle(line)) { masterTitle=line; break; }
   }
@@ -694,13 +730,28 @@ function parseMessageBlock(rawText, messageId, msgDate) {
       const charBefore = cleanedTitle[yi - 1] || '';
       // Only cut when preceded by a separator, not by a word character
       if (/[\s.\-_(]/.test(charBefore)) {
-        cleanedTitle = cleanedTitle.substring(0, yi);
+        const candidate = cleanedTitle.substring(0, yi).trim();
+        // Protect numeric titles: if cutting at year would leave us empty
+        // BUT the title STARTS with a 4-digit number that is NOT the release year,
+        // keep the full string (e.g. "2012 2009" → title="2012", year=2009).
+        if (candidate.length < 1) {
+          const numericStart = cleanedTitle.match(/^(\d{1,4})(?:[\s._(\[|])/);
+          if (numericStart) {
+            const n = parseInt(numericStart[1], 10);
+            if (n !== year) cleanedTitle = String(n); // e.g. "2012" the movie
+            // else: year IS the title (standalone year) — leave cleanedTitle as-is
+          }
+        } else {
+          cleanedTitle = candidate;
+        }
       }
     }
   }
 
   // Step 3: Cut at S01/season tag
-  const sTag = cleanedTitle.match(/\bS\d{1,2}\b/i);
+  // Apply O→0 normalization first (handles channels that write SO1, SO2 etc.)
+  const cleanedForSTag = cleanedTitle.replace(/\bS([Oo])(\d)/gi, 'S0$2');
+  const sTag = cleanedForSTag.match(/\bS\d{1,2}\b/i);
   if (sTag && sTag.index > 2) cleanedTitle = cleanedTitle.substring(0, sTag.index);
 
   cleanedTitle=cleanedTitle
@@ -718,10 +769,13 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     .replace(/\.(mkv|mp4|avi|mov|ts|m2ts|zip|rar)\b/gi,'')
     .replace(/\b(mkv|mp4|avi|m2ts)\b/gi,'')
     .replace(/\bS\d{1,2}\s*E\d{1,3}\b/gi,'').replace(/\bSeason\s*\d+\b/gi,'')
+    .replace(/\bSeason\s*\d+\s*[-–to]+\s*\d+\b/gi,'')  // Strip season ranges: "Season 1-5"
+    .replace(/\bS\d{1,2}\s*[-–]\s*S\d{1,2}\b/gi,'')    // Strip pack ranges: "S01-S04"
     .replace(/\bEpisode\s*\d+\b/gi,'').replace(/\bEp\s*\d+\b/gi,'')
     .replace(/\b(\d{1,2})x\d{2,3}\b/gi,'')
     .replace(/\b(2160p|1080p|720p|480p|360p|4[Kk]|UHD|WEB[-.]?DL|HDRip|BluRay|BDRip|WEBRip|HEVC|x265|x264|AVC|AV1|HDR|HDR10P|REMUX|REPACK|PROPER|SDR|HLG|DV)\b/gi,'')
     .replace(/\bH\s+26[45]\b/gi,'')
+    .replace(/\b(IMAX|Remastered|Anniversary|Director.?s?\s*Cut|Extended\s*Cut|Special\s*Edition|Theatrical\s*Cut|Uncut|Unrated|Open\s*Matte|Hybrid|Fan\s*Edit|Edition)\b/gi,'')
     .replace(/\b(AMZN|NF|DSNP|ZEE5|SUN\s*NXT|SUNNXT|JIOHS|ETVWIN|AHA|ARTL|HMAX|SONY|HOTSTAR|APPLE|TVNZ|CRKL|PCOK|DPLS)\b/gi,'')
     .replace(/\b(DDP\d[._\s]\d|AAC\d[._\s]\d|DTS|DD[+P]?|AC3|TrueHD|Atmos|FLAC|MP3|DDP5|DD5|DD2)\b/gi,'')
     .replace(/\b(Rahul4K|JeRi|TK\s*\d+\s*\d+|ATV|ETV|DE3PM|DUDU|iP0|iP[12]|JHS|MSD4K|MKV4U|MKV4K|DHD|YTS|YIFY|RARBG|PSA|FGT|NTG|EVO|ION10|CMRG|FLUX|TEPES|SiGMA|ROCCaT|SPARKS|VEXT|ULTRAHDCLUB|SMURF|OFT|mkvcage|AGAT|MZABI|MRTRJ|MRN|TOMMY|GalaxyTV|Pahe|HONE|QxR)\b/gi,'')
@@ -734,6 +788,11 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     .replace(/\.(mkv|mp4|avi|mov|ts|m2ts|zip|rar)\b/gi,'')
     .replace(/[\[\(][^\]\)]*[\]\)]/g,'').replace(/#[a-zA-Z0-9_]+/g,'')
     .replace(/[._\-]+/g,' ').replace(/\s+/g,' ')
+    // ── Stray standalone digits left from season ranges like "1-5" → "5" ──────────
+    .replace(/(?:^|\s)\d{1,2}(?:\s|$)/g, ' ')
+    // ── Generic release-group trailer (final pass) ─────────────────────────
+    .replace(/\s+[A-Z][a-z]{1,3}[A-Z][a-zA-Z0-9]{2,14}$/, '')   // CamelCase: "TamilMV"
+    .replace(/\s+[A-Z]{3,12}(?:\d+[Kk]?)?$/, '')                  // ALL-CAPS: "TEAMX"
     .replace(/[\(\[\-\u2013\u2014\s]+$/,'').trim();
 
   cleanedTitle=stripEmojis(cleanedTitle).trim();
@@ -820,7 +879,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     if (imdbId && tmdbIdHint) break;
   }
 
-  return {title:cleanedTitle,rawTitle:masterTitle,year,language,languages:allLanguages,quality:bestQuality,contentType,isSeries,season,episode,downloads,messageId,date:msgDate||null,imdbId,tmdbIdHint};
+  return {title:cleanedTitle,rawTitle:masterTitle,year,language,languages:allLanguages,quality:bestQuality,contentType,isSeries,season,episode,downloads,messageId,date:msgDate||null,imdbId,tmdbIdHint,_isBatchList};
 }
 
 module.exports = {

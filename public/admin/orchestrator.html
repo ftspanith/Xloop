@@ -113,7 +113,7 @@
  .modal-confirm-wipe{background:#f59e0b;color:#000;}
  .modal-confirm-wipe:hover{background:#fbbf24;transform:translateY(-1px);}
 
- /* ── Mobile responsive ──────────────────────────── */
+ /* - Mobile responsive - */
  @media (max-width: 680px) {
   .orch-modes { grid-template-columns: 1fr; }
   .orch-actions { flex-direction: column; }
@@ -228,11 +228,11 @@
 <div class="toast" id="toast">Message</div>
 <script src="/js/admin.js"></script>
 <script>
- // ── State ────────────────────────────────────────────────
+ // - State -
  let skipScraper = false, isRunning = false, eventSource = null;
- let cAdded = 0, cUpdated = 0;
+ let cAdded = 0, cUpdated = 0, pipelineStarted = false;
 
- // ── Mobile sidebar ───────────────────────────────────────
+ // - Mobile sidebar -
  function openMobileSidebar() {
   document.getElementById('adminSidebar').classList.add('open');
   document.getElementById('sidebarBackdrop').classList.add('visible');
@@ -244,14 +244,14 @@
   document.body.style.overflow = '';
  }
 
- // ── Mode select ──────────────────────────────────────────
+ // - Mode select -
  function selectMode(skip) {
   skipScraper = skip;
   document.getElementById('modeCard-full').classList.toggle('selected', !skip);
   document.getElementById('modeCard-skip').classList.toggle('selected', skip);
  }
 
- // ── Log helpers ──────────────────────────────────────────
+ // - Log helpers -
  function appendLog(text) {
   const box = document.getElementById('logBox');
   const span = document.createElement('span');
@@ -285,13 +285,20 @@
 
  function setStat(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
- function clearLog() {
-  document.getElementById('logBox').innerHTML = '<span class="log-skip">Log cleared.</span>';
-  cAdded = 0; cUpdated = 0;
-  ['statExtracted','statMovies','statPacks','statGroups'].forEach(id => setStat(id, '—'));
-  document.getElementById('statAdded').textContent = '0';
-  document.getElementById('statUpdated').textContent = '0';
- }
+ async function clearLog() {
+   document.getElementById('logBox').innerHTML = '<span class="log-skip">Log cleared.</span>';
+   cAdded = 0; cUpdated = 0;
+   ['statExtracted','statMovies','statPacks','statGroups'].forEach(id => setStat(id, '—'));
+   document.getElementById('statAdded').textContent = '0';
+   document.getElementById('statUpdated').textContent = '0';
+   // Also clear server-side log buffer so old lines don't replay on reconnect
+   try {
+    await fetch('/api/orchestrator/clear-logs', {
+     method: 'POST',
+     headers: { 'Authorization': `Bearer ${getToken()}` }
+    });
+   } catch(_) {}
+  }
 
  function setStatus(state, label) {
   const el = document.getElementById('orchStatus');
@@ -299,7 +306,7 @@
   el.innerHTML = `<span class="status-dot"></span> ${label}`;
  }
 
- // ── SSE stream helpers ───────────────────────────────────
+ // - SSE stream helpers -
  function connectStream(onMessage) {
   if (eventSource) { eventSource.close(); eventSource = null; }
   eventSource = new EventSource('/api/orchestrator/stream');
@@ -315,10 +322,10 @@
   };
  }
 
- // ── Start pipeline ───────────────────────────────────────
+ // - Start pipeline -
  async function startPipeline() {
   if (isRunning) return;
-  isRunning = true; cAdded = 0; cUpdated = 0;
+  isRunning = true; cAdded = 0; cUpdated = 0; pipelineStarted = false;
   document.getElementById('logBox').innerHTML = '';
   document.getElementById('doneBanner').classList.remove('visible');
   document.getElementById('startBtn').disabled = true;
@@ -328,8 +335,19 @@
   document.getElementById('modeCards').style.pointerEvents = 'none';
   setStatus('running', 'RUNNING');
 
+  // Clear server-side log buffer first so stale "finished" lines from a
+  // previous run don't replay via SSE and prematurely trigger onFinished()
+  try {
+   await fetch('/api/orchestrator/clear-logs', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${getToken()}` }
+   });
+  } catch(_) {}
+
   connectStream((text) => {
    appendLog(text);
+   // Only react to finish/error signals AFTER server confirmed pipeline started
+   if (!pipelineStarted) return;
    if (/🎉 Pipeline finished successfully|Pipeline finished/i.test(text)) onFinished(text);
    if (/💥 Pipeline stopped due to an error/i.test(text)) onFinished(text, true);
   });
@@ -346,6 +364,7 @@
     onFinished('', true);
    } else {
     appendLog('✅ API accepted start request. Streaming logs...');
+    pipelineStarted = true; // Now safe to act on finish/error events
    }
   } catch(e) {
    appendLog(`❌ ERROR: ${e.message}`);
@@ -353,7 +372,7 @@
   }
  }
 
- // ── Stop pipeline ────────────────────────────────────────
+ // - Stop pipeline -
  async function stopPipeline() {
   try {
    await fetch('/api/orchestrator/stop', {
@@ -365,7 +384,7 @@
   onFinished('', true);
  }
 
- // ── Finished handler ─────────────────────────────────────
+ // - Finished handler -
  function onFinished(lastLine, failed = false) {
   isRunning = false;
   if (eventSource) { eventSource.close(); eventSource = null; }
@@ -383,7 +402,7 @@
   }
  }
 
- // ── Wipe DB ──────────────────────────────────────────────
+ // - Wipe DB -
  function showWipeConfirm() { document.getElementById('wipeModal').classList.add('visible'); }
  function closeWipeConfirm() { document.getElementById('wipeModal').classList.remove('visible'); }
 
@@ -419,7 +438,7 @@
   } catch(e) { appendLog(`❌ ERROR: ${e.message}`); onFinished('', true); }
  }
 
- // ── Page load: check if pipeline already running ─────────
+ // - Page load: check if pipeline already running -
  async function initOrchestrator() {
   await checkAuth();
   try {

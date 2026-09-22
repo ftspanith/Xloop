@@ -23,7 +23,7 @@ function stringSim(a, b) {
 // GET /api/search?q=&genre=&year=&quality=&type=&language=&page=&limit=
 router.get('/', async (req, res) => {
   try {
-    const {
+    let {
       q = '',
       genre,
       year,
@@ -34,7 +34,12 @@ router.get('/', async (req, res) => {
       limit = 24,
     } = req.query;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    // ── Sanitise inputs ──────────────────────────────────────────────────
+    q     = String(q).slice(0, 200).trim();          // guard: max 200 chars
+    page  = Math.max(1, parseInt(page)  || 1);
+    limit = Math.min(100, Math.max(1, parseInt(limit) || 24)); // cap: 1–100
+
+    const skip = (page - 1) * limit;
 
     // ── Build filter ───────────────────────────────────────────────────────────
     const filter = {};
@@ -65,26 +70,27 @@ router.get('/', async (req, res) => {
           Movie.find(textFilter, projection)
             .sort({ score: { $meta: 'textScore' } })
             .skip(skip)
-            .limit(parseInt(limit))
+            .limit(limit)
             .select('-__v -downloads'),
           Movie.countDocuments(textFilter),
         ]);
         results = docs;
         total   = count;
       } catch (_) {
-        // Text index not ready — fall back to regex
+        // Text index not ready — fall back to regex (user input is already length-clamped above)
+        const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regexFilter = {
           ...filter,
           $or: [
-            { title:       { $regex: clean, $options: 'i' } },
-            { description: { $regex: clean, $options: 'i' } },
+            { title:       { $regex: escaped, $options: 'i' } },
+            { description: { $regex: escaped, $options: 'i' } },
           ],
         };
         const [docs, count] = await Promise.all([
           Movie.find(regexFilter)
             .sort({ rating: -1, createdAt: -1 })
             .skip(skip)
-            .limit(parseInt(limit))
+            .limit(limit)
             .select('-__v -downloads'),
           Movie.countDocuments(regexFilter),
         ]);
@@ -105,7 +111,7 @@ router.get('/', async (req, res) => {
         Movie.find(filter)
           .sort({ createdAt: -1 })
           .skip(skip)
-          .limit(parseInt(limit))
+          .limit(limit)
           .select('-__v -downloads'),
         Movie.countDocuments(filter),
       ]);
@@ -116,8 +122,8 @@ router.get('/', async (req, res) => {
     res.json({
       results,
       total,
-      page: parseInt(page),
-      pages: Math.ceil(total / parseInt(limit)),
+      page,
+      pages: Math.ceil(total / limit),
       // Legacy fields — some pages still read these
       movies: results.filter(r => r.type === 'movie'),
       series: results.filter(r => r.type === 'series' || r.type === 'anime'),

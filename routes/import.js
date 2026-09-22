@@ -481,20 +481,43 @@ router.post('/bulk', auth, async (req, res) => {
     return res.status(400).json({ message: 'Messages array required' });
   }
 
-  // ── Expand each message into individual per-movie blocks ──
-  // Split on double newlines, but merge URL-only blocks back into the prev filename block
-  // (handles case where user has blank line between filename and link)
+  // ── Expand each message into individual per-movie blocks ──────────────────
+  // Strategy A: split on double newlines (standard channel post format)
+  // Strategy B: split on numbered-list boundaries (batch post format)
+  //   e.g. "1. Movie A (2022)\nhttps://...\n2. Movie B (2023)\nhttps://..."
+  const NUMBERED_SPLIT_RE = /(?=\n\d+[\.\)]\s+.{5,})/;
   const isUrlOnlyBlock = b => b.split('\n').every(l => !l.trim() || /^https?:\/\//i.test(l.trim()));
   const expandedMessages = [];
+
   for (const msgObj of messages) {
     if (!msgObj?.text) continue;
-    // Normalize CRLF to LF (browser textarea can produce \r\n)
+    // Normalize CRLF → LF
     const normText = msgObj.text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    // Quick pre-check: is this a numbered-list batch post?
+    const numberedMatches = normText.match(/^\d+[\.\)]\s+/mg) || [];
+    const isNumberedBatch = numberedMatches.length >= 2;
+
+    if (isNumberedBatch) {
+      // Split into per-item chunks on numbered list boundaries
+      const numberedChunks = normText.split(NUMBERED_SPLIT_RE)
+        .map(b => b.replace(/^\n/, '').trim())
+        .filter(Boolean);
+      for (const chunk of numberedChunks) {
+        // Strip the leading "1. " / "2) " numbering
+        const cleaned = chunk.replace(/^\d+[\.\)]\s+/, '');
+        if (cleaned) expandedMessages.push({ ...msgObj, text: cleaned });
+      }
+      continue;
+    }
+
+    // Standard double-newline split
     const rawBlocks = normText.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
     if (rawBlocks.length <= 1) {
       expandedMessages.push({ ...msgObj, text: normText });
     } else {
       // Merge orphan URL-only blocks back into the preceding filename block
+      // (handles case where user has blank line between filename and link)
       const merged = [];
       for (const block of rawBlocks) {
         if (merged.length > 0 && isUrlOnlyBlock(block)) {
@@ -508,6 +531,7 @@ router.post('/bulk', auth, async (req, res) => {
       }
     }
   }
+
 
   let successCount = 0, updatedCount = 0, skippedCount = 0, lowConfidence = 0, duplicateCount = 0;
   const errors = [];

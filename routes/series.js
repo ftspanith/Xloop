@@ -3,6 +3,17 @@ const Movie  = require('../models/Movie');
 const auth   = require('../middleware/auth');
 const axios  = require('axios');
 
+const TMDB_KEY = process.env.TMDB_API_KEY;
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function safeLimit(raw, max = 100) {
+  const n = parseInt(raw) || 20;
+  return Math.min(Math.max(1, n), max);
+}
+
 // ── GET /api/series/featured ──────────────────────────────────────────────────
 router.get('/featured', async (req, res) => {
   try {
@@ -56,20 +67,22 @@ router.get('/latest', async (req, res) => {
 // ── GET /api/series  (list + filters + pagination) ───────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const { genre, year, type, language, page = 1, limit = 20 } = req.query;
+    const { genre, year, quality, type, language, page = 1, limit = 20 } = req.query;
     const filter = type === 'anime'  ? { type: 'anime' }
                  : type === 'series' ? { type: 'series' }
                  : { type: { $in: ['series','anime'] } };
     if (genre)    filter.genre    = { $in: [genre] };
     if (year)     filter.year     = parseInt(year);
-    if (language) filter.language = { $regex: language, $options: 'i' };
+    if (quality)  filter.quality  = quality; // fix: apply quality filter
+    if (language) filter.language = { $regex: escapeRegex(language.slice(0, 50)), $options: 'i' };
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const lim  = safeLimit(limit);
+    const skip = (Math.max(1, parseInt(page)) - 1) * lim;
     const [series, total] = await Promise.all([
-      Movie.find(filter).sort({ rating: -1, createdAt: -1 }).skip(skip).limit(parseInt(limit)).select('-__v -downloads'),
+      Movie.find(filter).sort({ rating: -1, createdAt: -1 }).skip(skip).limit(lim).select('-__v -downloads'),
       Movie.countDocuments(filter),
     ]);
-    res.json({ series, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+    res.json({ series, total, page: parseInt(page), pages: Math.ceil(total / lim) });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -80,10 +93,13 @@ router.get('/:id/tmdb-data', async (req, res) => {
   try {
     const series = await Movie.findById(req.params.id).select('tmdbId');
     if (!series?.tmdbId) return res.json({ seasons: [] });
-
+    if (!TMDB_KEY) {
+      console.warn('[TMDB] TMDB_API_KEY is not set — cannot fetch season data');
+      return res.json({ seasons: [] });
+    }
     const tmdbRes = await axios.get(
       `https://api.themoviedb.org/3/tv/${series.tmdbId}`,
-      { params: { api_key: process.env.TMDB_API_KEY }, timeout: 8000 }
+      { params: { api_key: TMDB_KEY }, timeout: 8000 }
     );
     const seasons = (tmdbRes.data.seasons || []).map(s => ({
       seasonNumber: s.season_number,
@@ -139,7 +155,10 @@ router.get('/:id', async (req, res) => {
   try {
     const series = await Movie.findById(req.params.id);
     if (!series) return res.status(404).json({ message: 'Not found' });
-    Movie.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } }).exec();
+    // Fire-and-forget views increment — catch to prevent unhandled rejections
+    Movie.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } })
+      .exec()
+      .catch(err => console.error('[views] series increment error:', err.message));
     res.json(series);
   } catch (err) {
     if (err.name === 'CastError') return res.status(404).json({ message: 'Not found' });

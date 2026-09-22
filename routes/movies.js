@@ -11,7 +11,18 @@ const tmdbCache = {
   topRated: { data: null, expires: 0 }
 };
 
-const TMDB_KEY = process.env.TMDB_API_KEY || 'ad2813b9d2a7cf1e33a4d3cc46cbe01d';
+const TMDB_KEY = process.env.TMDB_API_KEY;
+
+// ── Safely escape a string for use in a RegExp ──────────────────────────────
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ── Clamp pagination params to safe bounds ───────────────────────────────────
+function safeLimit(raw, isAdmin = false) {
+  const n = parseInt(raw) || 20;
+  return Math.min(Math.max(1, n), isAdmin ? 500 : 100);
+}
 
 async function getTmdbIds(endpoint, cacheKey) {
   if (tmdbCache[cacheKey].data && Date.now() < tmdbCache[cacheKey].expires) {
@@ -226,7 +237,9 @@ router.get('/by-genre/:genre', async (req, res) => {
 // ── GET /api/movies/by-language/:lang ────────────────────────────────────────
 router.get('/by-language/:lang', async (req, res) => {
   try {
-    const langRegex = new RegExp(req.params.lang, 'i');
+    // Escape user input before using in RegExp to prevent ReDoS
+    const safe = escapeRegex(req.params.lang.slice(0, 50));
+    const langRegex = new RegExp(safe, 'i');
     const rawMovies = await Movie.find({
       $or: [
         { originalLanguage: langRegex },
@@ -257,6 +270,7 @@ router.get('/scan-all', auth, async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const { genre, year, quality, type, search, sort = 'createdAt', page = 1, limit = 20 } = req.query;
+    const isAdmin = !!req.headers['authorization']; // rough check — not enforced, just for limit
     const filter = {};
 
     // type filter: 'all' returns everything, otherwise default to 'movie'
@@ -266,15 +280,13 @@ router.get('/', async (req, res) => {
     if (genre)   filter.genre   = { $in: [genre] };
     if (year)    filter.year    = parseInt(year);
     if (quality) filter.quality = quality;
-    
+
     if (search) {
-      const s = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // escape regex
+      const s = escapeRegex(search.slice(0, 200)); // clamp + escape for safety
       filter.$or = [
-        { title: { $regex: s, $options: 'i' } },
-        { originalTitle: { $regex: s, $options: 'i' } },
+        { title:    { $regex: s, $options: 'i' } },
         { language: { $regex: s, $options: 'i' } },
-        { languages: { $regex: s, $options: 'i' } },
-        { genre: { $regex: s, $options: 'i' } }
+        { genre:    { $regex: s, $options: 'i' } }
       ];
     }
 
@@ -284,13 +296,14 @@ router.get('/', async (req, res) => {
                   : sort === 'title'      ? { title: 1 }
                   :                         { createdAt: -1 };
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const lim  = safeLimit(limit, isAdmin);
+    const skip = (Math.max(1, parseInt(page)) - 1) * lim;
     const [movies, total] = await Promise.all([
-      Movie.find(filter).sort(sortObj).skip(skip).limit(parseInt(limit)).select('-__v'),
+      Movie.find(filter).sort(sortObj).skip(skip).limit(lim).select('-__v'),
       Movie.countDocuments(filter),
     ]);
 
-    res.json({ movies, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+    res.json({ movies, total, page: parseInt(page), pages: Math.ceil(total / lim) });
   } catch (err) {
     console.error('GET /api/movies error:', err.message);
     res.status(500).json({ message: 'Server error' });
@@ -302,7 +315,10 @@ router.get('/:id', async (req, res) => {
   try {
     const movie = await Movie.findById(req.params.id);
     if (!movie) return res.status(404).json({ message: 'Not found' });
-    Movie.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } }).exec(); // fire-and-forget
+    // Fire-and-forget views increment — catch errors to prevent unhandled rejections
+    Movie.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } })
+      .exec()
+      .catch(err => console.error('[views] increment error:', err.message));
     res.json(movie);
   } catch (err) {
     if (err.name === 'CastError') return res.status(404).json({ message: 'Not found' });
@@ -320,10 +336,15 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// ── PUT /api/movies/:id ───────────────────────────────────────────────────────
+// ── PUT /api/movies/:id (full replace — protected) ───────────────────────
 router.put('/:id', auth, async (req, res) => {
   try {
-    const movie = await Movie.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    // Use $set to avoid wiping fields not included in the request body
+    const movie = await Movie.findByIdAndUpdate(
+      req.params.id,
+      { $set: req.body },
+      { new: true, runValidators: true }
+    );
     if (!movie) return res.status(404).json({ message: 'Not found' });
     res.json(movie);
   } catch (err) {

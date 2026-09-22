@@ -10,7 +10,7 @@ const auth      = require('../middleware/auth');
 try {
   require.resolve('../orchestrator.js');
   require.resolve('../extract_links.js');
-  require.resolve('../scrape_links.js');
+  require.resolve('../scrape_api.js');
   require.resolve('../heal_db.js');
   require.resolve('../wipe_db.js');
   require.resolve('../pipeline.js');
