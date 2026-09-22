@@ -116,22 +116,11 @@
   <!-- PAGE HEADER -->
   <div class="page-header">
     <h1 class="page-title">TV Shows</h1>
-    <p class="page-sub">Series &amp; Anime — all in one place</p>
+    <p class="page-sub">Browse all TV series</p>
   </div>
 
-  <!-- TYPE TABS: All Shows + Series only (Anime is in the navbar) -->
-  <div class="type-tabs" id="typeTabs">
-    <button class="type-tab active" data-type="all" id="tab-all">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-      All Shows
-      <span class="count-badge" id="countAll">–</span>
-    </button>
-    <button class="type-tab" data-type="series" id="tab-series">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-      Series
-      <span class="count-badge" id="countSeries">–</span>
-    </button>
-  </div>
+  <!-- No type tabs needed — this page is always series only -->
+  <div class="type-tabs" id="typeTabs" style="display:none"></div>
 
   <!-- FILTERS: Genre / Year / Quality only -->
   <div class="filters" id="filtersBar">
@@ -213,23 +202,20 @@
 
     // ── State ─────────────────────────────────────────────────────────────────
     let currentPage = 1;
-    let activeType  = 'all'; // 'all' | 'series' | 'anime'
+    // This page is ALWAYS series only — anime has its own /anime.html page
+    const CONTENT_TYPE = 'series';
 
-    // ── Load counts for tab badges ───────────────────────────────────────────────
+    // ── Load count badge ───────────────────────────────────────────────────────
     async function loadCounts() {
       try {
-        const [resSeries, resAnime] = await Promise.all([
-          fetch('/api/movies?type=series&limit=1&page=1'),
-          fetch('/api/movies?type=anime&limit=1&page=1'),
-        ]);
-        const [dSeries, dAnime] = await Promise.all([resSeries.json(), resAnime.json()]);
-        const totalAll = (dSeries.total || 0) + (dAnime.total || 0);
-        document.getElementById('countAll').textContent    = totalAll > 999 ? (totalAll/1000).toFixed(1)+'k' : totalAll;
-        document.getElementById('countSeries').textContent = dSeries.total || 0;
+        const res = await fetch('/api/movies?type=series&limit=1&page=1');
+        const d   = await res.json();
+        document.getElementById('showsStats').innerHTML =
+          `<span>${(d.total || 0).toLocaleString()}</span> series found`;
       } catch {}
     }
 
-    // ── Load grid ─────────────────────────────────────────────────────────────
+    // ── Load grid (always type=series) ────────────────────────────────────────
     async function loadShows(page = 1) {
       currentPage = page;
       const genre   = document.getElementById('genreFilter').value;
@@ -237,42 +223,28 @@
       const quality = document.getElementById('qualityFilter').value;
       const lang    = document.getElementById('langFilter').value;
 
-      // Build API URLs — "all" means we fetch series AND anime and merge
       const container = document.getElementById('moviesGrid');
       container.classList.add('loading');
       container.innerHTML = '<div class="spinner"></div>';
 
-      let items = [], total = 0;
-
       try {
-        if (activeType === 'all') {
-          // Fetch both in parallel, merge & re-sort
-          const base = `page=${page}&limit=20${genre ? '&genre='+genre : ''}${year ? '&year='+year : ''}${quality ? '&quality='+quality : ''}${lang ? '&language='+encodeURIComponent(lang) : ''}`;
-          const [resSeries, resAnime] = await Promise.all([
-            fetch(`/api/movies?type=series&${base}`),
-            fetch(`/api/movies?type=anime&${base}`)
-          ]);
-          const [dSeries, dAnime] = await Promise.all([resSeries.json(), resAnime.json()]);
-          total = (dSeries.total || 0) + (dAnime.total || 0);
-          items = [...(dSeries.movies || []), ...(dAnime.movies || [])];
-        } else {
-          let url = `/api/movies?type=${activeType}&page=${page}&limit=20`;
-          if (genre)   url += `&genre=${genre}`;
-          if (year)    url += `&year=${year}`;
-          if (quality) url += `&quality=${quality}`;
-          if (lang)    url += `&language=${encodeURIComponent(lang)}`;
-          const res  = await fetch(url);
-          const data = await res.json();
-          items = data.movies || [];
-          total = data.total  || 0;
-        }
+        // Always fetch series only — anime is on /anime.html
+        let url = `/api/movies?type=series&page=${page}&limit=20`;
+        if (genre)   url += `&genre=${genre}`;
+        if (year)    url += `&year=${year}`;
+        if (quality) url += `&quality=${quality}`;
+        if (lang)    url += `&language=${encodeURIComponent(lang)}`;
+        const res  = await fetch(url);
+        const data = await res.json();
+        const items = data.movies || [];
+        const total = data.total  || 0;
 
         // Stats bar
         document.getElementById('showsStats').innerHTML =
-          `<span>${total.toLocaleString()}</span> titles found`;
+          `<span>${total.toLocaleString()}</span> series found`;
 
         if (!items.length) {
-          container.innerHTML = '<div class="empty-state">No shows found</div>';
+          container.innerHTML = '<div class="empty-state">No TV shows found</div>';
           document.getElementById('moviesPagination').innerHTML = '';
           container.classList.remove('loading');
           container.classList.add('loaded');
@@ -280,7 +252,7 @@
         }
 
         // Render cards
-        container.innerHTML = items.map((item, i) => createCard(item, item.type || 'series', i)).join('');
+        container.innerHTML = items.map((item, i) => createCard(item, 'series', i)).join('');
         container.classList.remove('loading');
         container.classList.add('loaded');
         activateLazyImages();
@@ -305,15 +277,7 @@
       }
     }
 
-    // ── Tab switching ─────────────────────────────────────────────────────────
-    document.getElementById('typeTabs').addEventListener('click', e => {
-      const tab = e.target.closest('.type-tab');
-      if (!tab) return;
-      document.querySelectorAll('.type-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      activeType = tab.dataset.type;
-      loadShows(1);
-    });
+    // ── No tab switching needed — this page is always series ─────────────────
 
     // ── Filters ───────────────────────────────────────────────────────────────
     ['genreFilter', 'yearFilter', 'qualityFilter', 'langFilter'].forEach(id => {
