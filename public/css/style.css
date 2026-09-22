@@ -3,17 +3,6 @@
 /* ─── RESET & VARIABLES ─────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ── Smooth theme transitions ────────────────────────────── */
-/* Applied to all elements so theme switching is silky smooth */
-*, *::before, *::after {
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.2s ease, box-shadow 0.3s ease;
-}
-/* But NEVER transition layout or transforms (breaks animations) */
-*, *::before, *::after {
-  transition-property: background-color, border-color, color, box-shadow;
-}
-
-
 :root {
   --bg:        #000000;
   --bg2:       #141414;
@@ -2072,26 +2061,3 @@ ul { list-style: none; }
   }
 }
 
-
-
-/* ═══════════════════════════════════════════════════════════════
-   LIGHT THEME OVERRIDES [data-theme="light"]
-   ═══════════════════════════════════════════════════════════════ */
-[data-theme="light"] .nav-inner { border-bottom: 1px solid rgba(0,0,0,0.08); }
-[data-theme="light"] .nav-search-form { background: var(--bg3); border-color: rgba(0,0,0,0.15); }
-[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); }
-[data-theme="light"] .card { background: var(--card); box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
-[data-theme="light"] .card-title, [data-theme="light"] .card-sub { color: var(--text); }
-[data-theme="light"] .page-title { color: var(--text); }
-[data-theme="light"] .page-sub  { color: var(--text2); }
-[data-theme="light"] .custom-select, [data-theme="light"] select { background: var(--bg2); color: var(--text); border-color: rgba(0,0,0,0.12); }
-[data-theme="light"] .btn-sm { background: var(--bg3); color: var(--text); border-color: rgba(0,0,0,0.12); }
-[data-theme="light"] .footer { background: var(--bg2); border-color: rgba(0,0,0,0.1); }
-[data-theme="light"] .footer-logo, [data-theme="light"] .footer-copy, [data-theme="light"] .footer-links a { color: var(--text2); }
-[data-theme="light"] .type-tab { background: var(--bg3); color: var(--text2); border-color: rgba(0,0,0,0.1); }
-[data-theme="light"] .type-tab.active { background: var(--accent); color: #fff; }
-[data-theme="light"] .admin-sidebar { background: var(--bg2); }
-[data-theme="light"] .admin-nav a { color: var(--text2); }
-[data-theme="light"] .admin-nav a.active, [data-theme="light"] .admin-nav a:hover { background: var(--bg3); color: var(--accent); }
-[data-theme="light"] .empty-state { color: var(--text2); }
-[data-theme="light"] .hero-overlay { background: linear-gradient(to right, rgba(240,240,245,0.9) 30%, transparent 70%), linear-gradient(to top, rgba(240,240,245,0.6) 0%, transparent 60%); }

@@ -316,3 +316,150 @@ async function loadHomepage() {
 }
 
 document.addEventListener('DOMContentLoaded', loadHomepage);
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  SHARED CUSTOM SELECT BUILDER
+//  Call window.initCustomSelects() after DOM + any dynamic options
+//  are ready. Works for any page that has filter-select elements.
+//
+//  Each <select> can carry data attributes for icon+label:
+//    data-icon="<svg…>"  data-label="Genre"
+// ═══════════════════════════════════════════════════════════════════
+window.initCustomSelects = function (opts) {
+  const ICONS = {
+    genre:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>',
+    year:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    quality: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>',
+    lang:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>',
+    sort:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+  };
+
+  // Per-id metadata map (fallback: guess from id)
+  const META = Object.assign({
+    genreFilter:    { icon: ICONS.genre,   label: 'Genre' },
+    yearFilter:     { icon: ICONS.year,    label: 'Year' },
+    qualityFilter:  { icon: ICONS.quality, label: 'Quality' },
+    langFilter:     { icon: ICONS.lang,    label: 'Language' },
+    sortFilter:     { icon: ICONS.sort,    label: 'Sort By' },
+  }, opts || {});
+
+  // Close all open dropdowns
+  function closeAll(except) {
+    document.querySelectorAll('.custom-select').forEach(cs => {
+      if (cs !== except) cs.classList.remove('open');
+    });
+  }
+
+  // Build wrappers for each select
+  document.querySelectorAll('select.filter-select').forEach(select => {
+    // Skip if already wrapped
+    if (select.closest('.custom-select-wrapper')) return;
+
+    select.style.display = 'none';
+
+    // Determine meta — allow data attrs to override
+    const id = select.id;
+    let meta = META[id] || { icon: '', label: select.dataset.label || '' };
+    if (select.dataset.icon)  meta = { icon: select.dataset.icon,  label: meta.label };
+    if (select.dataset.label) meta.label = select.dataset.label;
+
+    // Wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'custom-select-wrapper';
+    select.parentNode.insertBefore(wrapper, select);
+    wrapper.appendChild(select);
+
+    // Pill button
+    const pill = document.createElement('div');
+    pill.className = 'custom-select';
+    pill.setAttribute('role', 'button');
+    pill.setAttribute('tabindex', '0');
+
+    const iconEl  = document.createElement('span');
+    iconEl.className = 'filter-icon';
+    iconEl.innerHTML = meta.icon;
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'label-text';
+    labelEl.textContent = select.options[select.selectedIndex]?.text || meta.label;
+
+    const arrow = document.createElement('span');
+    arrow.className = 'arrow';
+    arrow.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>';
+
+    pill.appendChild(iconEl);
+    pill.appendChild(labelEl);
+    pill.appendChild(arrow);
+    wrapper.appendChild(pill);
+
+    // Dropdown panel
+    const panel = document.createElement('div');
+    panel.className = 'custom-options';
+
+    // Header label
+    if (meta.label) {
+      const hdr = document.createElement('div');
+      hdr.className = 'custom-options-header';
+      hdr.textContent = meta.label;
+      panel.appendChild(hdr);
+    }
+
+    // Options
+    function buildOptions() {
+      // Remove old options (not the header)
+      Array.from(panel.querySelectorAll('.custom-option')).forEach(el => el.remove());
+
+      Array.from(select.options).forEach((opt, idx) => {
+        const item = document.createElement('div');
+        item.className = 'custom-option' + (idx === select.selectedIndex ? ' selected' : '');
+        item.textContent = opt.text;
+        item.addEventListener('click', () => {
+          select.selectedIndex = idx;
+          labelEl.textContent = opt.text;
+          panel.querySelectorAll('.custom-option').forEach(c => c.classList.remove('selected'));
+          item.classList.add('selected');
+          pill.classList.remove('open');
+          pill.classList.toggle('has-value', idx > 0);
+          select.dispatchEvent(new Event('change'));
+        });
+        panel.appendChild(item);
+      });
+    }
+    buildOptions();
+    wrapper.appendChild(panel);
+
+    // Re-sync if native select changes programmatically (e.g. reset)
+    select.addEventListener('change', () => {
+      const si = select.selectedIndex;
+      labelEl.textContent = select.options[si]?.text || meta.label;
+      pill.classList.toggle('has-value', si > 0);
+      panel.querySelectorAll('.custom-option').forEach((c, i) => {
+        c.classList.toggle('selected', i === si);
+      });
+    });
+
+    // If options are added dynamically after init (e.g. year dropdown filled by JS)
+    // observe mutations and rebuild
+    new MutationObserver(() => buildOptions())
+      .observe(select, { childList: true });
+
+    // Toggle open on click/keyboard
+    pill.addEventListener('click', e => {
+      e.stopPropagation();
+      const isOpen = pill.classList.contains('open');
+      closeAll();
+      pill.classList.toggle('open', !isOpen);
+    });
+    pill.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pill.click(); }
+      if (e.key === 'Escape') pill.classList.remove('open');
+    });
+  });
+
+  // Close when clicking outside
+  if (!window._customSelectDocListener) {
+    window._customSelectDocListener = true;
+    document.addEventListener('click', () => closeAll());
+  }
+};
