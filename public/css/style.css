@@ -1886,3 +1886,175 @@ ul { list-style: none; }
 .page-fade-enter {
   animation: fadeInUp 0.4s cubic-bezier(0.2,0.8,0.2,1) both;
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN PORTAL — FULL MOBILE OVERHAUL
+   Makes every admin page fully usable on phones (iOS + Android)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Bottom nav bar (phone-only, one-thumb navigation) ── */
+.admin-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 1200;
+  background: rgba(10,10,18,0.97);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 6px 0 env(safe-area-inset-bottom, 0px);
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: space-around;
+}
+.admin-bottom-nav a {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; padding: 6px 4px;
+  color: rgba(255,255,255,0.4);
+  font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  text-decoration: none; transition: color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.admin-bottom-nav a svg { flex-shrink: 0; }
+.admin-bottom-nav a.active { color: var(--accent, #e50914); }
+.admin-bottom-nav a:active { background: rgba(255,255,255,0.05); }
+
+/* ── Touch-safe tap targets ─────────────────────────────── */
+@media (max-width: 680px) {
+  /* All buttons min 44px tall for iOS HIG compliance */
+  .admin-content button,
+  .admin-content .btn,
+  .admin-content input[type="submit"],
+  .orch-btn, .btn-primary, .btn-secondary, .btn-green, .btn-danger {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+  /* Inputs min 44px tall */
+  .admin-content input,
+  .admin-content select,
+  .admin-content textarea {
+    min-height: 44px;
+    font-size: 16px !important; /* prevents iOS zoom on focus */
+  }
+
+  /* ── Admin bottom nav ─────────────────────────────────── */
+  .admin-bottom-nav { display: flex; }
+  /* Add safe space at bottom so content isn't hidden behind bottom nav */
+  .admin-content { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+
+  /* ── Sidebar: bigger + safer ─────────────────────────── */
+  .admin-sidebar {
+    width: min(300px, 85vw);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .admin-nav a {
+    padding: 13px 16px;
+    font-size: 0.95rem;
+    border-radius: 10px;
+  }
+  .admin-logo { padding: 20px 16px 16px; font-size: 1.15rem; }
+  .sidebar-close-btn { font-size: 1.4rem; padding: 10px; width: 40px; height: 40px; }
+
+  /* ── Page header ─────────────────────────────────────── */
+  .admin-page-title { font-size: 1.15rem; }
+
+  /* ── Stats grid: 2 cols on phone ─────────────────────── */
+  .stats-grid { grid-template-columns: 1fr 1fr !important; gap: 10px; }
+  .stat-card { padding: 14px; }
+  .stat-value { font-size: 1.5rem; }
+
+  /* ── Form grids → always single column ───────────────── */
+  .form-grid,
+  .form-row,
+  .form-row.triple {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+
+  /* ── Orchestrator buttons → 2-col grid ───────────────── */
+  .orch-actions {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .orch-btn { min-width: unset !important; flex: unset !important; }
+  #startBtn { grid-column: 1 / -1; } /* Full pipeline button spans full width */
+  #logBox { height: 320px !important; font-size: 0.72rem !important; }
+
+  /* ── Orchestrator mode cards → stack vertically ──────── */
+  .orch-modes { grid-template-columns: 1fr !important; gap: 10px; }
+
+  /* ── Scraper + fix-posters action rows ───────────────── */
+  .scraper-actions, .action-row {
+    flex-direction: column !important;
+    gap: 10px;
+  }
+
+  /* ── Bulk import textarea ─────────────────────────────── */
+  .bulk-textarea, #bulkText { min-height: 140px !important; font-size: 14px !important; }
+
+  /* ── Add movie/series form ────────────────────────────── */
+  .form-card { padding: 16px !important; }
+
+  /* ── Modal: full-screen sheet on phone ───────────────── */
+  .modal-overlay { padding: 0 !important; align-items: flex-end !important; }
+  .modal-overlay .modal,
+  .modal-overlay .modal-box {
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-top-left-radius: 20px !important;
+    border-top-right-radius: 20px !important;
+    padding: 24px 16px 32px !important;
+    max-height: 92vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* ── Dashboard recent content table → card layout ────── */
+  .admin-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .admin-table { min-width: 560px; }
+  /* Small inline action buttons */
+  .admin-table .btn-sm { padding: 6px 10px; font-size: 0.75rem; white-space: nowrap; }
+
+  /* ── Fix Posters grid: 2 cols ────────────────────────── */
+  .posters-grid,
+  .poster-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
+  .poster-card { border-radius: 10px !important; }
+
+  /* ── Login page ──────────────────────────────────────── */
+  .login-card { padding: 28px 20px !important; margin: 16px !important; }
+
+  /* ── Admin top header ────────────────────────────────── */
+  .mobile-menu-btn { display: flex; align-items: center; min-height: 40px; min-width: 40px; }
+
+  /* ── Toast: full width on phones ─────────────────────── */
+  .toast { left: 12px !important; right: 12px !important; bottom: calc(80px + env(safe-area-inset-bottom, 0px) + 12px) !important; text-align: center !important; }
+
+  /* ── Scraper/pipeline log box ─────────────────────────── */
+  .log-wrap { border-radius: 10px; }
+
+  /* ── Wipe confirm modal ───────────────────────────────── */
+  .modal-btns { flex-direction: column; }
+  .modal-btns button { width: 100%; justify-content: center; }
+}
+
+/* ── Very small phones (SE, Galaxy A-series) ─────────────── */
+@media (max-width: 380px) {
+  .admin-content { padding: 10px 10px calc(80px + env(safe-area-inset-bottom, 0px)); }
+  .admin-bottom-nav a { font-size: 0.56rem; }
+  .stats-grid { gap: 8px; }
+  .stat-value { font-size: 1.35rem; }
+  .orch-btn { font-size: 0.82rem; padding: 11px 10px; }
+}
+
+/* ── Safe area inset for notched iPhones (notch + home bar) ─ */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .admin-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+

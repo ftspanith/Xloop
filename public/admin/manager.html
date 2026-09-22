@@ -150,11 +150,58 @@
     .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
     .empty-icon { font-size: 3rem; margin-bottom: 12px; }
 
+    /* ── Mobile overhaul ──────────────────────────────────────── */
+    /* Bottom nav bar */
+    .manager-bottom-nav {
+      display: none;
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 1200;
+      background: rgba(10,10,18,0.97); border-top: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      padding: 6px 0 env(safe-area-inset-bottom, 0px);
+      flex-direction: row; align-items: stretch; justify-content: space-around;
+    }
+    .manager-bottom-nav a {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 3px; padding: 6px 4px; color: rgba(255,255,255,0.4);
+      font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+      text-decoration: none; transition: color 0.2s; -webkit-tap-highlight-color: transparent;
+    }
+    .manager-bottom-nav a.active { color: #e50914; }
+
     @media (max-width: 640px) {
       .form-row { grid-template-columns: 1fr; }
       .form-row.triple { grid-template-columns: 1fr; }
       .link-row { grid-template-columns: 1fr; }
-      .container { padding: 16px; }
+      .container { padding: 12px 10px calc(80px + env(safe-area-inset-bottom, 0px)); }
+      .header { padding: 12px 14px; gap: 10px; }
+      .header-logo { font-size: 1.1rem; }
+      .header-back { padding: 7px 12px; font-size: 0.8rem; }
+      .tabs { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .tab-btn { padding: 9px 14px; font-size: 0.82rem; flex-shrink: 0; }
+      .movie-grid { grid-template-columns: 1fr 1fr !important; gap: 10px; }
+      .movie-card-img { height: 120px; }
+      .movie-card-body { padding: 10px; }
+      .movie-card-title { font-size: 0.82rem; }
+      .movie-card-actions { gap: 6px; flex-wrap: wrap; }
+      .movie-card-actions .btn { padding: 6px 10px; font-size: 0.75rem; }
+      /* Touch targets */
+      .btn { min-height: 44px; touch-action: manipulation; }
+      input, select, textarea { min-height: 44px; font-size: 16px !important; }
+      /* Modal: bottom sheet */
+      .modal-overlay { padding: 0 !important; align-items: flex-end !important; }
+      .modal {
+        border-radius: 20px 20px 0 0 !important;
+        padding: 20px 14px 32px !important;
+        max-height: 92vh; overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        width: 100% !important; max-width: 100% !important;
+      }
+      .stats-bar { gap: 10px; }
+      .stat-pill { padding: 8px 12px; font-size: 0.8rem; }
+      .manager-bottom-nav { display: flex; }
+    }
+    @media (max-width: 380px) {
+      .movie-grid { grid-template-columns: 1fr !important; }
     }
   </style>
 </head>
@@ -810,5 +857,29 @@ loadSearch();
     document.body.style.overflow = '';
   }
 </script>
+
+<!-- ── Mobile Bottom Navigation Bar ── -->
+<nav class="manager-bottom-nav">
+  <a href="/admin/dashboard.html">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    Dashboard
+  </a>
+  <a href="/admin/orchestrator.html">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    Pipeline
+  </a>
+  <a href="/admin/manager.html" class="active">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    Content
+  </a>
+  <a href="/admin/fix-posters.html">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+    Posters
+  </a>
+  <a href="/admin/bulk-import.html">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    Import
+  </a>
+</nav>
 </body>
 </html>
