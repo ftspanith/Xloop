@@ -3,10 +3,15 @@ const router    = express.Router();
 const path      = require('path');
 const auth      = require('../middleware/auth');
 
-// ── Import pipeline directly (in-process, NOT child_process.spawn)
-// Vercel serverless kills spawned children as soon as the lambda returns.
-// Running the pipeline in the same process keeps it alive for the full duration.
-const { runPipeline } = require('../pipeline_full');
+// pipeline_full is lazy-loaded inside the route handlers so it doesn't
+// get bundled/required on every Vercel cold start (it pulls in ESM-only deps)
+let _runPipeline = null;
+async function getRunPipeline() {
+  if (!_runPipeline) {
+    _runPipeline = require('../pipeline_full').runPipeline;
+  }
+  return _runPipeline;
+}
 
 let pipelineRunning  = false;  // is a pipeline running?
 let pipelinePromise  = null;   // the in-flight Promise
@@ -80,6 +85,7 @@ router.post('/start', auth, (req, res) => {
   pipelineRunning = true;
   broadcast(`🚀 Starting ${label}...`);
 
+  const runPipeline = await getRunPipeline();
   pipelinePromise = runPipeline({
     noBypass:  !!skipScraper,
     noWipe:    !!skipScraper,   // skip scraper = skip wipe too
@@ -109,6 +115,7 @@ router.post('/heal', auth, (req, res) => {
   pipelineRunning = true;
   broadcast('🩺 Starting Database Healer (heal-only mode)...');
 
+  const runPipeline = await getRunPipeline();
   pipelinePromise = runPipeline({
     noBypass: true,
     noWipe:   true,

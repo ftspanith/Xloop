@@ -25,7 +25,8 @@ const mongoose = require('mongoose');
 const fs       = require('fs');
 const path     = require('path');
 const axios    = require('axios');
-const { wrapper }   = require('axios-cookiejar-support');
+// axios-cookiejar-support is ESM-only ("type": "module") — lazy-loaded below
+// to prevent Vercel's ncc bundler from crashing on it at build time
 const { CookieJar } = require('tough-cookie');
 const { spawn }     = require('child_process');
 const Movie         = require('./models/Movie');
@@ -68,6 +69,7 @@ const DIRECT_HOST_RE = /gdflix|hubcloud|drive\.google|gofile|terabox|mega\.nz|1f
 // ═══════════════════════════════════════════════════════════════════════════
 async function bypassSofturl(url) {
   const jar    = new CookieJar();
+  const { wrapper } = await import('axios-cookiejar-support');
   const client = wrapper(axios.create({ jar, withCredentials: true }));
   const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
   const hdrs = {
