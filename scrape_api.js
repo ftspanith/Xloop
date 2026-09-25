@@ -142,17 +142,25 @@ async function withRetry(fn, maxRetries = 4) {
     try {
       return await fn();
     } catch (err) {
-      if (err.errorMessage && err.errorMessage.includes('FLOOD_WAIT')) {
-        const waitSec = parseInt(err.errorMessage.match(/\d+/)?.[0]) || 30;
+      const msg = err.message || err.errorMessage || '';
+      // FloodWait: always wait exactly as told
+      if (msg.includes('FLOOD_WAIT') || (err.errorMessage && err.errorMessage.includes('FLOOD_WAIT'))) {
+        const waitSec = parseInt(msg.match(/\d+/)?.[0]) || 30;
         logFn(`   [FloodWait] Telegram rate limit — waiting ${waitSec}s...`);
         await sleep(waitSec * 1000 + 2000);
         continue;
       }
-      if (err.errorMessage && (err.errorMessage.includes('CHANNEL_INVALID') || err.errorMessage.includes('CHANNEL_PRIVATE') || err.errorMessage.includes('USERNAME_INVALID'))) {
-        throw err; // Fatal error, retrying won't help
-      }
+      // Fatal: channel inaccessible — skip immediately, no retries
+      const isFatal = msg.includes('CHANNEL_INVALID') || msg.includes('CHANNEL_PRIVATE') ||
+        msg.includes('USERNAME_INVALID') || msg.includes('input entity') ||
+        (err.errorMessage && (
+          err.errorMessage.includes('CHANNEL_INVALID') ||
+          err.errorMessage.includes('CHANNEL_PRIVATE') ||
+          err.errorMessage.includes('USERNAME_INVALID')
+        ));
+      if (isFatal) throw err;
       if (attempt === maxRetries) throw err;
-      logFn(`   [Retry ${attempt + 1}/${maxRetries}] ${err.message} — retrying in ${delay/1000}s`);
+      logFn(`   [Retry ${attempt + 1}/${maxRetries}] ${msg.slice(0,80)} — retrying in ${delay/1000}s`);
       await sleep(delay);
       delay = Math.min(delay * 2, 30000);
     }
@@ -266,13 +274,26 @@ function saveOutput(newMessages, modeLabel, existingMessages = []) {
   // Sort by date descending (newest first)
   merged.sort((a, b) => new Date(b.date) - new Date(a.date));
 
+  const exportedAt = new Date().toISOString();
   const exportData = {
-    exported_at:              new Date().toISOString(),
+    exported_at:              exportedAt,
     scrape_mode:              modeLabel,
     total_messages_collected: merged.length,
     messages:                 merged,
   };
-  fs.writeFileSync(EXPORT_FILE, JSON.stringify(exportData, null, 2));
+
+  const json = JSON.stringify(exportData, null, 2);
+
+  // ── Human-readable filename: xloop_full_2026-09-25_30810msgs.json
+  const dateStr  = exportedAt.slice(0, 10); // YYYY-MM-DD
+  const readableFile = path.join(__dirname, `xloop_${modeLabel}_${dateStr}_${merged.length}msgs.json`);
+
+  // Write readable-named file
+  fs.writeFileSync(readableFile, json);
+  // Also write standard telegram_export.json for pipeline compatibility
+  fs.writeFileSync(EXPORT_FILE, json);
+
+  logFn(`   Readable file  : ${path.basename(readableFile)}`);
   return merged.length;
 }
 
