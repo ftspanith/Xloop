@@ -853,67 +853,56 @@
   }
 
   // ── Upload export functions (inline in dashboard) ───────────────────────────
-  let _dashExportFiles = [];
+  // Store raw File objects — no FileReader needed
+  let _dashRawFiles = [];
 
   function dashPreviewExport(input) {
-    const files = Array.from(input.files);
-    if (!files.length) return;
-    const totalMB = (files.reduce((s, f) => s + f.size, 0) / 1024 / 1024).toFixed(1);
-    const label = files.length === 1
-      ? `${files[0].name} (${totalMB} MB)`
-      : `${files.length} files selected (${totalMB} MB total)`;
+    _dashRawFiles = Array.from(input.files || []);
+    if (!_dashRawFiles.length) return;
+    const totalMB = (_dashRawFiles.reduce((s, f) => s + f.size, 0) / 1024 / 1024).toFixed(1);
+    const label = _dashRawFiles.length === 1
+      ? `${_dashRawFiles[0].name} (${totalMB} MB)`
+      : `${_dashRawFiles.length} files (${totalMB} MB total)`;
     document.getElementById('dashExportFileName').textContent = label;
     document.getElementById('dashUploadBtn').style.display = 'inline-block';
-
-    // Read all files into _dashExportFiles array
-    _dashExportFiles = [];
-    let loaded = 0;
-    files.forEach((file, i) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        _dashExportFiles[i] = e.target.result;
-        loaded++;
-        if (loaded === files.length) {
-          document.getElementById('dashUploadMsg').style.display = 'block';
-          document.getElementById('dashUploadMsg').style.color = 'rgba(255,255,255,.5)';
-          document.getElementById('dashUploadMsg').textContent = `${files.length} file(s) ready. Click Upload to Server.`;
-        }
-      };
-      reader.readAsText(file);
-    });
+    const msg = document.getElementById('dashUploadMsg');
+    msg.style.display = 'block';
+    msg.style.color = 'rgba(255,255,255,.5)';
+    msg.textContent = `${_dashRawFiles.length} file(s) ready — click Upload to Server.`;
   }
 
   async function dashUploadExport() {
-    const readyFiles = (_dashExportFiles || []).filter(Boolean);
-    if (!readyFiles.length) {
-      alert('Files are still loading, please wait a moment.');
-      return;
-    }
+    if (!_dashRawFiles.length) { alert('No file selected.'); return; }
     const btn = document.getElementById('dashUploadBtn');
     const msg = document.getElementById('dashUploadMsg');
     msg.style.display = 'block';
     btn.disabled = true;
+
     try {
       const token = localStorage.getItem('xloop_admin_token');
-      let body, contentType = 'application/json';
+      msg.style.color = 'rgba(255,255,255,.6)';
 
-      if (readyFiles.length === 1) {
-        // ── Single file: send raw text directly — no re-parse/stringify needed ──
-        // This avoids the browser memory crash on 17MB+ files
-        msg.style.color = 'rgba(255,255,255,.6)';
-        msg.textContent = 'Uploading file to server...';
-        body = readyFiles[0]; // raw JSON string as-is
+      let body;
+      if (_dashRawFiles.length === 1) {
+        // ── Single file: stream the File blob directly — no FileReader, no memory copy ──
+        msg.textContent = `Uploading ${(_dashRawFiles[0].size/1024/1024).toFixed(1)} MB to server...`;
+        body = _dashRawFiles[0]; // Browser streams this directly
       } else {
-        // ── Multiple files: build merged JSON array string without full parse ──
-        msg.style.color = 'rgba(255,255,255,.6)';
-        msg.textContent = `Uploading ${readyFiles.length} files to server — merging...`;
-        // Wrap each raw JSON export into an array: [export1, export2, ...]
-        body = '[' + readyFiles.join(',') + ']';
+        // ── Multiple files: wrap in a JSON array using Blobs (zero string parsing) ──
+        msg.textContent = `Uploading ${_dashRawFiles.length} files and merging on server...`;
+        const parts = [];
+        parts.push(new Blob(['['], { type: 'application/json' }));
+        _dashRawFiles.forEach((file, i) => {
+          if (i > 0) parts.push(new Blob([','], { type: 'application/json' }));
+          parts.push(file);
+        });
+        parts.push(new Blob([']'], { type: 'application/json' }));
+        body = new Blob(parts, { type: 'application/json' });
       }
 
       const res = await fetch('/api/scrape/upload-export', {
         method: 'POST',
-        headers: { 'Content-Type': contentType, 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body,
       });
       const data = await res.json();
