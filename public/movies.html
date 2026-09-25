@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Movies - XLOOP</title>
   <link rel="stylesheet" href="/css/style.css">
-<script src="/js/theme.js"></script>
+
 </head>
 <body>
   <!-- NAVBAR -->
@@ -158,7 +158,7 @@
         
         let html = '';
         data.movies.forEach((item, index) => {
-          html += createCard(item, 'movie', index);
+          html += createCard(item, item.type || 'movie', index);
         });
         container.innerHTML = html;
         container.classList.add('loaded');
