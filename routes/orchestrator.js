@@ -85,28 +85,49 @@ router.post('/start', auth, async (req, res) => {
   pipelineRunning = true;
   broadcast(`🚀 Starting ${label}...`);
 
-  // For Skip Scraper: use existing bypassed/links JSON — do NOT re-extract.
+  // For Skip Scraper: load existing links from MongoDB (persists across Lambda instances).
   // For Full Pipeline: importSrc=undefined so pipeline re-extracts fresh (overwrites JSONs).
   let importSrc = undefined;
   if (skipScraper) {
-    const fs   = require('fs');
-    const osp  = require('path');
-    const TMP  = process.env.VERCEL ? '/tmp' : osp.join(__dirname, '..');
-    const bypassedFile = osp.join(TMP, 'bypassed_links.json');
-    const linksFile    = osp.join(TMP, 'links_for_bypasser.json');
-    if (fs.existsSync(bypassedFile)) {
-      importSrc = bypassedFile;
-      broadcast(`📂 Skip Scraper: using existing bypassed_links.json`);
-    } else if (fs.existsSync(linksFile)) {
-      importSrc = linksFile;
-      broadcast(`📂 Skip Scraper: using existing links_for_bypasser.json`);
-    } else {
-      broadcast(`❌ Skip Scraper: no existing JSON found in ${TMP}. Run Full Pipeline first or upload telegram_export.json.`);
+    try {
+      const PipelineCache = require('../models/PipelineCache');
+      const mongoose = require('mongoose');
+
+      // Connect to DB to check cache
+      if (mongoose.connection.readyState !== 1) {
+        await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
+      }
+
+      const cache = await PipelineCache.findOne({ key: 'bypassed_links' }).lean();
+      if (cache && cache.data && cache.data.length > 0) {
+        // Write to /tmp so pipeline_full.js can read it as a file (it still needs a file path)
+        const osp = require('path');
+        const fs  = require('fs');
+        const tmpFile = osp.join('/tmp', 'bypassed_links.json');
+        fs.writeFileSync(tmpFile, JSON.stringify(cache.data));
+        importSrc = tmpFile;
+        broadcast(`📂 Skip Scraper: loaded ${cache.data.length} entries from MongoDB cache (saved ${new Date(cache.savedAt).toLocaleDateString()})`);
+      } else {
+        // Try local filesystem fallback for local dev
+        const osp = require('path');
+        const fs  = require('fs');
+        const localFile = osp.join(__dirname, '..', 'bypassed_links.json');
+        if (fs.existsSync(localFile)) {
+          importSrc = localFile;
+          broadcast(`📂 Skip Scraper: using local bypassed_links.json`);
+        } else {
+          broadcast(`❌ Skip Scraper: no cached data found. Run Full Pipeline first to build the cache.`);
+          pipelineRunning = false;
+          return;
+        }
+      }
+    } catch (err) {
+      broadcast(`❌ Skip Scraper cache load failed: ${err.message}`);
       pipelineRunning = false;
       return;
     }
   } else {
-    broadcast(`🔄 Full Pipeline: will re-extract fresh from telegram_export.json (overwrites all JSONs)`);
+    broadcast(`🔄 Full Pipeline: will re-extract fresh from telegram_export.json`);
   }
 
   const runPipeline = await getRunPipeline();

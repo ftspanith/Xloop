@@ -788,6 +788,20 @@ async function main(opts = {}) {
   // STEP 4: Import
   sep();
   log('STEP 4 — Importing all entries → MongoDB...');
+
+  // Save to PipelineCache so Skip Scraper works across Lambda invocations on Vercel
+  try {
+    const PipelineCache = require('./models/PipelineCache');
+    await PipelineCache.findOneAndUpdate(
+      { key: 'bypassed_links' },
+      { key: 'bypassed_links', data: allEntries, count: allEntries.length, savedAt: new Date() },
+      { upsert: true, new: true }
+    );
+    log(`💾 Saved ${allEntries.length} entries to MongoDB cache (for Skip Scraper)`);
+  } catch (cacheErr) {
+    warn(`Cache save failed (non-fatal): ${cacheErr.message}`);
+  }
+
   await phaseImport(allEntries);
   ok('Import complete');
   try { await mongoose.disconnect(); } catch(_) {}
