@@ -72,10 +72,24 @@ const MODE         = parseInt(args.mode) || 1;
 const DAYS         = parseInt(args.days) || 1;
 const START_DATE   = args['start-date'];
 const END_DATE     = args['end-date'];
-const RAW_CHANNELS = args.channels || 'all';
+const PROFILE      = parseInt(args.profile) || 1;   // --profile=1 or --profile=2
+const ACCOUNT_NAME = args['account-name'] || `acc${PROFILE}`;
 
+// ── Pick credentials based on profile ────────────────────────────────────────
+const TG_API_ID   = PROFILE === 2 ? process.env.TG_API_ID_2   : process.env.TG_API_ID;
+const TG_API_HASH = PROFILE === 2 ? process.env.TG_API_HASH_2 : process.env.TG_API_HASH;
+const TG_SESSION  = PROFILE === 2 ? process.env.TG_SESSION_2  : process.env.TG_SESSION;
+
+// Each account can have its own channel list (TG_CHANNELS_2=id1,id2,...)
+// If not set, falls back to the built-in ALL_CHANNEL_IDS
+const ACCOUNT_CHANNELS_ENV = PROFILE === 2 ? process.env.TG_CHANNELS_2 : process.env.TG_CHANNELS_1;
+const ACCOUNT_CHANNEL_IDS  = ACCOUNT_CHANNELS_ENV
+  ? ACCOUNT_CHANNELS_ENV.split(',').map(Number).filter(Boolean)
+  : ALL_CHANNEL_IDS;
+
+const RAW_CHANNELS = args.channels || 'all';
 const TARGET_CHANNELS = RAW_CHANNELS === 'all'
-  ? [...ALL_CHANNEL_IDS]
+  ? [...ACCOUNT_CHANNEL_IDS]
   : RAW_CHANNELS.split(',').map(Number).filter(Boolean);
 
 let logFn = (msg) => process.stdout.write(msg + '\n');
@@ -284,9 +298,9 @@ function saveOutput(newMessages, modeLabel, existingMessages = []) {
 
   const json = JSON.stringify(exportData, null, 2);
 
-  // ── Human-readable filename: xloop_full_2026-09-25_30810msgs.json
-  const dateStr  = exportedAt.slice(0, 10); // YYYY-MM-DD
-  const readableFile = path.join(__dirname, `xloop_${modeLabel}_${dateStr}_${merged.length}msgs.json`);
+  // ── Human-readable filename: xloop_full_acc1_2026-09-25_30810msgs.json
+  const dateStr      = exportedAt.slice(0, 10); // YYYY-MM-DD
+  const readableFile = path.join(__dirname, `xloop_${modeLabel}_${ACCOUNT_NAME}_${dateStr}_${merged.length}msgs.json`);
 
   // Write readable-named file
   fs.writeFileSync(readableFile, json);
@@ -299,20 +313,22 @@ function saveOutput(newMessages, modeLabel, existingMessages = []) {
 
 // ── MAIN ─────────────────────────────────────────────────────
 (async () => {
-  const apiId   = parseInt(process.env.TG_API_ID);
-  const apiHash = process.env.TG_API_HASH;
+  const apiId   = parseInt(TG_API_ID);
+  const apiHash = TG_API_HASH;
 
   if (!apiId || !apiHash) {
-    logFn('TG_API_ID or TG_API_HASH missing from .env. Run node scrape.js once first.');
+    logFn(`TG_API_ID${PROFILE>1?'_'+PROFILE:''} or TG_API_HASH${PROFILE>1?'_'+PROFILE:''} missing from .env.`);
     process.exit(1);
   }
-  if (!process.env.TG_SESSION) {
-    logFn('TG_SESSION missing from .env. Run node scrape.js once to authenticate first.');
+  if (!TG_SESSION) {
+    logFn(`TG_SESSION${PROFILE>1?'_'+PROFILE:''} missing from .env. Authenticate first.`);
     process.exit(1);
   }
 
+  logFn(`\n▶  Account: ${ACCOUNT_NAME} (Profile ${PROFILE}) | Channels: ${TARGET_CHANNELS.length}`);
+
   const client = new TelegramClient(
-    new StringSession(process.env.TG_SESSION),
+    new StringSession(TG_SESSION),
     apiId, apiHash,
     { connectionRetries: 8, retryDelay: 2000 }
   );
