@@ -104,20 +104,34 @@ app.use(express.static(path.join(__dirname, 'public'), {
   lastModified: true,
 }));
 
-// ── DB readiness guard ────────────────────────────────────────────────────────
-app.use((req, res, next) => {
+// ── DB readiness guard — wait up to 8s for cold-start connection ─────────────
+// On Vercel, MongoDB takes 2-5s to connect. Instead of immediately returning
+// 503, we poll readyState up to 8 seconds before giving up.
+app.use(async (req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
   if (req.path === '/api/health')    return next();
-  const state = mongoose.connection.readyState;
-  if (state !== 1) {
+
+  if (mongoose.connection.readyState === 1) return next();
+
+  // Wait up to 8 seconds for the DB to become ready (cold start)
+  const MAX_WAIT_MS  = 8000;
+  const POLL_INTERVAL = 200;
+  let waited = 0;
+
+  while (mongoose.connection.readyState !== 1 && waited < MAX_WAIT_MS) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL));
+    waited += POLL_INTERVAL;
+  }
+
+  if (mongoose.connection.readyState !== 1) {
+    const state = mongoose.connection.readyState;
     const label = ['disconnected','connected','connecting','disconnecting'][state] || 'unknown';
-    // Removed console.warn here — this fires on EVERY request when DB is down,
-    // flooding logs. The 503 response tells the client everything it needs.
     return res.status(503).json({
-      message: 'Database not ready. Please wait a moment and try again.',
+      message: 'Database not ready. Please try again in a moment.',
       db: label,
     });
   }
+
   next();
 });
 
