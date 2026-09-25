@@ -6,12 +6,11 @@ const path       = require('path');
 const compression = require('compression');
 const guestGate  = require('./middleware/guestGate');
 
-// ── Fail fast if critical env vars are missing ──────────────────────────────
+// ── Warn if critical env vars are missing (do not exit, Vercel will 500) ────
 const REQUIRED_ENV = ['MONGODB_URI', 'JWT_SECRET'];
 const missing = REQUIRED_ENV.filter(k => !process.env[k]);
 if (missing.length) {
-  console.error(`[FATAL] Missing env vars: ${missing.join(', ')}`);
-  process.exit(1);
+  console.warn(`[WARNING] Missing critical env vars: ${missing.join(', ')}. App will likely fail!`);
 }
 
 const app = express();
