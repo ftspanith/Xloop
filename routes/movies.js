@@ -268,17 +268,18 @@ router.get('/scan-all', auth, async (req, res) => {
 // ── GET /api/movies  (list + filters + pagination) ───────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const { genre, year, quality, type, search, sort = 'createdAt', page = 1, limit = 20 } = req.query;
-    const isAdmin = !!req.headers['authorization']; // rough check — not enforced, just for limit
+    const { genre, year, quality, type, language, search, sort = 'createdAt', page = 1, limit = 20 } = req.query;
+    const isAdmin = !!req.headers['authorization'];
     const filter = {};
 
     // type filter: 'all' returns everything, otherwise default to 'movie'
     if (type === 'all') { /* no type filter */ }
     else filter.type = type || 'movie';
 
-    if (genre)   filter.genre   = { $in: [genre] };
-    if (year)    filter.year    = parseInt(year);
-    if (quality) filter.quality = quality;
+    if (genre)    filter.genre    = { $in: [genre] };
+    if (year)     filter.year     = parseInt(year);
+    if (quality)  filter.quality  = quality;
+    if (language) filter.language = { $regex: escapeRegex(language.slice(0, 50)), $options: 'i' };
 
     if (search) {
       const s = escapeRegex(search.slice(0, 200)); // clamp + escape for safety
