@@ -39,6 +39,7 @@ const _argv        = IS_MAIN ? process.argv.slice(2) : [];
 const ROOT             = __dirname;
 const IS_VERCEL        = !!process.env.VERCEL;
 const TMP              = IS_VERCEL ? '/tmp' : ROOT;
+const EXPORT_FILE      = path.join(TMP, 'telegram_export.json');
 const LINKS_FILE       = path.join(TMP, 'links_for_bypasser.json');
 const SHORTLINKS_FILE  = path.join(TMP, 'shortlinks_report.json');
 const BYPASSED_FILE    = path.join(TMP, 'bypassed_links.json');
