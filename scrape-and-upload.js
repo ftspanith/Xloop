@@ -1,21 +1,38 @@
 #!/usr/bin/env node
 /**
- * scrape-and-upload.js
- * ─────────────────────────────────────────────────────────────────────────────
- * ONE-COMMAND workflow for Xloop on Vercel:
- *   1. Runs scrape_api.js locally to generate telegram_export.json
- *   2. Reads the generated file
- *   3. Uploads to your live Vercel site via /api/scrape/upload-export
- *   4. Triggers Full Pipeline automatically (optional)
+ * scrape-and-upload.js — Xloop Scrape & Upload Automation
+ * ─────────────────────────────────────────────────────────
+ * Runs the Telegram scraper locally then auto-uploads to your live Vercel site.
  *
- * Usage:
- *   node scrape-and-upload.js               → scrape all channels + upload
- *   node scrape-and-upload.js --upload-only → skip scraping, just upload existing file
- *   node scrape-and-upload.js --mode=2      → scrape mode 2 + upload
- *   node scrape-and-upload.js --no-pipeline → upload only, don't trigger pipeline
+ * MODES:
+ *   --mode=1   Full scrape     → ALL messages from ALL channels (takes hours)
+ *   --mode=2   Specific        → Only channels you list with --channels=ID1,ID2
+ *   --mode=3   Date range      → Last N days OR specific date range
+ *   --mode=4   New only        → Only messages newer than last export (fastest)
  *
- * Set XLOOP_URL in .env or pass as env var:
- *   XLOOP_URL=https://xloop-rose.vercel.app
+ * EXAMPLES:
+ *   node scrape-and-upload.js --mode=4
+ *     → Daily update: fetch only new messages since last scrape
+ *
+ *   node scrape-and-upload.js --mode=3 --days=7
+ *     → Last 7 days from all channels
+ *
+ *   node scrape-and-upload.js --mode=3 --start-date=2024-01-01 --end-date=2024-03-01
+ *     → Specific date range
+ *
+ *   node scrape-and-upload.js --mode=2 --channels=2121685058,1460307412
+ *     → Only specific channels (full scrape of those channels)
+ *
+ *   node scrape-and-upload.js --mode=1
+ *     → Full total scrape of all channels
+ *
+ *   node scrape-and-upload.js --upload-only
+ *     → Skip scraping, just upload existing telegram_export.json
+ *
+ * NPM SHORTCUTS:
+ *   npm run scrape               → mode 4 (daily new-only, recommended)
+ *   npm run scrape:full          → mode 1 (full total scrape)
+ *   npm run scrape:upload-only   → just upload existing file
  */
 'use strict';
 
@@ -27,16 +44,57 @@ const https       = require('https');
 const http        = require('http');
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const SITE_URL     = process.env.XLOOP_URL || 'https://xloop-rose.vercel.app';
-const ADMIN_USER   = process.env.ADMIN_USERNAME || 'admin';
-const ADMIN_PASS   = process.env.ADMIN_PASSWORD || 'xloop@admin123';
-const EXPORT_FILE  = path.join(__dirname, 'telegram_export.json');
+const SITE_URL      = process.env.XLOOP_URL      || 'https://xloop-rose.vercel.app';
+const ADMIN_USER    = process.env.ADMIN_USERNAME  || 'admin';
+const ADMIN_PASS    = process.env.ADMIN_PASSWORD  || 'xloop@admin123';
+const EXPORT_FILE   = path.join(__dirname, 'telegram_export.json');
 const SCRAPE_SCRIPT = path.join(__dirname, 'scrape_api.js');
 
-const args         = process.argv.slice(2);
-const uploadOnly   = args.includes('--upload-only');
-const noPipeline   = args.includes('--no-pipeline');
-const mode         = (args.find(a => a.startsWith('--mode=')) || '--mode=1').split('=')[1];
+// Parse CLI args
+const rawArgs    = process.argv.slice(2);
+const getArg     = (name) => { const a = rawArgs.find(a => a.startsWith(`--${name}=`)); return a ? a.split('=').slice(1).join('=') : null; };
+const hasFlag    = (name) => rawArgs.includes(`--${name}`);
+
+const uploadOnly  = hasFlag('upload-only');
+const noPipeline  = hasFlag('no-pipeline');
+const showHelp    = hasFlag('help') || hasFlag('h');
+const mode        = getArg('mode')       || '4';   // default: new-only (fastest)
+const days        = getArg('days')       || '1';
+const channels    = getArg('channels')   || 'all';
+const startDate   = getArg('start-date') || '';
+const endDate     = getArg('end-date')   || '';
+
+const MODE_LABELS = {
+  '1': 'Full scrape — ALL messages from ALL channels',
+  '2': `Specific channels — ${channels}`,
+  '3': startDate ? `Date range ${startDate} → ${endDate || 'now'}` : `Last ${days} day(s)`,
+  '4': 'New only — messages newer than last export',
+};
+
+if (showHelp) {
+  console.log(`
+Usage: node scrape-and-upload.js [options]
+
+Modes:
+  --mode=1                Full scrape (all channels, all history)
+  --mode=2 --channels=ID  Specific channels only
+  --mode=3 --days=N       Last N days
+  --mode=3 --start-date=YYYY-MM-DD [--end-date=YYYY-MM-DD]
+  --mode=4                New messages only since last export (default)
+
+Options:
+  --upload-only           Skip scraping, upload existing telegram_export.json
+  --no-pipeline           Upload only, don't trigger Full Pipeline
+  --channels=ID1,ID2      Channel IDs for mode 2
+  --days=N                Number of days back for mode 3
+
+NPM shortcuts:
+  npm run scrape           Daily update (mode 4)
+  npm run scrape:full      Full scrape (mode 1)
+  npm run scrape:upload-only
+`);
+  process.exit(0);
+}
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 const c = {
@@ -90,11 +148,26 @@ async function runScraper() {
     return;
   }
 
-  log(`Starting Telegram scraper (Mode ${mode})...`);
-  log('This may take 10-30 minutes depending on channel size.');
+  const label = MODE_LABELS[mode] || `Mode ${mode}`;
+  log(`Starting Telegram scraper: ${label}`);
+  if (mode === '1') log('⚠️  Full scrape may take 1-3 hours depending on channel sizes.');
+  if (mode === '4') log('Mode 4: Only fetching new messages since last export (fast).');
+
+  // Build args for scrape_api.js
+  const scrapeArgs = [`--mode=${mode}`, `--channels=${channels}`];
+  if (mode === '3') {
+    if (startDate) {
+      scrapeArgs.push(`--start-date=${startDate}`);
+      if (endDate) scrapeArgs.push(`--end-date=${endDate}`);
+    } else {
+      scrapeArgs.push(`--days=${days}`);
+    }
+  }
+
+  log(`Running: node scrape_api.js ${scrapeArgs.join(' ')}`);
 
   return new Promise((resolve, reject) => {
-    const child = spawn('node', [SCRAPE_SCRIPT, `--mode=${mode}`, '--channels=all'], {
+    const child = spawn('node', [SCRAPE_SCRIPT, ...scrapeArgs], {
       cwd: __dirname,
       stdio: 'inherit',
       env: { ...process.env },
@@ -163,10 +236,12 @@ async function triggerPipeline(token) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log(`\n${c.bold}${c.cyan}━━━ XLOOP ─ Scrape & Upload ━━━${c.reset}\n`);
-  console.log(`  Site:  ${SITE_URL}`);
-  console.log(`  Mode:  ${uploadOnly ? 'Upload Only' : `Scrape Mode ${mode} + Upload`}`);
-  console.log(`  Pipeline: ${noPipeline ? 'Manual' : 'Auto-trigger'}\n`);
+  console.log(`
+${c.bold}${c.cyan}━━━ XLOOP ─ Scrape & Upload ━━━${c.reset}
+`);
+  console.log(`  Site:     ${SITE_URL}`);
+  console.log(`  Mode:     ${uploadOnly ? 'Upload Only (skip scraper)' : MODE_LABELS[mode] || `Mode ${mode}`}`);
+  console.log(`  Pipeline: ${noPipeline ? 'Manual (go to dashboard)' : 'Auto-trigger after upload'}\n`);
 
   try {
     // Step 1: Scrape
