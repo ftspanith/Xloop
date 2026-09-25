@@ -85,11 +85,36 @@ router.post('/start', auth, async (req, res) => {
   pipelineRunning = true;
   broadcast(`🚀 Starting ${label}...`);
 
+  // For Skip Scraper: use existing bypassed/links JSON — do NOT re-extract.
+  // For Full Pipeline: importSrc=undefined so pipeline re-extracts fresh (overwrites JSONs).
+  let importSrc = undefined;
+  if (skipScraper) {
+    const fs   = require('fs');
+    const osp  = require('path');
+    const TMP  = process.env.VERCEL ? '/tmp' : osp.join(__dirname, '..');
+    const bypassedFile = osp.join(TMP, 'bypassed_links.json');
+    const linksFile    = osp.join(TMP, 'links_for_bypasser.json');
+    if (fs.existsSync(bypassedFile)) {
+      importSrc = bypassedFile;
+      broadcast(`📂 Skip Scraper: using existing bypassed_links.json`);
+    } else if (fs.existsSync(linksFile)) {
+      importSrc = linksFile;
+      broadcast(`📂 Skip Scraper: using existing links_for_bypasser.json`);
+    } else {
+      broadcast(`❌ Skip Scraper: no existing JSON found in ${TMP}. Run Full Pipeline first or upload telegram_export.json.`);
+      pipelineRunning = false;
+      return;
+    }
+  } else {
+    broadcast(`🔄 Full Pipeline: will re-extract fresh from telegram_export.json (overwrites all JSONs)`);
+  }
+
   const runPipeline = await getRunPipeline();
   pipelinePromise = runPipeline({
     noBypass:  !!skipScraper,
-    noWipe:    !!skipScraper,   // skip scraper = skip wipe too
+    noWipe:    !!skipScraper,
     resume:    !!resume,
+    importSrc,            // undefined for Full Pipeline (fresh), file path for Skip Scraper
     emitter:   broadcast,
   })
   .then(() => {
