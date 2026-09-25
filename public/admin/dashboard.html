@@ -458,8 +458,63 @@
         </button>
       </div>
 
+      <!-- ── Scrape Mode Selector ── -->
+      <div style="margin:14px 0 0; padding:14px 16px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.07);">
+        <div style="font-size:0.78rem; font-weight:700; color:rgba(255,255,255,.5); letter-spacing:.08em; text-transform:uppercase; margin-bottom:10px;">🔄 Scrape Mode</div>
+        <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:12px;">
+          <label id="sm1" onclick="dashSelectMode(1)" style="cursor:pointer; padding:9px 12px; border-radius:8px; border:1px solid rgba(229,9,20,0.5); background:rgba(229,9,20,0.12); display:flex; flex-direction:column; gap:3px;">
+            <span style="font-size:0.82rem; font-weight:700; color:#fff;">🗂️ Full Scrape</span>
+            <span style="font-size:0.72rem; color:rgba(255,255,255,.4);">All channels · all history</span>
+          </label>
+          <label id="sm4" onclick="dashSelectMode(4)" style="cursor:pointer; padding:9px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); display:flex; flex-direction:column; gap:3px;">
+            <span style="font-size:0.82rem; font-weight:700; color:#fff;">⚡ Daily Update</span>
+            <span style="font-size:0.72rem; color:rgba(255,255,255,.4);">New messages only (fast)</span>
+          </label>
+          <label id="sm2" onclick="dashSelectMode(2)" style="cursor:pointer; padding:9px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); display:flex; flex-direction:column; gap:3px;">
+            <span style="font-size:0.82rem; font-weight:700; color:#fff;">📡 Specific Channels</span>
+            <span style="font-size:0.72rem; color:rgba(255,255,255,.4);">Choose which channels</span>
+          </label>
+          <label id="sm3" onclick="dashSelectMode(3)" style="cursor:pointer; padding:9px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); display:flex; flex-direction:column; gap:3px;">
+            <span style="font-size:0.82rem; font-weight:700; color:#fff;">📅 Date Range</span>
+            <span style="font-size:0.72rem; color:rgba(255,255,255,.4);">From specific date</span>
+          </label>
+        </div>
+
+        <!-- Mode 2: channel input -->
+        <div id="dashChPanel" style="display:none; margin-bottom:10px;">
+          <input id="dashChInput" type="text" placeholder="Channel IDs: 2121685058,1460307412" style="width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); border-radius:7px; color:#fff; padding:8px 12px; font-size:0.82rem; box-sizing:border-box;">
+        </div>
+
+        <!-- Mode 3: date inputs -->
+        <div id="dashDatePanel" style="display:none; margin-bottom:10px; display:none;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:120px;">
+              <label style="font-size:0.75rem; color:rgba(255,255,255,.4); display:block; margin-bottom:4px;">Start Date</label>
+              <input id="dashStartDate" type="date" style="width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); border-radius:7px; color:#fff; padding:7px 10px; font-size:0.82rem; box-sizing:border-box;">
+            </div>
+            <div style="flex:1; min-width:120px;">
+              <label style="font-size:0.75rem; color:rgba(255,255,255,.4); display:block; margin-bottom:4px;">End Date (optional)</label>
+              <input id="dashEndDate" type="date" style="width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); border-radius:7px; color:#fff; padding:7px 10px; font-size:0.82rem; box-sizing:border-box;">
+            </div>
+            <div style="flex:1; min-width:80px;">
+              <label style="font-size:0.75rem; color:rgba(255,255,255,.4); display:block; margin-bottom:4px;">Or Last N Days</label>
+              <input id="dashDays" type="number" value="7" min="1" style="width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); border-radius:7px; color:#fff; padding:7px 10px; font-size:0.82rem; box-sizing:border-box;">
+            </div>
+          </div>
+        </div>
+
+        <button onclick="dashGenCmd()" style="width:100%; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); color:#fff; padding:9px; border-radius:8px; cursor:pointer; font-size:0.82rem; font-weight:600;">⚡ Generate Command</button>
+
+        <!-- Generated command box -->
+        <div id="dashCmdBox" style="display:none; margin-top:10px; position:relative; background:#0a0a0a; border:1px solid rgba(255,255,255,.1); border-radius:8px; padding:11px 44px 11px 12px;">
+          <code id="dashGenCmd" style="font-size:0.82rem; color:#22c55e; font-family:monospace; word-break:break-all;"></code>
+          <button onclick="dashCopyCmd()" style="position:absolute; top:8px; right:8px; background:rgba(255,255,255,.1); border:none; color:#fff; padding:3px 9px; border-radius:5px; cursor:pointer; font-size:0.75rem;">Copy</button>
+        </div>
+        <div id="dashCmdDesc" style="font-size:0.75rem; color:rgba(255,255,255,.35); margin-top:6px; display:none;"></div>
+      </div>
+
       <!-- ── Upload telegram_export.json ── -->
-      <div id="uploadExportPanel" style="margin: 12px 0; padding: 14px 16px; background: rgba(255,255,255,0.04); border-radius: 10px; border: 1px solid rgba(229,9,20,0.25);">
+      <div id="uploadExportPanel" style="margin: 10px 0 0; padding: 14px 16px; background: rgba(255,255,255,0.04); border-radius: 10px; border: 1px solid rgba(229,9,20,0.25);">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
           <div>
             <div style="font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:3px;">📤 telegram_export.json</div>
@@ -478,7 +533,7 @@
       </div>
 
       <!-- Mini terminal -->
-      <div class="dash-terminal">
+      <div class="dash-terminal" style="margin-top:12px;">
         <div class="dash-terminal-header">
           <div class="term-dots"><span></span><span></span><span></span></div>
           <span class="term-title">xloop_orchestrator</span>
@@ -843,6 +898,86 @@
         el.textContent = '⚠️ Not uploaded yet — choose a file to upload before running Full Pipeline';
       }
     } catch(_) {}
+  }
+
+  // ── Scrape Mode Selector ─────────────────────────────────────────────────────
+  let _dashScrapeMode = 1;
+  const _smStyles = {
+    active:   'border:1px solid rgba(229,9,20,0.5); background:rgba(229,9,20,0.12);',
+    inactive: 'border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);',
+  };
+
+  function dashSelectMode(m) {
+    _dashScrapeMode = m;
+    [1,2,3,4].forEach(n => {
+      const el = document.getElementById(`sm${n}`);
+      if (el) el.style.cssText = el.style.cssText.replace(/border:[^;]+;|background:[^;]+;/g,'') +
+        (n === m ? _smStyles.active : _smStyles.inactive);
+    });
+    const chPanel   = document.getElementById('dashChPanel');
+    const datePanel = document.getElementById('dashDatePanel');
+    if (chPanel)   chPanel.style.display   = m === 2 ? 'block' : 'none';
+    if (datePanel) datePanel.style.display = m === 3 ? 'block' : 'none';
+    // Hide command box when mode changes
+    const cb = document.getElementById('dashCmdBox');
+    if (cb) cb.style.display = 'none';
+  }
+
+  function dashGenCmd() {
+    const startDate = document.getElementById('dashStartDate')?.value || '';
+    const endDate   = document.getElementById('dashEndDate')?.value   || '';
+    const days      = document.getElementById('dashDays')?.value      || '7';
+    const chInput   = document.getElementById('dashChInput')?.value.trim() || 'all';
+
+    let cmd = 'node scrape-and-upload.js';
+    let desc = '';
+
+    switch (_dashScrapeMode) {
+      case 1:
+        cmd  += ' --mode=1';
+        desc  = '⚠️ Full scrape — all channels, all history. Takes 1–3 hours.';
+        break;
+      case 4:
+        cmd  += ' --mode=4';
+        desc  = '⚡ Daily update — only new messages since last scrape. Fastest option.';
+        break;
+      case 2:
+        cmd  += ` --mode=2 --channels=${chInput}`;
+        desc  = `Scrapes specific channels: ${chInput}`;
+        break;
+      case 3:
+        if (startDate) {
+          cmd += ` --mode=3 --start-date=${startDate}`;
+          if (endDate) cmd += ` --end-date=${endDate}`;
+          desc = `Date range: ${startDate} → ${endDate || 'now'}`;
+        } else {
+          cmd += ` --mode=3 --days=${days}`;
+          desc = `Last ${days} day(s) from all channels.`;
+        }
+        break;
+    }
+
+    const cmdEl  = document.getElementById('dashGenCmd');
+    const descEl = document.getElementById('dashCmdDesc');
+    const box    = document.getElementById('dashCmdBox');
+    if (cmdEl)  cmdEl.textContent  = cmd;
+    if (descEl) { descEl.textContent = desc; descEl.style.display = 'block'; }
+    if (box)    box.style.display  = 'block';
+  }
+
+  function dashCopyCmd() {
+    const cmd = document.getElementById('dashGenCmd')?.textContent || '';
+    navigator.clipboard.writeText(cmd).then(() => {
+      // Flash button
+      const btn = event.target;
+      const orig = btn.textContent;
+      btn.textContent = '✅ Copied!';
+      btn.style.background = 'rgba(34,197,94,0.2)';
+      setTimeout(() => { btn.textContent = orig; btn.style.background = 'rgba(255,255,255,.1)'; }, 1500);
+    }).catch(() => {
+      const el = document.createElement('textarea');
+      el.value = cmd; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+    });
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────
