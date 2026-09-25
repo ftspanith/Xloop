@@ -98,25 +98,28 @@ router.post('/start', auth, async (req, res) => {
         await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
       }
 
-      const cache = await PipelineCache.findOne({ key: 'extracted_links' }).lean();
-      if (cache && cache.data && cache.data.length > 0) {
-        // Write to /tmp so pipeline_full.js can read it as a file (it still needs a file path)
+      const cache = await PipelineCache.findOne({ key: 'extracted_links' }, 'count savedAt').lean();
+      if (cache && cache.count > 0) {
+        // Load all links from ExtractedLink collection (one doc per link — no 16MB limit)
+        const ExtractedLinkM = require('../models/ExtractedLink');
+        const links = await ExtractedLinkM.find({}).lean();
+        const clean = links.map(({ _id, __v, uploadBatch, ...rest }) => rest);
         const osp = require('path');
         const fs  = require('fs');
-        const tmpFile = osp.join('/tmp', 'bypassed_links.json');
-        fs.writeFileSync(tmpFile, JSON.stringify(cache.data));
+        const tmpFile = osp.join('/tmp', 'links_for_bypasser.json');
+        fs.writeFileSync(tmpFile, JSON.stringify(clean));
         importSrc = tmpFile;
-        broadcast(`📂 Skip Scraper: loaded ${cache.data.length} entries from MongoDB cache (saved ${new Date(cache.savedAt).toLocaleDateString()})`);
+        broadcast(`📂 Skip Scraper: loaded ${clean.length} links from MongoDB (${new Date(cache.savedAt).toLocaleDateString()})`);
       } else {
         // Try local filesystem fallback for local dev
         const osp = require('path');
         const fs  = require('fs');
-        const localFile = osp.join(__dirname, '..', 'bypassed_links.json');
+        const localFile = osp.join(__dirname, '..', 'links_for_bypasser.json');
         if (fs.existsSync(localFile)) {
           importSrc = localFile;
-          broadcast(`📂 Skip Scraper: using local bypassed_links.json`);
+          broadcast(`📂 Skip Scraper: using local links_for_bypasser.json`);
         } else {
-          broadcast(`❌ Skip Scraper: no cached data found. Run Full Pipeline first to build the cache.`);
+          broadcast(`❌ Skip Scraper: no cached data found. Upload telegram_export.json first.`);
           pipelineRunning = false;
           return;
         }

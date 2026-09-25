@@ -723,9 +723,18 @@ async function main(opts = {}) {
         const PipelineCache = require('./models/PipelineCache');
         // First try extracted_links (set by upload endpoint — no raw export needed)
         let cached = await PipelineCache.findOne({ key: 'extracted_links' }).lean();
-        if (cached && cached.data && cached.data.length > 0) {
-          fs.writeFileSync(LINKS_FILE, JSON.stringify(cached.data));
-          ok(`Loaded ${cached.data.length} pre-extracted links from MongoDB. Skipping extraction step.`);
+        if (cached && cached.count > 0) {
+          // Load all links from ExtractedLink collection (no 16MB limit)
+          const ExtractedLink = require('./models/ExtractedLink');
+          const links = await ExtractedLink.find({}).lean();
+          if (links.length > 0) {
+            // Strip internal MongoDB fields before writing to file
+            const clean = links.map(({_id, __v, uploadBatch, ...rest}) => rest);
+            fs.writeFileSync(LINKS_FILE, JSON.stringify(clean));
+            ok(`Loaded ${clean.length} pre-extracted links from MongoDB. Skipping extraction step.`);
+          } else {
+            throw new Error('ExtractedLink collection is empty');
+          }
         } else if (fs.existsSync(EXPORT_FILE)) {
           // Fall back: run extract_links.js from raw export in /tmp
           log('STEP 1 — Parsing telegram_export.json...');

@@ -176,14 +176,31 @@ router.post('/upload-export', auth, express.json({ limit: '200mb' }), async (req
     // Merge shortlinks in
     const allLinks = [...extracted, ...shortlinks];
 
-    // Save ONLY the compact extracted links to MongoDB (not the raw 50MB export)
+    // ── Save to ExtractedLink collection (one doc per link — no 16MB limit) ──
+    // Each upload gets a batch ID so we can atomically replace the previous batch.
+    const ExtractedLink = require('../models/ExtractedLink');
+    const batchId = `batch_${Date.now()}`;
+
+    // Tag all entries with this batch ID
+    allLinks.forEach(e => { e.uploadBatch = batchId; });
+
+    // Insert new batch in chunks of 500
+    const CHUNK = 500;
+    for (let i = 0; i < allLinks.length; i += CHUNK) {
+      await ExtractedLink.insertMany(allLinks.slice(i, i + CHUNK), { ordered: false });
+    }
+
+    // Delete all previous batches (keep only the new one)
+    await ExtractedLink.deleteMany({ uploadBatch: { $ne: batchId } });
+
+    // Save a small metadata record in PipelineCache (just count + batchId, no data)
     await PipelineCache.findOneAndUpdate(
       { key: 'extracted_links' },
-      { key: 'extracted_links', data: allLinks, count: allLinks.length, savedAt: new Date() },
+      { key: 'extracted_links', data: { batchId, count: allLinks.length }, count: allLinks.length, savedAt: new Date() },
       { upsert: true, new: true }
     );
 
-    // Write links_for_bypasser.json to /tmp for immediate pipeline use
+    // Write links_for_bypasser.json to /tmp for immediate same-Lambda pipeline use
     try {
       fs.writeFileSync(path.join(os.tmpdir(), 'links_for_bypasser.json'), JSON.stringify(allLinks));
       fs.writeFileSync(path.join(os.tmpdir(), 'shortlinks_report.json'), JSON.stringify(shortlinks));
