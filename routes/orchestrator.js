@@ -70,7 +70,7 @@ router.get('/status', (req, res) => {
 });
 
 // ── Start pipeline (auth required) ───────────────────────────────────────────
-router.post('/start', auth, (req, res) => {
+router.post('/start', auth, async (req, res) => {
   if (pipelineRunning) {
     return res.status(400).json({ error: 'Pipeline is already running' });
   }
@@ -105,7 +105,7 @@ router.post('/start', auth, (req, res) => {
 });
 
 // ── Heal Only ────────────────────────────────────────────────────────────────
-router.post('/heal', auth, (req, res) => {
+router.post('/heal', auth, async (req, res) => {
   if (pipelineRunning) {
     return res.status(400).json({ error: 'Pipeline is already running' });
   }
