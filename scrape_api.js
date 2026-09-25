@@ -298,16 +298,23 @@ function saveOutput(newMessages, modeLabel, existingMessages = []) {
 
   const json = JSON.stringify(exportData, null, 2);
 
-  // ── Human-readable filename: xloop_full_acc1_2026-09-25_30810msgs.json
+  // ── Human-readable filename → saved to ~/Downloads for easy access
   const dateStr      = exportedAt.slice(0, 10); // YYYY-MM-DD
-  const readableFile = path.join(__dirname, `xloop_${modeLabel}_${ACCOUNT_NAME}_${dateStr}_${merged.length}msgs.json`);
+  const fileName     = `xloop_${modeLabel}_${ACCOUNT_NAME}_${dateStr}_${merged.length}msgs.json`;
+  const downloadsDir = path.join(os.homedir(), 'Downloads');
+  const readableFile = path.join(downloadsDir, fileName);
 
-  // Write readable-named file
-  fs.writeFileSync(readableFile, json);
-  // Also write standard telegram_export.json for pipeline compatibility
+  // Write to ~/Downloads/ (easy to find + upload)
+  try {
+    fs.writeFileSync(readableFile, json);
+    logFn(`   Saved to       : ~/Downloads/${fileName}`);
+  } catch(_) {
+    // Fallback to project root if Downloads not writable
+    fs.writeFileSync(path.join(__dirname, fileName), json);
+    logFn(`   Saved to       : ${fileName} (project folder)`);
+  }
+  // Also write telegram_export.json in project root for pipeline compatibility
   fs.writeFileSync(EXPORT_FILE, json);
-
-  logFn(`   Readable file  : ${path.basename(readableFile)}`);
   return merged.length;
 }
 
