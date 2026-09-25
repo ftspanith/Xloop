@@ -98,7 +98,7 @@ router.post('/start', auth, async (req, res) => {
         await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
       }
 
-      const cache = await PipelineCache.findOne({ key: 'bypassed_links' }).lean();
+      const cache = await PipelineCache.findOne({ key: 'extracted_links' }).lean();
       if (cache && cache.data && cache.data.length > 0) {
         // Write to /tmp so pipeline_full.js can read it as a file (it still needs a file path)
         const osp = require('path');

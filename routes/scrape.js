@@ -95,39 +95,115 @@ router.post('/start', auth, (req, res) => {
 router.post('/upload-export', auth, express.json({ limit: '200mb' }), async (req, res) => {
   try {
     const PipelineCache = require('../models/PipelineCache');
+    const { parseMessageBlock, classifyUrl, isJunkTitle } = require('../utils/parser');
     const data = req.body;
 
     if (!data || (!Array.isArray(data.messages) && !Array.isArray(data))) {
-      return res.status(400).json({ message: 'Invalid telegram_export.json format. Expected { messages: [...] } or an array.' });
+      return res.status(400).json({ message: 'Invalid telegram_export.json format.' });
     }
 
     const messages = Array.isArray(data) ? data : data.messages;
-    const count = messages.length;
 
-    // Save raw export to MongoDB cache
+    // ── Run extraction inline (same logic as extract_links.js) ───────────────
+    // We extract here instead of storing raw JSON (raw JSON = 50MB+ > MongoDB 16MB limit)
+    const HOST_PRIORITY = ['GDFlix','HubCloud','FilePress','DTFlix','TMBCloud','Direct','Download'];
+    const MAX_HOSTS = 3;
+    const hostRank = h => { const i = HOST_PRIORITY.indexOf(h); return i === -1 ? 99 : i; };
+    const CDN_RE = [/\.(m3u8|ts|m4s)(\?|$)/i, /\/(image|img|thumbnail|poster|banner|cover)\//i,
+      /\/(uploads?|wp-content|static|assets?)\//i, /cdn\.(hotstar|zee5|sonyliv)/i,
+      /vod\d*\./i, /img\d*\./i, /thumbs?\./i, /akamaized\.net/i, /cloudfront\.net/i];
+    const isJunkUrl = u => { if (!u) return true;
+      if (/workers\.dev/i.test(u)) return !/\.(mkv|mp4|avi|zip|rar)([?#]|$)/i.test(u);
+      return CDN_RE.some(r => r.test(u)); };
+    const slotKey = e => {
+      const sz = (e.size||'').replace(/\s/g,'').toLowerCase();
+      const fn = (e.filename||'').toLowerCase().trim().slice(0,80);
+      let d = '';
+      if (!sz && !fn) { try { d = new URL(e.url).hostname.replace('www.',''); } catch { d = e.url.slice(0,40); } }
+      return `${(e.quality||'HD').toLowerCase()}|${sz}|${fn}|${(e.language||'').toLowerCase()}|${e.season??''}|${e.episode??''}|${d}`;
+    };
+
+    const extracted = []; const shortlinks = [];
+    const seenUrls = new Set();
+    let skipped = 0;
+
+    for (const msg of messages) {
+      let rawText = '';
+      if (typeof msg.text === 'string') rawText = msg.text;
+      else if (Array.isArray(msg.text)) rawText = msg.text.map(p => {
+        if (typeof p === 'string') return p;
+        if (p.type === 'text_link' && p.href) return `${p.text}\n${p.href}\n`;
+        return p.text || '';
+      }).join('');
+      if (msg.reply_markup?.inline_keyboard) {
+        for (const row of msg.reply_markup.inline_keyboard)
+          for (const btn of (row||[])) if (btn.url) rawText += `\n${btn.url}`;
+      }
+      if (!rawText.trim()) { skipped++; continue; }
+      const parsed = parseMessageBlock(rawText, msg.id);
+      if (!parsed || !parsed.downloads?.length || !parsed.title || isJunkTitle(parsed.title)) { skipped++; continue; }
+
+      const msgSlots = new Map();
+      for (const dl of parsed.downloads) {
+        const lang = dl.language || parsed.language || '';
+        if (!dl.size && !dl.filename && !lang && dl.season === null && !parsed.title) continue;
+        for (const link of dl.links) {
+          const url = link.url.replace(/^http:\/\//i,'https://').replace(/\/$/,'');
+          if (isJunkUrl(url) || seenUrls.has(url)) continue;
+          const urlType = classifyUrl(url);
+          if (urlType === 'Ignore' || urlType === 'Paste') continue;
+          const entry = { messageId: parsed.messageId, title: parsed.title, year: parsed.year,
+            contentType: parsed.contentType, isSeries: parsed.isSeries,
+            season: dl.season??parsed.season, episode: dl.episode??parsed.episode,
+            language: lang, quality: dl.quality, size: dl.size, filename: dl.filename,
+            host: urlType, url, bypassedUrl: null,
+            isFast: /gdflix|hubcloud|gdlink|tmbcloud|fpgo|filebee/i.test(url),
+            imdbId: parsed.imdbId||null, tmdbIdHint: parsed.tmdbIdHint||null };
+          if (urlType === 'Shortlink') { shortlinks.push(entry); seenUrls.add(url); continue; }
+          const sk = slotKey(entry);
+          if (msgSlots.has(sk)) {
+            const sl = msgSlots.get(sk);
+            if (!sl.some(e=>e.host===urlType) && sl.length < MAX_HOSTS) sl.push(entry);
+          } else { msgSlots.set(sk, [entry]); }
+        }
+      }
+      for (const sl of msgSlots.values()) {
+        sl.sort((a,b)=>hostRank(a.host)-hostRank(b.host));
+        for (const e of sl) { seenUrls.add(e.url); extracted.push(e); }
+      }
+    }
+
+    // Merge shortlinks in
+    const allLinks = [...extracted, ...shortlinks];
+
+    // Save ONLY the compact extracted links to MongoDB (not the raw 50MB export)
     await PipelineCache.findOneAndUpdate(
-      { key: 'telegram_export' },
-      { key: 'telegram_export', data, count, savedAt: new Date() },
+      { key: 'extracted_links' },
+      { key: 'extracted_links', data: allLinks, count: allLinks.length, savedAt: new Date() },
       { upsert: true, new: true }
     );
 
-    // Also write to /tmp for immediate use in same Lambda invocation
+    // Write links_for_bypasser.json to /tmp for immediate pipeline use
     try {
-      fs.writeFileSync(path.join(os.tmpdir(), 'telegram_export.json'), JSON.stringify(data));
+      fs.writeFileSync(path.join(os.tmpdir(), 'links_for_bypasser.json'), JSON.stringify(allLinks));
+      fs.writeFileSync(path.join(os.tmpdir(), 'shortlinks_report.json'), JSON.stringify(shortlinks));
     } catch(_) {}
 
-    res.json({ message: `✅ telegram_export.json uploaded — ${count} messages saved to MongoDB. Run Full Pipeline now.`, count });
+    res.json({
+      message: `✅ Extracted ${allLinks.length} links from ${messages.length} messages (${skipped} skipped). Saved to MongoDB. Run Full Pipeline now.`,
+      count: allLinks.length, messages: messages.length, skipped,
+    });
   } catch (err) {
     res.status(500).json({ message: `Upload failed: ${err.message}` });
   }
 });
 
-// ── GET /api/scrape/export-status — check if telegram_export is available ─────
+// ── GET /api/scrape/export-status — check if extracted links are available ────
 router.get('/export-status', auth, async (req, res) => {
   try {
     const PipelineCache = require('../models/PipelineCache');
-    const cache = await PipelineCache.findOne({ key: 'telegram_export' }, 'count savedAt').lean();
-    const tmpExists = fs.existsSync(path.join(os.tmpdir(), 'telegram_export.json'));
+    const cache = await PipelineCache.findOne({ key: 'extracted_links' }, 'count savedAt').lean();
+    const tmpExists = fs.existsSync(path.join(os.tmpdir(), 'links_for_bypasser.json'));
     res.json({
       available: !!(cache || tmpExists),
       source: cache ? 'mongodb' : tmpExists ? 'tmp' : 'none',

@@ -713,28 +713,43 @@ async function main(opts = {}) {
   // STEP 1: Extract
   sep();
   if (!IMPORT_SRC) {
-    // Check /tmp first (same Lambda instance as upload), then MongoDB cache
-    if (!fs.existsSync(EXPORT_FILE)) {
-      log('STEP 1 — telegram_export.json not in /tmp, checking MongoDB cache...');
+    // Check if already-extracted links are in /tmp (same Lambda as upload)
+    if (fs.existsSync(LINKS_FILE)) {
+      warn('STEP 1 — Using pre-extracted links_for_bypasser.json from /tmp');
+    } else {
+      // Try MongoDB cache (extracted_links saved during upload)
+      log('STEP 1 — Checking MongoDB for pre-extracted links...');
       try {
         const PipelineCache = require('./models/PipelineCache');
-        const cached = await PipelineCache.findOne({ key: 'telegram_export' }).lean();
-        if (cached && cached.data) {
-          fs.writeFileSync(EXPORT_FILE, JSON.stringify(cached.data));
-          ok(`Loaded telegram_export.json from MongoDB cache (${cached.count} messages)`);
+        // First try extracted_links (set by upload endpoint — no raw export needed)
+        let cached = await PipelineCache.findOne({ key: 'extracted_links' }).lean();
+        if (cached && cached.data && cached.data.length > 0) {
+          fs.writeFileSync(LINKS_FILE, JSON.stringify(cached.data));
+          ok(`Loaded ${cached.data.length} pre-extracted links from MongoDB. Skipping extraction step.`);
+        } else if (fs.existsSync(EXPORT_FILE)) {
+          // Fall back: run extract_links.js from raw export in /tmp
+          log('STEP 1 — Parsing telegram_export.json...');
+          await runScript(path.join(ROOT, 'extract_links.js'));
+          ok('Extraction done → links_for_bypasser.json');
         } else {
-          fail('telegram_export.json not found! Go to Admin → Scraper → Upload Export File first.');
-          throw new Error('telegram_export.json not found');
+          // Try loading raw export from MongoDB and run extraction
+          cached = await PipelineCache.findOne({ key: 'telegram_export' }).lean();
+          if (cached && cached.data) {
+            fs.writeFileSync(EXPORT_FILE, JSON.stringify(cached.data));
+            log('STEP 1 — Parsing telegram_export.json from MongoDB cache...');
+            await runScript(path.join(ROOT, 'extract_links.js'));
+            ok('Extraction done');
+          } else {
+            fail('No extracted links or telegram_export.json found. Upload your telegram_export.json first via the Dashboard.');
+            throw new Error('No export data found');
+          }
         }
       } catch (err) {
-        if (err.message === 'telegram_export.json not found') throw err;
-        fail(`Failed to load from MongoDB: ${err.message}. Upload telegram_export.json first.`);
-        throw new Error('telegram_export.json not found');
+        if (err.message === 'No export data found') throw err;
+        fail(`MongoDB load failed: ${err.message}`);
+        throw err;
       }
     }
-    log('STEP 1 — Parsing telegram_export.json...');
-    await runScript(path.join(ROOT, 'extract_links.js'));
-    ok('Extraction done → links_for_bypasser.json + shortlinks_report.json');
   } else {
     warn(`STEP 1 — Using existing file: ${IMPORT_SRC}`);
   }
