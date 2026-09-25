@@ -458,6 +458,25 @@
         </button>
       </div>
 
+      <!-- ── Upload telegram_export.json ── -->
+      <div id="uploadExportPanel" style="margin: 12px 0; padding: 14px 16px; background: rgba(255,255,255,0.04); border-radius: 10px; border: 1px solid rgba(229,9,20,0.25);">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+          <div>
+            <div style="font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:3px;">📤 telegram_export.json</div>
+            <div id="dashExportStatus" style="font-size:0.75rem; color:rgba(255,255,255,.45);">Checking...</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <label for="dashExportFile" style="cursor:pointer; background:rgba(229,9,20,0.12); border:1px solid rgba(229,9,20,0.4); color:#fff; padding:7px 14px; border-radius:6px; font-size:0.8rem; font-weight:600; white-space:nowrap;">
+              📁 Choose File
+            </label>
+            <input type="file" id="dashExportFile" accept=".json" style="display:none;" onchange="dashPreviewExport(this)">
+            <span id="dashExportFileName" style="font-size:0.78rem; color:rgba(255,255,255,.45); max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">No file selected</span>
+            <button id="dashUploadBtn" onclick="dashUploadExport()" style="display:none; background:var(--accent,#e50914); border:none; color:#fff; padding:7px 16px; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.8rem; white-space:nowrap;">Upload</button>
+          </div>
+        </div>
+        <div id="dashUploadMsg" style="margin-top:8px; font-size:0.78rem; display:none;"></div>
+      </div>
+
       <!-- Mini terminal -->
       <div class="dash-terminal">
         <div class="dash-terminal-header">
@@ -767,6 +786,65 @@
     }
   }
 
+  // ── Upload export functions (inline in dashboard) ───────────────────────────
+  let _dashExportData = null;
+
+  function dashPreviewExport(input) {
+    const file = input.files[0];
+    if (!file) return;
+    document.getElementById('dashExportFileName').textContent = `${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`;
+    document.getElementById('dashUploadBtn').style.display = 'inline-block';
+    const reader = new FileReader();
+    reader.onload = (e) => { _dashExportData = e.target.result; };
+    reader.readAsText(file);
+  }
+
+  async function dashUploadExport() {
+    if (!_dashExportData) return;
+    const btn = document.getElementById('dashUploadBtn');
+    const msg = document.getElementById('dashUploadMsg');
+    msg.style.display = 'block';
+    msg.style.color = 'rgba(255,255,255,.6)';
+    msg.textContent = '⏳ Uploading...';
+    btn.disabled = true;
+    try {
+      let parsed;
+      try { parsed = JSON.parse(_dashExportData); } catch(e) { throw new Error('Invalid JSON file'); }
+      const token = localStorage.getItem('xloop_admin_token');
+      const res = await fetch('/api/scrape/upload-export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(parsed),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Upload failed');
+      msg.style.color = '#22c55e';
+      msg.textContent = data.message;
+      dashCheckExportStatus();
+    } catch (err) {
+      msg.style.color = '#ef4444';
+      msg.textContent = `❌ ${err.message}`;
+    } finally { btn.disabled = false; }
+  }
+
+  async function dashCheckExportStatus() {
+    try {
+      const token = localStorage.getItem('xloop_admin_token');
+      const res = await fetch('/api/scrape/export-status', { headers: { 'Authorization': `Bearer ${token}` } });
+      const d = await res.json();
+      const el = document.getElementById('dashExportStatus');
+      if (!el) return;
+      if (d.available) {
+        const date = d.savedAt ? new Date(d.savedAt).toLocaleDateString() : '';
+        el.style.color = '#22c55e';
+        el.textContent = `✅ Ready — ${(d.count||0).toLocaleString()} messages${date ? ' · saved '+date : ''}`;
+      } else {
+        el.style.color = 'rgba(255,200,0,.8)';
+        el.textContent = '⚠️ Not uploaded yet — choose a file to upload before running Full Pipeline';
+      }
+    } catch(_) {}
+  }
+
   // ── Init ───────────────────────────────────────────────────────────────────
   checkAuth().then(valid => {
     if (valid) {
@@ -777,6 +855,8 @@
       syncOrchestratorStatus();
       // Keep badge in sync every 5s regardless of SSE state
       setInterval(syncOrchestratorStatus, 5000);
+      // Check if telegram_export.json is available
+      dashCheckExportStatus();
     }
   });
 
