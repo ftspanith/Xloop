@@ -31,20 +31,15 @@ const { spawn }     = require('child_process');
 const Movie         = require('./models/Movie');
 const { cleanTitleForApi, detectHost } = require('./utils/parser');
 
-// ─── CLI args ─────────────────────────────────────────────────────────────────
-const argv        = process.argv.slice(2);
-const NO_WIPE     = argv.includes('--no-wipe');
-const NO_HEAL     = argv.includes('--no-heal');
-const NO_BYPASS   = argv.includes('--no-bypass');
-const RESUME      = argv.includes('--resume');   // resume from checkpoint after crash
-const CONCURRENCY = parseInt((argv.find(a => a.startsWith('--concurrency=')) || '').replace('--concurrency=', '') || '3', 10);
-const IMPORT_SRC  = (argv.find(a => a.startsWith('--import-source=')) || '').replace('--import-source=', '') || null;
+// ─── CLI args (only used when run directly, not when require()'d) ─────────────
+const IS_MAIN = require.main === module;
+const _argv        = IS_MAIN ? process.argv.slice(2) : [];
 
 const ROOT             = __dirname;
 const LINKS_FILE       = path.join(ROOT, 'links_for_bypasser.json');
 const SHORTLINKS_FILE  = path.join(ROOT, 'shortlinks_report.json');
 const BYPASSED_FILE    = path.join(ROOT, 'bypassed_links.json');
-const CHECKPOINT_FILE  = path.join(ROOT, 'import_checkpoint.json'); // tracks processed title groups
+const CHECKPOINT_FILE  = path.join(ROOT, 'import_checkpoint.json');
 const TMDB_KEY         = process.env.TMDB_API_KEY || '';
 const OMDB_KEY         = process.env.OMDB_API_KEY  || '';
 
@@ -54,11 +49,14 @@ const C = {
   green: '\x1b[32m', yellow: '\x1b[33m',
   red: '\x1b[31m', cyan: '\x1b[36m', gray: '\x1b[90m',
 };
-const log  = msg => console.log(`${C.bold}${C.cyan}▶${C.reset}  ${msg}`);
-const ok   = msg => console.log(`${C.green}✅ ${msg}${C.reset}`);
-const warn = msg => console.log(`${C.yellow}⚠️  ${msg}${C.reset}`);
-const fail = msg => console.log(`${C.red}❌ ${msg}${C.reset}`);
-const sep  = ()  => console.log(`\n${C.gray}${'─'.repeat(64)}${C.reset}\n`);
+// emitter: function(line:string) — injected by orchestrator route for SSE streaming
+// When running as CLI, emitter simply prints to stdout
+let _emitter = line => process.stdout.write(line + '\n');
+const log  = msg => _emitter(`▶  ${msg}`);
+const ok   = msg => _emitter(`✅ ${msg}`);
+const warn = msg => _emitter(`⚠️  ${msg}`);
+const fail = msg => _emitter(`❌ ${msg}`);
+const sep  = ()  => _emitter('─'.repeat(64));
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -656,10 +654,20 @@ async function phaseImport(allEntries) {
   try { if (fs.existsSync(CHECKPOINT_FILE)) fs.unlinkSync(CHECKPOINT_FILE); } catch(_) {}
 }
 
-// ─── Spawn child script ───────────────────────────────────────────────────────
+// ─── Spawn child script — pipe output through _emitter for SSE streaming ──────
 function runScript(scriptPath, env = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn('node', [scriptPath], { cwd: ROOT, env: { ...process.env, ...env }, stdio: 'inherit' });
+    const child = spawn('node', [scriptPath], {
+      cwd: ROOT,
+      env: { ...process.env, ...env },
+      stdio: ['ignore', 'pipe', 'pipe'],  // pipe stdout+stderr → _emitter
+    });
+
+    const rl_out = require('readline').createInterface({ input: child.stdout });
+    const rl_err = require('readline').createInterface({ input: child.stderr });
+    rl_out.on('line', line => { if (line.trim()) _emitter(line); });
+    rl_err.on('line', line => { if (line.trim()) _emitter(`ERROR: ${line}`); });
+
     child.on('close', code => code === 0 ? resolve() : reject(new Error(`Exit ${code}: ${path.basename(scriptPath)}`)));
     child.on('error', reject);
   });
@@ -668,13 +676,20 @@ function runScript(scriptPath, env = {}) {
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════
-async function main() {
+async function main(opts = {}) {
+  // Support both CLI and require() usage
+  // opts.noWipe, opts.noHeal, opts.noBypass, opts.resume, opts.concurrency, opts.importSrc, opts.emitter
+  if (opts.emitter) _emitter = opts.emitter;
+
+  const NO_WIPE     = opts.noWipe     !== undefined ? opts.noWipe     : _argv.includes('--no-wipe');
+  const NO_HEAL     = opts.noHeal     !== undefined ? opts.noHeal     : _argv.includes('--no-heal');
+  const NO_BYPASS   = opts.noBypass   !== undefined ? opts.noBypass   : _argv.includes('--no-bypass');
+  const RESUME      = opts.resume     !== undefined ? opts.resume     : _argv.includes('--resume');
+  const CONCURRENCY = opts.concurrency || parseInt((_argv.find(a => a.startsWith('--concurrency=')) || '').replace('--concurrency=', '') || '3', 10);
+  const IMPORT_SRC  = opts.importSrc  || (_argv.find(a => a.startsWith('--import-source=')) || '').replace('--import-source=', '') || null;
+
   const t0 = Date.now();
-  console.log();
-  console.log(`${C.bold}${C.cyan}╔════════════════════════════════════════════════════╗${C.reset}`);
-  console.log(`${C.bold}${C.cyan}║   XLOOP ─ UNIFIED BYPASS + IMPORT PIPELINE        ║${C.reset}`);
-  console.log(`${C.bold}${C.cyan}╚════════════════════════════════════════════════════╝${C.reset}`);
-  console.log();
+  log('XLOOP ─ UNIFIED BYPASS + IMPORT PIPELINE');
 
   if (!TMDB_KEY) warn('TMDB_API_KEY not set — posters will be blank!');
   if (!process.env.MONGODB_URI) warn('MONGODB_URI not set — defaulting to localhost');
@@ -692,7 +707,7 @@ async function main() {
   // STEP 1: Extract
   sep();
   if (!IMPORT_SRC) {
-    if (!fs.existsSync(path.join(ROOT, 'telegram_export.json'))) { fail('telegram_export.json not found!'); process.exit(1); }
+    if (!fs.existsSync(path.join(ROOT, 'telegram_export.json'))) { fail('telegram_export.json not found! Upload it first.'); throw new Error('telegram_export.json not found'); }
     log('STEP 1 — Parsing telegram_export.json...');
     await runScript(path.join(ROOT, 'extract_links.js'));
     ok('Extraction done → links_for_bypasser.json + shortlinks_report.json');
@@ -702,14 +717,14 @@ async function main() {
 
   // Merge all entries (direct + shortlinks from separate file)
   const sourceFile = IMPORT_SRC || LINKS_FILE;
-  if (!fs.existsSync(sourceFile)) { fail(`Source file not found: ${sourceFile}`); process.exit(1); }
+  if (!fs.existsSync(sourceFile)) { fail(`Source file not found: ${sourceFile}`); throw new Error(`Source file not found: ${sourceFile}`); }
   let allEntries = JSON.parse(fs.readFileSync(sourceFile, 'utf8'));
 
-  // Pull in shortlinks from shortlinks_report.json (quarantined by extract_links.js)
+  // Pull in shortlinks from shortlinks_report.json
   if (!IMPORT_SRC && fs.existsSync(SHORTLINKS_FILE)) {
     const shortlinkData = JSON.parse(fs.readFileSync(SHORTLINKS_FILE, 'utf8'));
     if (shortlinkData.length > 0) {
-      console.log(`\n  📎 Merging ${shortlinkData.length} shortlinks from shortlinks_report.json`);
+      log(`Merging ${shortlinkData.length} shortlinks from shortlinks_report.json`);
       const existingUrls = new Set(allEntries.map(e => e.url));
       allEntries = [...allEntries, ...shortlinkData.filter(e => !existingUrls.has(e.url))];
     }
@@ -717,10 +732,7 @@ async function main() {
 
   const existingBypassed = fs.existsSync(BYPASSED_FILE) ? JSON.parse(fs.readFileSync(BYPASSED_FILE, 'utf8')) : [];
 
-  console.log(`\n  📦 Total entries  : ${allEntries.length}`);
-  console.log(`  Direct links     : ${allEntries.filter(e => e.host !== 'Shortlink').length}`);
-  console.log(`  Shortlinks       : ${allEntries.filter(e => e.host === 'Shortlink').length}`);
-  console.log(`  Prev. bypassed   : ${existingBypassed.length}`);
+  log(`Total entries: ${allEntries.length} | Direct: ${allEntries.filter(e => e.host !== 'Shortlink').length} | Shortlinks: ${allEntries.filter(e => e.host === 'Shortlink').length} | Prev bypassed: ${existingBypassed.length}`);
 
   // STEP 2: Bypass
   sep();
@@ -734,7 +746,7 @@ async function main() {
     for (const e of allEntries) { if (!e.bypassedUrl && bmap.has(e.url)) e.bypassedUrl = bmap.get(e.url); }
   }
 
-  // STEP 3: MongoDB — connect with retry + keepAlive to survive long runs
+  // STEP 3: MongoDB connect
   sep();
   log('STEP 3 — Connecting to MongoDB...');
   const MONGO_OPTS = {
@@ -742,12 +754,11 @@ async function main() {
     connectTimeoutMS:         15_000,
     socketTimeoutMS:          60_000,
     heartbeatFrequencyMS:     10_000,
-    family:                   4,       // IPv4 only — prevents IPv6 DNS hangs
+    family:                   4,
     maxPoolSize:              5,
     minPoolSize:              1,
     retryWrites:              true,
   };
-  // Retry MongoDB connection up to 5 times (handles transient DNS blips)
   let mongoConnected = false;
   for (let attempt = 1; attempt <= 5; attempt++) {
     try {
@@ -756,15 +767,14 @@ async function main() {
       break;
     } catch (err) {
       warn(`MongoDB connect attempt ${attempt}/5 failed: ${err.message}`);
-      if (attempt < 5) { console.log(`  Retrying in ${attempt * 5}s...`); await sleep(attempt * 5000); }
+      if (attempt < 5) { log(`Retrying in ${attempt * 5}s...`); await sleep(attempt * 5000); }
     }
   }
-  if (!mongoConnected) { fail('Could not connect to MongoDB after 5 attempts. Aborting.'); process.exit(1); }
-  // Auto-reconnect on disconnect (handles mid-run DNS drops)
+  if (!mongoConnected) { fail('Could not connect to MongoDB after 5 attempts. Aborting.'); throw new Error('MongoDB connection failed'); }
   mongoose.connection.on('disconnected', async () => {
     warn('MongoDB disconnected mid-run — attempting reconnect...');
     for (let i = 1; i <= 5; i++) {
-      try { await sleep(i * 3000); await mongoose.connect(process.env.MONGODB_URI, MONGO_OPTS); console.log('  MongoDB reconnected.'); break; }
+      try { await sleep(i * 3000); await mongoose.connect(process.env.MONGODB_URI, MONGO_OPTS); log('MongoDB reconnected.'); break; }
       catch(_) { warn(`Reconnect attempt ${i}/5 failed`); }
     }
   });
@@ -772,7 +782,7 @@ async function main() {
 
   // STEP 4: Import
   sep();
-  log('STEP 4 — Importing all entries (direct + bypassed) → MongoDB...');
+  log('STEP 4 — Importing all entries → MongoDB...');
   await phaseImport(allEntries);
   ok('Import complete');
   try { await mongoose.disconnect(); } catch(_) {}
@@ -787,11 +797,15 @@ async function main() {
     warn('STEP 5 — Skipping healer (--no-heal)');
   }
 
-  // Done
   sep();
   const s = Math.round((Date.now() - t0) / 1000);
-  console.log(`${C.bold}${C.green}🎉 Pipeline complete in ${Math.floor(s/60)}m ${s%60}s${C.reset}\n`);
-  console.log(`  Website: ${C.cyan}http://localhost:3000${C.reset}\n`);
+  ok(`🎉 Pipeline complete in ${Math.floor(s/60)}m ${s%60}s`);
 }
 
-main().catch(e => { fail(`Pipeline failed: ${e.message}`); process.exit(1); });
+// ── When run directly from CLI ────────────────────────────────────────────────
+if (IS_MAIN) {
+  main().catch(e => { fail(`Pipeline failed: ${e.message}`); process.exit(1); });
+}
+
+// ── When require()'d by orchestrator route ────────────────────────────────────
+module.exports = { runPipeline: main };

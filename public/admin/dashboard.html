@@ -654,9 +654,12 @@
         const text = data.text || '';
         appendLog(text);
 
-        // Sync badge based on key messages
-        if (/🚀 Starting Master|Wiping Database/i.test(text)) setLive(true);
-        if (/🏁 Pipeline finished|🏁 Wipe finished|🛑 Force stopped/i.test(text)) setLive(false);
+        // Sync badge based on key messages from broadcast()
+        if (/🚀 Starting|Starting.*Pipeline|Wiping database/i.test(text)) setLive(true);
+        if (/🏁 Pipeline finished|🏁 Healer finished|🛑 Stop requested|❌ Pipeline error/i.test(text)) {
+          setLive(false);
+          syncOrchestratorStatus();
+        }
       } catch (_) {}
     };
 

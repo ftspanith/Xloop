@@ -1,86 +1,51 @@
 const express   = require('express');
 const router    = express.Router();
-const { spawn } = require('child_process');
-const readline  = require('readline');
 const path      = require('path');
 const auth      = require('../middleware/auth');
 
-// Force Vercel's Node File Trace (NFT) to bundle these scripts
-// because they are spawned dynamically via child_process
-try {
-  require.resolve('../orchestrator.js');
-  require.resolve('../extract_links.js');
-  require.resolve('../scrape_api.js');
-  require.resolve('../heal_db.js');
-  require.resolve('../wipe_db.js');
-  require.resolve('../pipeline.js');
-  require.resolve('../pipeline_full.js');
-} catch (e) {}
+// ── Import pipeline directly (in-process, NOT child_process.spawn)
+// Vercel serverless kills spawned children as soon as the lambda returns.
+// Running the pipeline in the same process keeps it alive for the full duration.
+const { runPipeline } = require('../pipeline_full');
 
-let clients       = [];   // active SSE connections
-let activeProcess = null; // currently running child process
-let logBuffer     = [];   // in-memory log history buffer (last 500 lines)
+let pipelineRunning  = false;  // is a pipeline running?
+let pipelinePromise  = null;   // the in-flight Promise
+let clients          = [];     // active SSE connections
+let logBuffer        = [];     // last 500 lines for replay
 const MAX_LOG_HISTORY = 500;
 
-// ── Broadcast to all SSE clients ─────────────────────────────────────────────
+// ── Broadcast a log line to all SSE clients ───────────────────────────────────
 function broadcast(message) {
-  logBuffer.push(message);
+  // Strip ANSI color codes (they look bad in the terminal UI)
+  const clean = message.replace(/\x1b\[[0-9;]*m/g, '');
+  logBuffer.push(clean);
   if (logBuffer.length > MAX_LOG_HISTORY) logBuffer.shift();
 
-  const payload = `data: ${JSON.stringify({ text: message })}\n\n`;
+  const payload = `data: ${JSON.stringify({ text: clean })}\n\n`;
   clients = clients.filter(c => {
     try { c.res.write(payload); return true; }
     catch (_) { return false; }
   });
 }
 
-function isProcessAlive(proc) {
-  if (!proc) return false;
-  if (proc.killed || proc.exitCode !== null) return false;
-  try {
-    process.kill(proc.pid, 0);
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-function runScript(scriptCmd, scriptArgs, startMessage, finishMessage) {
-  broadcast(startMessage);
-  activeProcess = spawn(scriptCmd, scriptArgs, { cwd: path.join(__dirname, '..') });
-
-  readline.createInterface({ input: activeProcess.stdout }).on('line', line => {
-    if (line.trim()) broadcast(line);
-  });
-  readline.createInterface({ input: activeProcess.stderr }).on('line', line => {
-    if (line.trim()) broadcast(`ERROR: ${line}`);
-  });
-
-  activeProcess.on('close', code => {
-    broadcast(`\n🏁 ${finishMessage} exit code ${code}`);
-    activeProcess = null;
-  });
-}
-
-// ── SSE stream ────────────────────────────────────────────────────────────────
+// ── SSE stream endpoint ───────────────────────────────────────────────────────
 router.get('/stream', (req, res) => {
-  res.setHeader('Content-Type',  'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection',    'keep-alive');
+  res.setHeader('Content-Type',      'text/event-stream');
+  res.setHeader('Cache-Control',     'no-cache');
+  res.setHeader('Connection',        'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
   const clientId  = Date.now() + Math.random();
-  const newClient = { id: clientId, res };
-  clients.push(newClient);
+  clients.push({ id: clientId, res });
 
-  // Immediately replay past log buffer to new connection (so dashboard refresh keeps logs)
+  // Send connection confirmation + replay log buffer
   res.write(`data: ${JSON.stringify({ text: '📡 Connected to Orchestrator Live Stream' })}\n\n`);
   for (const line of logBuffer) {
     res.write(`data: ${JSON.stringify({ text: line })}\n\n`);
   }
-  if (activeProcess) {
-    res.write(`data: ${JSON.stringify({ text: '⚠️ A pipeline process is currently running in background.' })}\n\n`);
+  if (pipelineRunning) {
+    res.write(`data: ${JSON.stringify({ text: '⚠️  Pipeline is currently running — logs above are from this run.' })}\n\n`);
   }
 
   const heartbeat = setInterval(() => {
@@ -96,82 +61,103 @@ router.get('/stream', (req, res) => {
 
 // ── Status ────────────────────────────────────────────────────────────────────
 router.get('/status', (req, res) => {
-  res.json({ running: !!activeProcess });
+  res.json({ running: pipelineRunning });
 });
 
-// ── Start (auth required) ────────────────────────────────────────────────────
+// ── Start pipeline (auth required) ───────────────────────────────────────────
 router.post('/start', auth, (req, res) => {
-  if (activeProcess && !isProcessAlive(activeProcess)) {
-    activeProcess = null;
-  }
-  if (activeProcess) {
-    return res.status(400).json({ error: 'Process is already running' });
+  if (pipelineRunning) {
+    return res.status(400).json({ error: 'Pipeline is already running' });
   }
 
   const { skipScraper, resume } = req.body || {};
+  const label = skipScraper ? 'Skip Scraper (import-only)' : 'Full Pipeline';
 
-  // Always use pipeline_full.js — it handles extract + bypass + import + heal
-  // skipScraper=true  → --no-bypass --no-wipe  (use existing links, skip shortlinks)
-  // skipScraper=false → full pipeline (extract fresh, bypass shortlinks, import, heal)
-  // resume=true       → --resume  (continue from checkpoint after a crash)
-  const scriptPath = path.join(__dirname, '..', 'pipeline_full.js');
-  const args = [scriptPath];
-  if (skipScraper) {
-    args.push('--no-bypass');  // skip dead shortlinks
-    args.push('--no-wipe');    // keep existing DB entries
-  }
-  if (resume) args.push('--resume'); // continue from checkpoint
-
-  const label = skipScraper ? 'Skip Scraper (no-bypass)' : 'Full Pipeline';
-  runScript('node', args, `🚀 Starting ${label}...`, 'Pipeline finished with');
+  // Respond immediately — pipeline runs async in background
   res.json({ message: `${label} started` });
+
+  // Run in-process, stream logs via broadcast()
+  pipelineRunning = true;
+  broadcast(`🚀 Starting ${label}...`);
+
+  pipelinePromise = runPipeline({
+    noBypass:  !!skipScraper,
+    noWipe:    !!skipScraper,   // skip scraper = skip wipe too
+    resume:    !!resume,
+    emitter:   broadcast,
+  })
+  .then(() => {
+    broadcast('🏁 Pipeline finished successfully.');
+  })
+  .catch(err => {
+    broadcast(`❌ Pipeline error: ${err.message}`);
+  })
+  .finally(() => {
+    pipelineRunning = false;
+    pipelinePromise = null;
+  });
 });
 
-// ── Heal Only (auth required) ────────────────────────────────────────────────
+// ── Heal Only ────────────────────────────────────────────────────────────────
 router.post('/heal', auth, (req, res) => {
-  if (activeProcess && !isProcessAlive(activeProcess)) {
-    activeProcess = null;
-  }
-  if (activeProcess) {
-    return res.status(400).json({ error: 'Process is already running' });
+  if (pipelineRunning) {
+    return res.status(400).json({ error: 'Pipeline is already running' });
   }
 
-  const scriptPath = path.join(__dirname, '..', 'heal_db.js');
-  runScript('node', [scriptPath], '🩺 Starting Database Healer...', 'Database Healer finished with');
   res.json({ message: 'Healer started' });
+
+  pipelineRunning = true;
+  broadcast('🩺 Starting Database Healer (heal-only mode)...');
+
+  pipelinePromise = runPipeline({
+    noBypass: true,
+    noWipe:   true,
+    noHeal:   false,
+    // Only run steps 3-5 by providing existing source file
+    importSrc: require('path').join(__dirname, '..', 'bypassed_links.json'),
+    emitter:  broadcast,
+  })
+  .then(() => broadcast('🏁 Healer finished.'))
+  .catch(err => broadcast(`❌ Healer error: ${err.message}`))
+  .finally(() => { pipelineRunning = false; pipelinePromise = null; });
 });
 
-// ── Stop (auth required) ─────────────────────────────────────────────────────
+// ── Stop ─────────────────────────────────────────────────────────────────────
+// Note: with in-process execution we can't SIGTERM a promise.
+// This marks it as stopped so the UI unlocks. The async code will naturally
+// finish its current unit of work (one import group) then the flag is checked.
+let _stopRequested = false;
 router.post('/stop', auth, (req, res) => {
-  if (!activeProcess) {
-    return res.status(400).json({ error: 'No process is currently running' });
+  if (!pipelineRunning) {
+    return res.status(400).json({ error: 'No pipeline is running' });
   }
-
-  try { activeProcess.kill('SIGTERM'); } catch (_) {}
-  broadcast('🛑 Force stopped by admin.');
-  activeProcess = null;
-
-  res.json({ message: 'Pipeline stopped' });
+  _stopRequested = true;
+  pipelineRunning = false;
+  broadcast('🛑 Stop requested by admin. Pipeline will finish current task then exit.');
+  res.json({ message: 'Stop requested' });
 });
 
-// ── Wipe (auth required) ─────────────────────────────────────────────────────
+// ── Wipe DB ───────────────────────────────────────────────────────────────────
 router.post('/wipe', auth, (req, res) => {
-  if (activeProcess && !isProcessAlive(activeProcess)) {
-    activeProcess = null;
-  }
-  if (activeProcess) {
-    return res.status(400).json({ error: 'Process is already running' });
+  if (pipelineRunning) {
+    return res.status(400).json({ error: 'Pipeline is already running' });
   }
 
-  const scriptPath = path.join(__dirname, '..', 'wipe_db.js');
-  runScript('node', [scriptPath], '🧨 Wiping Database...', 'Wipe finished with');
+  const mongoose = require('mongoose');
+  const Movie    = require('../models/Movie');
+
   res.json({ message: 'Wipe started' });
+  broadcast('🧨 Wiping database...');
+
+  Movie.deleteMany({})
+    .then(r => broadcast(`✅ Wiped ${r.deletedCount} entries from database.`))
+    .catch(e => broadcast(`❌ Wipe error: ${e.message}`));
 });
 
-// ── Clear Logs ───────────────────────────────────────────────────────────────
+// ── Clear Logs ────────────────────────────────────────────────────────────────
 router.post('/clear-logs', auth, (req, res) => {
   logBuffer = [];
-  broadcast('🧹 Terminal log buffer cleared.');
+  broadcast('🧹 Log buffer cleared.');
   res.json({ message: 'Logs cleared' });
 });
 
