@@ -3,10 +3,44 @@
   "builds": [
     {
       "src": "server.js",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "routes/**",
+          "models/**",
+          "middleware/**",
+          "utils/**",
+          "pipeline_full.js",
+          "invite_tokens.json"
+        ]
+      }
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "server.js"
+    },
+    {
+      "src": "/admin/(.*)",
+      "dest": "server.js"
+    },
+    {
+      "src": "/(.*\\.(css|js|svg|png|jpg|jpeg|webp|woff2?|ico|json|txt))",
+      "dest": "public/$1"
+    },
+    {
+      "src": "/([^.]*)\\.html",
+      "dest": "public/$1.html"
+    },
+    {
+      "src": "/",
+      "dest": "public/index.html"
+    },
     {
       "src": "/(.*)",
       "dest": "server.js"
