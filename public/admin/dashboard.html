@@ -459,81 +459,92 @@
       </div>
 
       <!-- ── Scrape Mode Selector ── -->
-      <div style="margin:14px 0 0; padding:14px 16px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.07);">
-        <div style="font-size:0.78rem; font-weight:700; color:rgba(255,255,255,.5); letter-spacing:.08em; text-transform:uppercase; margin-bottom:10px;">🔄 Scrape Mode</div>
-        <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:12px;">
-          <label id="sm1" onclick="dashSelectMode(1)" style="cursor:pointer; padding:9px 12px; border-radius:8px; border:1px solid rgba(229,9,20,0.5); background:rgba(229,9,20,0.12); display:flex; flex-direction:column; gap:3px;">
-            <span style="font-size:0.82rem; font-weight:700; color:#fff;">🗂️ Full Scrape</span>
-            <span style="font-size:0.72rem; color:rgba(255,255,255,.4);">All channels · all history</span>
+      <div style="margin:16px 0 0; padding:16px; background:rgba(0,0,0,0.2); border-radius:12px; border:1px solid rgba(255,255,255,0.05); box-shadow: inset 0 2px 10px rgba(0,0,0,0.1);">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+           <div style="font-size:0.75rem; font-weight:800; color:rgba(255,255,255,.4); letter-spacing:.1em; text-transform:uppercase;">Scrape Mode</div>
+        </div>
+        
+        <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:14px;">
+          <label id="sm1" onclick="dashSelectMode(1)" style="cursor:pointer; padding:12px 14px; border-radius:8px; border:1px solid rgba(229,9,20,0.5); background:rgba(229,9,20,0.12); display:flex; flex-direction:column; gap:4px; transition: all 0.2s ease;">
+            <span style="font-size:0.85rem; font-weight:700; color:#fff;">Full Scrape</span>
+            <span style="font-size:0.7rem; color:rgba(255,255,255,.5);">All channels · all history</span>
           </label>
-          <label id="sm4" onclick="dashSelectMode(4)" style="cursor:pointer; padding:9px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); display:flex; flex-direction:column; gap:3px;">
-            <span style="font-size:0.82rem; font-weight:700; color:#fff;">⚡ Daily Update</span>
-            <span style="font-size:0.72rem; color:rgba(255,255,255,.4);">New messages only (fast)</span>
+          <label id="sm4" onclick="dashSelectMode(4)" style="cursor:pointer; padding:12px 14px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); display:flex; flex-direction:column; gap:4px; transition: all 0.2s ease;">
+            <span style="font-size:0.85rem; font-weight:700; color:#fff;">Daily Update</span>
+            <span style="font-size:0.7rem; color:rgba(255,255,255,.5);">New messages only (fast)</span>
           </label>
-          <label id="sm2" onclick="dashSelectMode(2)" style="cursor:pointer; padding:9px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); display:flex; flex-direction:column; gap:3px;">
-            <span style="font-size:0.82rem; font-weight:700; color:#fff;">📡 Specific Channels</span>
-            <span style="font-size:0.72rem; color:rgba(255,255,255,.4);">Choose which channels</span>
+          <label id="sm2" onclick="dashSelectMode(2)" style="cursor:pointer; padding:12px 14px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); display:flex; flex-direction:column; gap:4px; transition: all 0.2s ease;">
+            <span style="font-size:0.85rem; font-weight:700; color:#fff;">Specific Channels</span>
+            <span style="font-size:0.7rem; color:rgba(255,255,255,.5);">Choose which channels</span>
           </label>
-          <label id="sm3" onclick="dashSelectMode(3)" style="cursor:pointer; padding:9px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); display:flex; flex-direction:column; gap:3px;">
-            <span style="font-size:0.82rem; font-weight:700; color:#fff;">📅 Date Range</span>
-            <span style="font-size:0.72rem; color:rgba(255,255,255,.4);">From specific date</span>
+          <label id="sm3" onclick="dashSelectMode(3)" style="cursor:pointer; padding:12px 14px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); display:flex; flex-direction:column; gap:4px; transition: all 0.2s ease;">
+            <span style="font-size:0.85rem; font-weight:700; color:#fff;">Date Range</span>
+            <span style="font-size:0.7rem; color:rgba(255,255,255,.5);">From specific date</span>
           </label>
         </div>
 
         <!-- Mode 2: channel input -->
-        <div id="dashChPanel" style="display:none; margin-bottom:10px;">
-          <input id="dashChInput" type="text" placeholder="Channel IDs: 2121685058,1460307412" style="width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); border-radius:7px; color:#fff; padding:8px 12px; font-size:0.82rem; box-sizing:border-box;">
+        <div id="dashChPanel" style="display:none; margin-bottom:14px;">
+          <label style="font-size:0.75rem; color:rgba(255,255,255,.4); display:block; margin-bottom:6px;">Channel IDs (comma separated)</label>
+          <input id="dashChInput" type="text" placeholder="e.g. 2121685058, 1460307412" style="width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.15); border-radius:6px; color:#fff; padding:10px 12px; font-size:0.85rem; box-sizing:border-box; outline:none; transition: border-color 0.2s ease;" onfocus="this.style.borderColor='rgba(229,9,20,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,.15)'">
         </div>
 
         <!-- Mode 3: date inputs -->
-        <div id="dashDatePanel" style="display:none; margin-bottom:10px; display:none;">
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <div style="flex:1; min-width:120px;">
-              <label style="font-size:0.75rem; color:rgba(255,255,255,.4); display:block; margin-bottom:4px;">Start Date</label>
-              <input id="dashStartDate" type="date" style="width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); border-radius:7px; color:#fff; padding:7px 10px; font-size:0.82rem; box-sizing:border-box;">
+        <div id="dashDatePanel" style="display:none; margin-bottom:14px; display:none;">
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:130px;">
+              <label style="font-size:0.75rem; color:rgba(255,255,255,.4); display:block; margin-bottom:6px;">Start Date</label>
+              <input id="dashStartDate" type="date" style="width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.15); border-radius:6px; color:#fff; padding:9px 12px; font-size:0.85rem; box-sizing:border-box; outline:none;" onfocus="this.style.borderColor='rgba(229,9,20,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,.15)'">
             </div>
-            <div style="flex:1; min-width:120px;">
-              <label style="font-size:0.75rem; color:rgba(255,255,255,.4); display:block; margin-bottom:4px;">End Date (optional)</label>
-              <input id="dashEndDate" type="date" style="width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); border-radius:7px; color:#fff; padding:7px 10px; font-size:0.82rem; box-sizing:border-box;">
+            <div style="flex:1; min-width:130px;">
+              <label style="font-size:0.75rem; color:rgba(255,255,255,.4); display:block; margin-bottom:6px;">End Date <span style="opacity:0.5">(optional)</span></label>
+              <input id="dashEndDate" type="date" style="width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.15); border-radius:6px; color:#fff; padding:9px 12px; font-size:0.85rem; box-sizing:border-box; outline:none;" onfocus="this.style.borderColor='rgba(229,9,20,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,.15)'">
             </div>
-            <div style="flex:1; min-width:80px;">
-              <label style="font-size:0.75rem; color:rgba(255,255,255,.4); display:block; margin-bottom:4px;">Or Last N Days</label>
-              <input id="dashDays" type="number" value="7" min="1" style="width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); border-radius:7px; color:#fff; padding:7px 10px; font-size:0.82rem; box-sizing:border-box;">
+            <div style="flex:1; min-width:90px;">
+              <label style="font-size:0.75rem; color:rgba(255,255,255,.4); display:block; margin-bottom:6px;">Or Last N Days</label>
+              <input id="dashDays" type="number" value="7" min="1" style="width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.15); border-radius:6px; color:#fff; padding:9px 12px; font-size:0.85rem; box-sizing:border-box; outline:none;" onfocus="this.style.borderColor='rgba(229,9,20,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,.15)'">
             </div>
           </div>
         </div>
 
-        <button onclick="dashGenCmd()" style="width:100%; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); color:#fff; padding:9px; border-radius:8px; cursor:pointer; font-size:0.82rem; font-weight:600;">⚡ Generate Command</button>
+        <button onclick="dashGenCmd()" style="width:100%; background:var(--primary, #e50914); border:none; color:#fff; padding:12px; border-radius:8px; cursor:pointer; font-size:0.85rem; font-weight:700; transition: background 0.2s ease; display:flex; justify-content:center; align-items:center; gap:8px;" onmouseover="this.style.background='#b20710'" onmouseout="this.style.background='var(--primary, #e50914)'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+          Generate Command
+        </button>
 
         <!-- Generated command box -->
-        <div id="dashCmdBox" style="display:none; margin-top:10px; position:relative; background:#0a0a0a; border:1px solid rgba(255,255,255,.1); border-radius:8px; padding:11px 44px 11px 12px;">
-          <code id="dashGenCmd" style="font-size:0.82rem; color:#22c55e; font-family:monospace; word-break:break-all;"></code>
-          <button onclick="dashCopyCmd()" style="position:absolute; top:8px; right:8px; background:rgba(255,255,255,.1); border:none; color:#fff; padding:3px 9px; border-radius:5px; cursor:pointer; font-size:0.75rem;">Copy</button>
+        <div id="dashCmdBox" style="display:none; margin-top:14px; position:relative; background:#000; border:1px solid rgba(255,255,255,.1); border-radius:8px; padding:14px 60px 14px 14px; box-shadow: inset 0 2px 8px rgba(0,0,0,0.3);">
+          <code id="dashGenCmd" style="font-size:0.85rem; color:#22c55e; font-family:'Menlo', 'Monaco', monospace; word-break:break-all; display:block;"></code>
+          <button onclick="dashCopyCmd()" style="position:absolute; top:10px; right:10px; background:rgba(255,255,255,.1); border:none; color:#fff; padding:5px 12px; border-radius:5px; cursor:pointer; font-size:0.75rem; font-weight:600; transition: background 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,.2)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">Copy</button>
         </div>
-        <div id="dashCmdDesc" style="font-size:0.75rem; color:rgba(255,255,255,.35); margin-top:6px; display:none;"></div>
+        <div id="dashCmdDesc" style="font-size:0.75rem; color:rgba(255,255,255,.45); margin-top:8px; display:none; padding-left:2px;"></div>
       </div>
 
       <!-- ── Upload telegram_export.json ── -->
-      <div id="uploadExportPanel" style="margin: 10px 0 0; padding: 14px 16px; background: rgba(255,255,255,0.04); border-radius: 10px; border: 1px solid rgba(229,9,20,0.25);">
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <div id="uploadExportPanel" style="margin: 16px 0 0; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid rgba(229,9,20,0.3); box-shadow: inset 0 2px 10px rgba(0,0,0,0.1);">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
           <div>
-            <div style="font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:3px;">📤 telegram_export.json</div>
-            <div id="dashExportStatus" style="font-size:0.75rem; color:rgba(255,255,255,.45);">Checking...</div>
+            <div style="font-size:0.85rem; font-weight:700; color:#fff; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg>
+              telegram_export.json
+            </div>
+            <div id="dashExportStatus" style="font-size:0.75rem; color:rgba(255,255,255,.5);">Checking status...</div>
           </div>
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <label for="dashExportFile" style="cursor:pointer; background:rgba(229,9,20,0.12); border:1px solid rgba(229,9,20,0.4); color:#fff; padding:7px 14px; border-radius:6px; font-size:0.8rem; font-weight:600; white-space:nowrap;">
-              📁 Choose File
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <label for="dashExportFile" style="cursor:pointer; background:transparent; border:1px solid rgba(229,9,20,0.5); color:var(--primary, #e50914); padding:8px 16px; border-radius:6px; font-size:0.8rem; font-weight:600; white-space:nowrap; transition: all 0.2s ease; display:flex; align-items:center; gap:6px;" onmouseover="this.style.background='rgba(229,9,20,0.1)'" onmouseout="this.style.background='transparent'">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Choose File
             </label>
             <input type="file" id="dashExportFile" accept=".json" style="display:none;" onchange="dashPreviewExport(this)">
-            <span id="dashExportFileName" style="font-size:0.78rem; color:rgba(255,255,255,.45); max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">No file selected</span>
-            <button id="dashUploadBtn" onclick="dashUploadExport()" style="display:none; background:var(--accent,#e50914); border:none; color:#fff; padding:7px 16px; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.8rem; white-space:nowrap;">Upload</button>
+            <span id="dashExportFileName" style="font-size:0.75rem; color:rgba(255,255,255,.5); max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">No file selected</span>
+            <button id="dashUploadBtn" onclick="dashUploadExport()" style="display:none; background:var(--primary,#e50914); border:none; color:#fff; padding:8px 18px; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.8rem; white-space:nowrap; transition: background 0.2s ease;" onmouseover="this.style.background='#b20710'" onmouseout="this.style.background='var(--primary,#e50914)'">Upload to Server</button>
           </div>
         </div>
-        <div id="dashUploadMsg" style="margin-top:8px; font-size:0.78rem; display:none;"></div>
+        <div id="dashUploadMsg" style="margin-top:10px; font-size:0.78rem; display:none; padding:8px; background:rgba(255,255,255,0.05); border-radius:6px;"></div>
       </div>
 
       <!-- Mini terminal -->
-      <div class="dash-terminal" style="margin-top:12px;">
+      <div class="dash-terminal" style="margin-top:16px;">
         <div class="dash-terminal-header">
           <div class="term-dots"><span></span><span></span><span></span></div>
           <span class="term-title">xloop_orchestrator</span>
