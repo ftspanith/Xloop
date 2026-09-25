@@ -36,6 +36,7 @@
     .orch-card { animation: fadeUpIn 0.55s cubic-bezier(0.2,0.8,0.2,1) 0.35s both; }
     /* Table card */
     .dash-table-card { animation: fadeUpIn 0.55s cubic-bezier(0.2,0.8,0.2,1) 0.45s both; }
+    @keyframes cardFadeIn { from { opacity:0; transform:translateY(14px) scale(0.96); } to { opacity:1; transform:none; } }
     /* ── Dashboard Page ── */
 
     /* Stats grid */
@@ -386,27 +387,26 @@
       <h1 class="admin-page-title">Dashboard</h1>
     </div>
 
-    <!-- ── Stats ── -->
     <div class="dash-stats">
       <div class="dash-stat">
         <div class="dash-stat-label">Total Movies</div>
-        <div class="dash-stat-value" id="statMovies">—</div>
-        <div class="dash-stat-sub">in database</div>
+        <div class="dash-stat-value stat-loading" id="statMovies">—</div>
+        <div class="dash-stat-sub">in database <span class="live-dot"></span></div>
       </div>
       <div class="dash-stat">
         <div class="dash-stat-label">Total Series</div>
-        <div class="dash-stat-value" id="statSeries">—</div>
-        <div class="dash-stat-sub">in database</div>
+        <div class="dash-stat-value stat-loading" id="statSeries">—</div>
+        <div class="dash-stat-sub">in database <span class="live-dot" style="animation-delay:.4s"></span></div>
       </div>
       <div class="dash-stat">
         <div class="dash-stat-label">Total Anime</div>
-        <div class="dash-stat-value" id="statAnime">—</div>
-        <div class="dash-stat-sub">in database</div>
+        <div class="dash-stat-value stat-loading" id="statAnime">—</div>
+        <div class="dash-stat-sub">in database <span class="live-dot" style="animation-delay:.8s"></span></div>
       </div>
       <div class="dash-stat">
         <div class="dash-stat-label">Total Items</div>
-        <div class="dash-stat-value" id="statTotal">—</div>
-        <div class="dash-stat-sub">all types</div>
+        <div class="dash-stat-value stat-loading" id="statTotal">—</div>
+        <div class="dash-stat-sub">all types <span class="live-dot" style="animation-delay:1.2s"></span></div>
       </div>
     </div>
 
@@ -558,12 +558,16 @@
 
     <!-- ── Recent Content ── -->
     <div class="dash-section-header">
-      <span class="dash-section-title">Recent Content</span>
+      <span class="dash-section-title">Recent Content <span class="live-dot" style="animation-delay:.6s"></span></span>
       <a href="/admin/manager.html" class="orch-full-link">
         View All
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </a>
     </div>
+
+    <!-- Poster grid replaces boring table -->
+    <div id="recentGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:14px; margin-bottom:32px;"></div>
+
 
     <div class="dash-table-card">
       <table class="admin-table">
@@ -588,49 +592,95 @@
 <script src="/js/admin.js"></script>
 <script>
   // ── Dashboard data load ───────────────────────────────────
+  // ── Count-up animation ───────────────────────────────────────────────────────
+  const _statPrev = { statMovies: 0, statSeries: 0, statAnime: 0, statTotal: 0 };
+  function countUp(id, target) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('stat-loading');
+    const start  = _statPrev[id] || 0;
+    const delta  = target - start;
+    if (delta === 0 && el.textContent === target.toLocaleString()) return;
+    _statPrev[id] = target;
+    if (delta <= 0) { el.textContent = target.toLocaleString(); el.classList.add('num-updated'); return; }
+    const dur    = Math.min(900, Math.max(300, delta * 0.8));
+    const step   = 16;
+    const steps  = Math.ceil(dur / step);
+    let   cur    = start;
+    let   i      = 0;
+    el.classList.add('num-updated');
+    const t = setInterval(() => {
+      i++;
+      const progress = i / steps;
+      const ease = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      cur = Math.round(start + delta * ease);
+      el.textContent = cur.toLocaleString();
+      if (i >= steps) { clearInterval(t); el.textContent = target.toLocaleString(); }
+    }, step);
+  }
+
+  // ── Recent content poster grid ─────────────────────────────────────────────
+  const TYPE_COLOR = { movie:'#e50914', series:'#f59e0b', anime:'#8b5cf6' };
+  function renderRecentGrid(items) {
+    const grid = document.getElementById('recentGrid');
+    if (!grid) return;
+    if (!items.length) {
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:rgba(255,255,255,.3);font-size:0.9rem;">No content yet — run Full Pipeline to import</div>';
+      return;
+    }
+    grid.innerHTML = items.map((item, idx) => {
+      const color = TYPE_COLOR[item._typeLabel] || '#e50914';
+      const poster = item.posterUrl || item.poster || '';
+      return `
+      <div onclick="window.open('/admin/manager.html','_self')" style="
+        cursor:pointer; border-radius:10px; overflow:hidden;
+        background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.07);
+        animation: cardFadeIn 0.4s ease ${idx * 0.05}s both;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        position:relative;
+      " onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 16px 32px rgba(0,0,0,0.5)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+        <div style="aspect-ratio:2/3; background:#111; position:relative; overflow:hidden;">
+          ${poster
+            ? `<img src="${poster}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" onerror="this.style.display='none'">`
+            : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.03);">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="3"/><path d="M8 10h8M8 14h5"/></svg>
+               </div>`
+          }
+          <div style="position:absolute;top:6px;left:6px;background:${color};color:#fff;font-size:0.65rem;font-weight:800;padding:2px 7px;border-radius:999px;text-transform:uppercase;letter-spacing:.05em;">${item._typeLabel}</div>
+          ${item.rating ? `<div style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,0.75);color:#f59e0b;font-size:0.7rem;font-weight:700;padding:2px 6px;border-radius:5px;">★ ${item.rating}</div>` : ''}
+        </div>
+        <div style="padding:8px 10px;">
+          <div style="font-size:0.78rem;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${item.title}">${item.title}</div>
+          <div style="font-size:0.7rem;color:rgba(255,255,255,.4);margin-top:2px;">${item.year || '—'}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
   async function loadDashboard() {
     try {
       const [mRes, sRes, aRes] = await Promise.all([
-        apiFetch('/api/movies?limit=6&type=movie&sort=updatedAt'),
-        apiFetch('/api/movies?limit=6&type=series&sort=updatedAt'),
-        apiFetch('/api/movies?limit=6&type=anime&sort=updatedAt')
+        apiFetch('/api/movies?limit=10&type=movie&sort=updatedAt'),
+        apiFetch('/api/movies?limit=10&type=series&sort=updatedAt'),
+        apiFetch('/api/movies?limit=10&type=anime&sort=updatedAt')
       ]);
-
-      function animateStat(id, val) {
-        const el = document.getElementById(id);
-        if (!el || el.textContent == val) return;
-        el.classList.remove('num-updated');
-        void el.offsetWidth;
-        el.textContent = val;
-        el.classList.add('num-updated');
-      }
 
       const mTotal = mRes.total || 0;
       const sTotal = sRes.total || 0;
       const aTotal = aRes.total || 0;
 
-      animateStat('statMovies', mTotal.toLocaleString());
-      animateStat('statSeries', sTotal.toLocaleString());
-      animateStat('statAnime',  aTotal.toLocaleString());
-      animateStat('statTotal',  (mTotal + sTotal + aTotal).toLocaleString());
+      countUp('statMovies', mTotal);
+      countUp('statSeries', sTotal);
+      countUp('statAnime',  aTotal);
+      countUp('statTotal',  mTotal + sTotal + aTotal);
 
       const combined = [
         ...(mRes.movies || []).map(m => ({ ...m, _typeLabel: 'movie' })),
         ...(sRes.movies || []).map(s => ({ ...s, _typeLabel: 'series' })),
         ...(aRes.movies || []).map(a => ({ ...a, _typeLabel: 'anime' }))
-      ].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 10);
+      ].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 18);
 
-      document.getElementById('recentTable').innerHTML = combined.length ? combined.map(item => `
-        <tr>
-          <td style="font-weight:600; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.title}</td>
-          <td><span class="type-badge ${item._typeLabel}">${item._typeLabel}</span></td>
-          <td style="color:var(--text2);">${item.year || '—'}</td>
-          <td style="color:var(--gold);">${item.rating ? item.rating + ' / 10' : '—'}</td>
-          <td>
-            <button class="btn-danger" onclick="deleteItem('${item._id}')">Delete</button>
-          </td>
-        </tr>
-      `).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:24px;">No content yet</td></tr>';
+      renderRecentGrid(combined);
 
     } catch (err) {
       showToast('Error loading dashboard', true);
@@ -1018,7 +1068,7 @@
   checkAuth().then(valid => {
     if (valid) {
       loadDashboard();
-      setInterval(loadDashboard, 8000);
+      setInterval(loadDashboard, 5000);
       connectOrchestratorStream();
       // Sync badge & buttons immediately on load (fixes OFFLINE after page refresh mid-run)
       syncOrchestratorStatus();
