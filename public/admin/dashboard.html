@@ -884,29 +884,37 @@
   }
 
   async function dashUploadExport() {
-    if (!_dashExportFiles || !_dashExportFiles.length) return;
+    const readyFiles = (_dashExportFiles || []).filter(Boolean);
+    if (!readyFiles.length) {
+      alert('Files are still loading, please wait a moment.');
+      return;
+    }
     const btn = document.getElementById('dashUploadBtn');
     const msg = document.getElementById('dashUploadMsg');
     msg.style.display = 'block';
-    msg.style.color = 'rgba(255,255,255,.6)';
-    msg.textContent = `Parsing ${_dashExportFiles.length} file(s)...`;
     btn.disabled = true;
     try {
-      // Parse all files and wrap each as export object
-      const exports = _dashExportFiles.map((raw, i) => {
-        try { return JSON.parse(raw); }
-        catch(e) { throw new Error(`File ${i+1} is invalid JSON`); }
-      });
-
-      msg.textContent = `Uploading ${exports.length} file(s) to server — extracting & merging...`;
-
-      // Send as array (server handles merge + dedup)
-      const payload = exports.length === 1 ? exports[0] : exports;
       const token = localStorage.getItem('xloop_admin_token');
+      let body, contentType = 'application/json';
+
+      if (readyFiles.length === 1) {
+        // ── Single file: send raw text directly — no re-parse/stringify needed ──
+        // This avoids the browser memory crash on 17MB+ files
+        msg.style.color = 'rgba(255,255,255,.6)';
+        msg.textContent = 'Uploading file to server...';
+        body = readyFiles[0]; // raw JSON string as-is
+      } else {
+        // ── Multiple files: build merged JSON array string without full parse ──
+        msg.style.color = 'rgba(255,255,255,.6)';
+        msg.textContent = `Uploading ${readyFiles.length} files to server — merging...`;
+        // Wrap each raw JSON export into an array: [export1, export2, ...]
+        body = '[' + readyFiles.join(',') + ']';
+      }
+
       const res = await fetch('/api/scrape/upload-export', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(payload),
+        headers: { 'Content-Type': contentType, 'Authorization': `Bearer ${token}` },
+        body,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Upload failed');
