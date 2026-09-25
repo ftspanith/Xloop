@@ -183,7 +183,21 @@
      Telegram Scraper</h1>
 
     <div class="auth-notice">
-      <strong> First-time setup:</strong> You must run <code>node scrape.js</code> once from the terminal to authenticate your Telegram account. After that, the session is saved and you can use this panel freely without re-authenticating.
+      <strong>&#9888; Vercel Note:</strong> The live Telegram scraper cannot run on Vercel serverless. Run the scraper locally then upload your <code>telegram_export.json</code> below. Then go to <a href="/admin/orchestrator.html" style="color:var(--primary,#e50914)">Full Orchestrator</a> and run Full Pipeline.
+    </div>
+
+    <!-- Upload Export File -->
+    <div class="options-panel" style="margin-bottom:20px; border:1px solid rgba(229,9,20,0.4);">
+      <h3 style="color:var(--primary,#e50914); margin-bottom:8px;">&#128228; Upload telegram_export.json</h3>
+      <p style="color:rgba(255,255,255,.6); font-size:0.85rem; margin-bottom:14px;">Generate this file locally using the Telegram scraper, then upload it here. It will be saved to MongoDB so the Full Pipeline can use it anytime.</p>
+      <div id="exportStatus" style="margin-bottom:12px; padding:8px 12px; background:rgba(255,255,255,.05); border-radius:6px; font-size:0.85rem; color:rgba(255,255,255,.5);">Checking status...</div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <label for="exportFileInput" style="cursor:pointer; background:rgba(229,9,20,0.15); border:1px solid rgba(229,9,20,0.5); color:#fff; padding:10px 20px; border-radius:6px; font-size:0.9rem; font-weight:600;">&#128193; Choose File</label>
+        <input type="file" id="exportFileInput" accept=".json" style="display:none;" onchange="previewExport(this)">
+        <span id="exportFileName" style="color:rgba(255,255,255,.6); font-size:0.85rem;">No file selected</span>
+        <button id="uploadExportBtn" onclick="uploadExport()" style="display:none; background:var(--primary,#e50914); border:none; color:#fff; padding:10px 24px; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.9rem;">Upload &amp; Save to MongoDB</button>
+      </div>
+      <div id="uploadProgress" style="margin-top:10px; font-size:0.85rem;"></div>
     </div>
 
     <!--  Mode Selection  -->
@@ -289,6 +303,67 @@
   let selectedMode    = 1;
   let selectedChannels = [];
   let allChannels      = [];
+
+  // ── Upload export file functions ─────────────────────────────────────────
+  let _exportFileData = null;
+
+  function previewExport(input) {
+    const file = input.files[0];
+    if (!file) return;
+    document.getElementById('exportFileName').textContent = `${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`;
+    document.getElementById('uploadExportBtn').style.display = 'inline-block';
+    const reader = new FileReader();
+    reader.onload = (e) => { _exportFileData = e.target.result; };
+    reader.readAsText(file);
+  }
+
+  async function uploadExport() {
+    if (!_exportFileData) return;
+    const btn  = document.getElementById('uploadExportBtn');
+    const prog = document.getElementById('uploadProgress');
+    btn.disabled = true;
+    btn.textContent = 'Uploading...';
+    prog.style.color = 'rgba(255,255,255,.6)';
+    prog.textContent = '⏳ Parsing and uploading to MongoDB...';
+    try {
+      let parsed;
+      try { parsed = JSON.parse(_exportFileData); } catch(e) { throw new Error('Invalid JSON file'); }
+      const token = localStorage.getItem('xloop_admin_token');
+      const res = await fetch('/api/scrape/upload-export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(parsed),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Upload failed');
+      prog.style.color = '#22c55e';
+      prog.textContent = data.message;
+      checkExportStatus();
+    } catch (err) {
+      prog.style.color = '#ef4444';
+      prog.textContent = `❌ ${err.message}`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Upload & Save to MongoDB';
+    }
+  }
+
+  async function checkExportStatus() {
+    try {
+      const token = localStorage.getItem('xloop_admin_token');
+      const res = await fetch('/api/scrape/export-status', { headers: { 'Authorization': `Bearer ${token}` } });
+      const d = await res.json();
+      const el = document.getElementById('exportStatus');
+      if (d.available) {
+        const date = d.savedAt ? new Date(d.savedAt).toLocaleString() : 'unknown';
+        el.style.color = '#22c55e';
+        el.textContent = `✅ telegram_export.json available in ${d.source} — ${d.count.toLocaleString()} messages — saved ${date}`;
+      } else {
+        el.style.color = 'rgba(255,200,0,.8)';
+        el.textContent = '⚠️ No telegram_export.json found. Upload one below to run the Full Pipeline.';
+      }
+    } catch(_) {}
+  }
 
   //  Load channel list from API 
   async function loadChannels() {
@@ -462,6 +537,7 @@
   checkAuth().then(valid => {
     if (valid) {
       loadChannels();
+      checkExportStatus();
       // Pre-select all channels by default
       setTimeout(() => {
         if (allChannels.length > 0) {

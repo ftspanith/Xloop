@@ -712,7 +712,25 @@ async function main(opts = {}) {
   // STEP 1: Extract
   sep();
   if (!IMPORT_SRC) {
-    if (!fs.existsSync(path.join(ROOT, 'telegram_export.json'))) { fail('telegram_export.json not found! Upload it first.'); throw new Error('telegram_export.json not found'); }
+    // Check /tmp first (same Lambda instance as upload), then MongoDB cache
+    if (!fs.existsSync(EXPORT_FILE)) {
+      log('STEP 1 — telegram_export.json not in /tmp, checking MongoDB cache...');
+      try {
+        const PipelineCache = require('./models/PipelineCache');
+        const cached = await PipelineCache.findOne({ key: 'telegram_export' }).lean();
+        if (cached && cached.data) {
+          fs.writeFileSync(EXPORT_FILE, JSON.stringify(cached.data));
+          ok(`Loaded telegram_export.json from MongoDB cache (${cached.count} messages)`);
+        } else {
+          fail('telegram_export.json not found! Go to Admin → Scraper → Upload Export File first.');
+          throw new Error('telegram_export.json not found');
+        }
+      } catch (err) {
+        if (err.message === 'telegram_export.json not found') throw err;
+        fail(`Failed to load from MongoDB: ${err.message}. Upload telegram_export.json first.`);
+        throw new Error('telegram_export.json not found');
+      }
+    }
     log('STEP 1 — Parsing telegram_export.json...');
     await runScript(path.join(ROOT, 'extract_links.js'));
     ok('Extraction done → links_for_bypasser.json + shortlinks_report.json');
