@@ -98,11 +98,34 @@ router.post('/upload-export', auth, express.json({ limit: '200mb' }), async (req
     const { parseMessageBlock, classifyUrl, isJunkTitle } = require('../utils/parser');
     const data = req.body;
 
-    if (!data || (!Array.isArray(data.messages) && !Array.isArray(data))) {
-      return res.status(400).json({ message: 'Invalid telegram_export.json format.' });
+    // Support single OR multiple export files:
+    //   Single: { messages: [...] }  OR  [...]
+    //   Multi:  [ { messages: [...] }, { messages: [...] }, ... ]
+    let allMessages;
+    if (Array.isArray(data)) {
+      // Could be array of messages OR array of export objects
+      if (data.length > 0 && data[0] && typeof data[0] === 'object' && Array.isArray(data[0].messages)) {
+        // Array of exports → merge all
+        allMessages = data.flatMap(d => d.messages || []);
+      } else {
+        // Raw array of messages
+        allMessages = data;
+      }
+    } else if (data.messages && Array.isArray(data.messages)) {
+      allMessages = data.messages;
+    } else {
+      return res.status(400).json({ message: 'Invalid format. Expected { messages:[...] }, an array of messages, or an array of exports.' });
     }
 
-    const messages = Array.isArray(data) ? data : data.messages;
+    // Global dedup by channel_id:message_id (handles overlapping files)
+    const msgMap = new Map();
+    for (const m of allMessages) {
+      const key = `${m.channel_id || '0'}:${m.id}`;
+      if (!msgMap.has(key)) msgMap.set(key, m);
+    }
+    const messages = [...msgMap.values()];
+    const rawCount = allMessages.length;
+    const dedupCount = rawCount - messages.length;
 
     // ── Run extraction inline (same logic as extract_links.js) ───────────────
     // We extract here instead of storing raw JSON (raw JSON = 50MB+ > MongoDB 16MB limit)
@@ -206,9 +229,10 @@ router.post('/upload-export', auth, express.json({ limit: '200mb' }), async (req
       fs.writeFileSync(path.join(os.tmpdir(), 'shortlinks_report.json'), JSON.stringify(shortlinks));
     } catch(_) {}
 
+    const dedupNote = dedupCount > 0 ? ` (${dedupCount} duplicate messages removed across files)` : '';
     res.json({
-      message: `✅ Extracted ${allLinks.length} links from ${messages.length} messages (${skipped} skipped). Saved to MongoDB. Run Full Pipeline now.`,
-      count: allLinks.length, messages: messages.length, skipped,
+      message: `✅ Extracted ${allLinks.length} links from ${messages.length} messages (${skipped} skipped)${dedupNote}. Saved to MongoDB. Run Full Pipeline now.`,
+      count: allLinks.length, messages: messages.length, rawMessages: rawCount, duplicatesRemoved: dedupCount, skipped,
     });
   } catch (err) {
     res.status(500).json({ message: `Upload failed: ${err.message}` });

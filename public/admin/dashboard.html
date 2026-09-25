@@ -535,7 +535,7 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               Choose File
             </label>
-            <input type="file" id="dashExportFile" accept=".json" style="display:none;" onchange="dashPreviewExport(this)">
+            <input type="file" id="dashExportFile" accept=".json" multiple style="display:none;" onchange="dashPreviewExport(this)">
             <span id="dashExportFileName" style="font-size:0.75rem; color:rgba(255,255,255,.5); max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">No file selected</span>
             <button id="dashUploadBtn" onclick="dashUploadExport()" style="display:none; background:var(--primary,#e50914); border:none; color:#fff; padding:8px 18px; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.8rem; white-space:nowrap; transition: background 0.2s ease;" onmouseover="this.style.background='#b20710'" onmouseout="this.style.background='var(--primary,#e50914)'">Upload to Server</button>
           </div>
@@ -853,34 +853,60 @@
   }
 
   // ── Upload export functions (inline in dashboard) ───────────────────────────
-  let _dashExportData = null;
+  let _dashExportFiles = [];
 
   function dashPreviewExport(input) {
-    const file = input.files[0];
-    if (!file) return;
-    document.getElementById('dashExportFileName').textContent = `${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`;
+    const files = Array.from(input.files);
+    if (!files.length) return;
+    const totalMB = (files.reduce((s, f) => s + f.size, 0) / 1024 / 1024).toFixed(1);
+    const label = files.length === 1
+      ? `${files[0].name} (${totalMB} MB)`
+      : `${files.length} files selected (${totalMB} MB total)`;
+    document.getElementById('dashExportFileName').textContent = label;
     document.getElementById('dashUploadBtn').style.display = 'inline-block';
-    const reader = new FileReader();
-    reader.onload = (e) => { _dashExportData = e.target.result; };
-    reader.readAsText(file);
+
+    // Read all files into _dashExportFiles array
+    _dashExportFiles = [];
+    let loaded = 0;
+    files.forEach((file, i) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        _dashExportFiles[i] = e.target.result;
+        loaded++;
+        if (loaded === files.length) {
+          document.getElementById('dashUploadMsg').style.display = 'block';
+          document.getElementById('dashUploadMsg').style.color = 'rgba(255,255,255,.5)';
+          document.getElementById('dashUploadMsg').textContent = `${files.length} file(s) ready. Click Upload to Server.`;
+        }
+      };
+      reader.readAsText(file);
+    });
   }
 
   async function dashUploadExport() {
-    if (!_dashExportData) return;
+    if (!_dashExportFiles || !_dashExportFiles.length) return;
     const btn = document.getElementById('dashUploadBtn');
     const msg = document.getElementById('dashUploadMsg');
     msg.style.display = 'block';
     msg.style.color = 'rgba(255,255,255,.6)';
-    msg.textContent = '⏳ Uploading...';
+    msg.textContent = `Parsing ${_dashExportFiles.length} file(s)...`;
     btn.disabled = true;
     try {
-      let parsed;
-      try { parsed = JSON.parse(_dashExportData); } catch(e) { throw new Error('Invalid JSON file'); }
+      // Parse all files and wrap each as export object
+      const exports = _dashExportFiles.map((raw, i) => {
+        try { return JSON.parse(raw); }
+        catch(e) { throw new Error(`File ${i+1} is invalid JSON`); }
+      });
+
+      msg.textContent = `Uploading ${exports.length} file(s) to server — extracting & merging...`;
+
+      // Send as array (server handles merge + dedup)
+      const payload = exports.length === 1 ? exports[0] : exports;
       const token = localStorage.getItem('xloop_admin_token');
       const res = await fetch('/api/scrape/upload-export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(parsed),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Upload failed');
@@ -889,7 +915,7 @@
       dashCheckExportStatus();
     } catch (err) {
       msg.style.color = '#ef4444';
-      msg.textContent = `❌ ${err.message}`;
+      msg.textContent = `Failed: ${err.message}`;
     } finally { btn.disabled = false; }
   }
 
