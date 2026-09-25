@@ -180,7 +180,10 @@ mongoose
   .then(async () => {
     console.log('[DB] Connected to MongoDB Atlas');
     await seedAdmin();
-    app.listen(PORT, '0.0.0.0', () => console.log(`[Server] Xloop running on :${PORT}`));
+    // Do not start listener in Vercel — Vercel handles requests directly via module.exports
+    if (!process.env.VERCEL) {
+      app.listen(PORT, '0.0.0.0', () => console.log(`[Server] Xloop running on :${PORT}`));
+    }
   })
   .catch(err => {
     console.error('[DB] Connection FAILED:', err.message);
