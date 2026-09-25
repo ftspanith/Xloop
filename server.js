@@ -160,7 +160,7 @@ app.use((err, req, res, _next) => { // eslint-disable-line no-unused-vars
 
 // ── Process-level error guards (prevent silent crashes) ──────────────────────
 process.on('unhandledRejection', (reason) => console.error('[UnhandledRejection]', reason?.message || reason));
-process.on('uncaughtException',  (err)    => { console.error('[UncaughtException]', err.message); process.exit(1); });
+process.on('uncaughtException',  (err)    => console.error('[UncaughtException]', err.message));
 
 // ── MongoDB ───────────────────────────────────────────────────────────────────
 const MONGO_OPTS = {
@@ -184,7 +184,6 @@ mongoose
   })
   .catch(err => {
     console.error('[DB] Connection FAILED:', err.message);
-    process.exit(1);
   });
 
 // Connection lifecycle — minimal, non-spammy
@@ -207,3 +206,6 @@ async function seedAdmin() {
     console.error('[Admin] Seed error (non-fatal):', err.message);
   }
 }
+
+// ── Export for Vercel Serverless ─────────────────────────────────────────────
+module.exports = app;
