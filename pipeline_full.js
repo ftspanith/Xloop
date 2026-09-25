@@ -37,10 +37,12 @@ const IS_MAIN = require.main === module;
 const _argv        = IS_MAIN ? process.argv.slice(2) : [];
 
 const ROOT             = __dirname;
-const LINKS_FILE       = path.join(ROOT, 'links_for_bypasser.json');
-const SHORTLINKS_FILE  = path.join(ROOT, 'shortlinks_report.json');
-const BYPASSED_FILE    = path.join(ROOT, 'bypassed_links.json');
-const CHECKPOINT_FILE  = path.join(ROOT, 'import_checkpoint.json');
+const IS_VERCEL        = !!process.env.VERCEL;
+const TMP              = IS_VERCEL ? '/tmp' : ROOT;
+const LINKS_FILE       = path.join(TMP, 'links_for_bypasser.json');
+const SHORTLINKS_FILE  = path.join(TMP, 'shortlinks_report.json');
+const BYPASSED_FILE    = path.join(TMP, 'bypassed_links.json');
+const CHECKPOINT_FILE  = path.join(TMP, 'import_checkpoint.json');
 const TMDB_KEY         = process.env.TMDB_API_KEY || '';
 const OMDB_KEY         = process.env.OMDB_API_KEY  || '';
 
@@ -700,8 +702,9 @@ async function main(opts = {}) {
   sep();
   if (!NO_WIPE) {
     log('STEP 0 — Wiping database...');
-    await runScript(path.join(ROOT, 'wipe_db.js'));
-    ok('Database wiped');
+    // Inline wipe — avoid spawning wipe_db.js (not available on Vercel serverless)
+    const r = await Movie.deleteMany({});
+    ok(`Database wiped — removed ${r.deletedCount} entries`);
   } else {
     warn('STEP 0 — Skipping wipe (--no-wipe)');
   }

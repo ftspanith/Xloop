@@ -19,7 +19,7 @@ const { parseMessageBlock, classifyUrl, isJunkTitle } = require('./utils/parser'
 const isVercel = !!process.env.VERCEL;
 const getPath = (file) => isVercel ? path.join('/tmp', file) : path.join(__dirname, file);
 
-const EXPORT_FILE       = path.join(__dirname, 'telegram_export.json'); // Always read from bundled source
+const EXPORT_FILE       = isVercel ? path.join('/tmp', 'telegram_export.json') : path.join(__dirname, 'telegram_export.json');
 const OUTPUT_FILE       = getPath('links_for_bypasser.json');
 const MISSING_LANG_FILE = getPath('missing_languages_report.json');
 const SHORTLINKS_FILE   = getPath('shortlinks_report.json');

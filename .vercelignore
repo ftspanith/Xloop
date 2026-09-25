@@ -6,15 +6,11 @@ node_modules/puppeteer-extra
 node_modules/puppeteer-extra-plugin-stealth
 node_modules/.cache
 
-# Local scripts — not needed on server
+# Local-only scripts — these run only from the local machine
 bypass_bot.js
 bypasser.js
-extract_links.js
-heal_db.js
-import_bypassed.js
 scrape_api.js
 share.js
-wipe_db.js
 
 # Data files that are too large or local-only
 telegram_export.json
