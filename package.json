@@ -6,6 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "scrape": "node scrape-and-upload.js",
+    "scrape:upload-only": "node scrape-and-upload.js --upload-only",
+    "scrape:no-pipeline": "node scrape-and-upload.js --no-pipeline",
     "bypass": "node bypasser.js",
     "bot": "node bypass_bot.js",
     "import-bypassed": "node import_bypassed.js",
