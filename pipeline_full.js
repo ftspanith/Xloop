@@ -449,7 +449,7 @@ function recomputeAggregates(doc) {
 // ═══════════════════════════════════════════════════════════════════════════
 // PHASE 2: IMPORT TO MONGODB
 // ═══════════════════════════════════════════════════════════════════════════
-async function phaseImport(allEntries) {
+async function phaseImport(allEntries, RESUME = false) {
   // Accept: direct links OR shortlinks that were successfully bypassed
   const valid = allEntries.filter(e => {
     if (e.host !== 'Shortlink') return true;
@@ -845,7 +845,7 @@ async function main(opts = {}) {
     warn(`Cache save failed (non-fatal): ${cacheErr.message}`);
   }
 
-  await phaseImport(allEntries);
+  await phaseImport(allEntries, RESUME);
   ok('Import complete');
   try { await mongoose.disconnect(); } catch(_) {}
 
