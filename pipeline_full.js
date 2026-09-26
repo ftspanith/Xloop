@@ -565,6 +565,12 @@ async function phaseImport(allEntries, RESUME = false) {
       let finalUrl = item.bypassedUrl || item.url;
       finalUrl = finalUrl.replace(/^http:\/\//i, 'https://').replace(/\/$/, '');
       const host     = detectHost(finalUrl);
+
+      // If we skipped the bypasser, do NOT insert unresolved shortlinks!
+      if (host === 'Shortlink' && !item.bypassedUrl) {
+        skipped++;
+        continue;
+      }
       const quality  = item.quality  || 'HD';
       const size     = item.size     || '';
       const language = item.language || '';

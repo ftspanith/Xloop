@@ -455,7 +455,7 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M2 12h20"/></svg>
           Heal DB Only
         </button>
-        <button class="orch-action-btn orch-btn-danger orch-btn-stop" id="btnStopOrch" onclick="stopOrchestrator()" style="display:none;">
+        <button class="orch-action-btn orch-btn-danger orch-btn-stop" id="btnStopOrch" onclick="stopOrchestrator()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
           Stop
         </button>
@@ -726,32 +726,24 @@
     const btnStart = document.getElementById('btnStartOrch');
     const btnManual= document.getElementById('btnStartOrchManual');
     const btnHeal  = document.getElementById('btnHealDB');
-    const btnStop  = document.getElementById('btnStopOrch');
+    
     if (live) {
       badge.className   = 'orch-status-badge live';
       badge.innerHTML   = '<span class="dot"></span>Live';
       if (btnStart)  btnStart.style.display  = 'none';
       if (btnManual) btnManual.style.display = 'none';
       if (btnHeal)   btnHeal.style.display   = 'none';
-      if (btnStop)   btnStop.style.display   = 'flex';
-      // Disable Wipe while running
-      const btnWipe = document.getElementById('btnWipeDB');
-      if (btnWipe) btnWipe.disabled = true;
     } else {
       badge.className   = 'orch-status-badge';
       badge.innerHTML   = '<span class="dot"></span>Offline';
       if (btnStart)  btnStart.style.display  = 'flex';
       if (btnManual) btnManual.style.display = 'flex';
       if (btnHeal)   btnHeal.style.display   = 'flex';
-      if (btnStop)   btnStop.style.display   = 'none';
-      // Re-enable Wipe when stopped
-      const btnWipe = document.getElementById('btnWipeDB');
-      if (btnWipe) btnWipe.disabled = false;
     }
   }
 
   function setBusy(busy) {
-    ['btnStartOrch','btnStartOrchManual','btnHealDB','btnStopOrch','btnWipeDB'].forEach(id => {
+    ['btnStartOrch','btnStartOrchManual','btnHealDB'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.disabled = busy;
     });
