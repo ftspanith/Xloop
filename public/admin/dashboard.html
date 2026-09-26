@@ -903,31 +903,172 @@
     msg.textContent = `${_dashRawFiles.length} file(s) ready — click Upload to Server.`;
   }
 
+  // ── Client-side URL classifier (mirrors utils/parser.js classifyUrl) ────────
+  const _IGNORE_RE = [/t\.me\//i,/telegram\.me\//i,/youtube\.com/i,/youtu\.be/i,/drive\.google\.com/i,/image\.tmdb\.org/i,/m\.media-amazon\.com/i,/hotstar/i,/jiohotstar\./i,/jiocinema\./i,/primevideo\./i,/netflix\./i,/play\.google\./i,/mxplayer\./i,/zee5\./i,/aha\.(video|in|com)/i,/sonyliv\./i,/x\.com/i,/twitter\.com/i,/instagram\.com/i,/facebook\.com/i,/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i];
+  const _PASTE_RE  = [/paste\.rs/i,/pastebin\.com/i,/telegra\.ph/i,/graph\.org/i,/justpaste\.it/i,/rentry\.co/i];
+  const _SHORT_RE  = [/oyy\./i,/ouo\./i,/gplinks\./i,/softurl\./i,/droplink\./i,/mdisk\./i,/terabox/i,/bit\.ly/i,/tinyurl\./i,/rb\.gy/i,/t\.ly/i,/cutt\.ly/i,/iir\.ai/i,/kglinks\./i,/dl\.fliprs\./i];
+  const _CDN_RE    = [/\.(m3u8|ts|m4s)(\?|$)/i,/\/(image|img|thumbnail|poster|banner|cover)\//i,/\/(uploads?|wp-content|static|assets?)\//i,/vod\d*\./i,/img\d*\./i,/thumbs?\./i];
+  function _classifyUrl(url) {
+    if (!url) return 'Ignore';
+    if (_IGNORE_RE.some(r=>r.test(url))) return 'Ignore';
+    if (_CDN_RE.some(r=>r.test(url)))    return 'Ignore';
+    if (_PASTE_RE.some(r=>r.test(url)))  return 'Paste';
+    if (_SHORT_RE.some(r=>r.test(url)))  return 'Shortlink';
+    if (/gdflix\.|gdlink\.dev|gdtot\./i.test(url))   return 'GDFlix';
+    if (/hubcloud\.|drivehub\./i.test(url))           return 'HubCloud';
+    if (/filepress\.|fpgo\.xyz/i.test(url))           return 'FilePress';
+    if (/dtflix\.ink|dotflix\.wtf/i.test(url))        return 'DTFlix';
+    if (/tmbcloud\./i.test(url))                      return 'TMBCloud';
+    if (/\/(file|download|d|dl|f)\/[a-zA-Z0-9_\-]{4,}/i.test(url)) return 'Direct';
+    if (/\.(mkv|mp4|avi|zip|rar|m2ts|ts|mov)(\?.*)?$/i.test(url))  return 'Direct';
+    return 'Download';
+  }
+  function _isJunkUrl(u) {
+    if (!u) return true;
+    if (/workers\.dev/i.test(u)) return !/\.(mkv|mp4|avi|zip|rar)([?#]|$)/i.test(u);
+    return _CDN_RE.some(r=>r.test(u));
+  }
+  function _detectContentType(t) {
+    t=(t||'').toLowerCase();
+    if (/\banime\b/.test(t)||/\bone[\s._-]?piece\b|\bnaruto\b|\bbleach\b|\bdragon[\s._-]?ball\b|\bdemon[\s._-]?slayer\b|\bjujutsu\b|\bdeath[\s._-]?note\b/i.test(t)) return 'anime';
+    if (/\bs\d{1,2}e\d{1,3}\b|\bseason\s*\d+\b|\bepisode\s*\d+\b|\bep\s*\d+\b|\bweb[\s-]?series\b|\bs\d{1,2}\b(?!\d)/i.test(t)) return 'series';
+    return 'movie';
+  }
+  function _extractYear(text) {
+    const m = (text||'').match(/[\[({]\s*(19\d{2}|20[012]\d)\s*[\])}]/);
+    if (m) return parseInt(m[1], 10);
+    const m2 = (text||'').match(/[._\- ](19\d{2}|20[012]\d)[._\- ]/);
+    if (m2) return parseInt(m2[1], 10);
+    return null;
+  }
+  function _extractSeasonEpisode(s) {
+    s = (s||'').replace(/\bS([Oo])(\d)/gi,'S0$2');
+    let m = s.match(/\bS(\d{1,2})\s*E(\d{1,3})/i); if(m) return {season:+m[1],episode:+m[2]};
+    m = s.match(/\bSeason\s*(\d+)\b/i); if(m) return {season:+m[1],episode:null};
+    m = s.match(/\bS(\d{1,2})\b(?!\d)/i); if(m) return {season:+m[1],episode:null};
+    return {season:null,episode:null};
+  }
+  function _extractSize(s) {
+    const m=(s||'').match(/(\d+(?:\.\d+)?\s*(?:GB|MB))/i);
+    return m?m[1].replace(/\s+/g,''):'';
+  }
+  function _normalizeQuality(s) {
+    if(!s) return 'HD'; s=s.toUpperCase();
+    if (/2160P|4K\b|UHD/.test(s)) return '4K';
+    if (/1080P/.test(s)) return '1080p';
+    if (/720P/.test(s)) return '720p';
+    if (/480P/.test(s)) return '480p';
+    return 'HD';
+  }
+  function _detectLanguage(s) {
+    const langs=[{n:'Telugu',r:/telugu/i},{n:'Tamil',r:/tamil/i},{n:'Hindi',r:/hindi/i},{n:'Malayalam',r:/malayalam/i},{n:'Kannada',r:/kannada/i},{n:'English',r:/english/i},{n:'Multi',r:/multi.*audio|dual.*audio|dual/i}];
+    for(const {n,r} of langs) if(r.test(s||'')) return n;
+    return '';
+  }
+
+  // ── Lightweight client-side message parser ────────────────────────────────
+  function _parseMessages(messages) {
+    const extracted = [], shortlinks = [];
+    const seenUrls = new Set();
+    let skipped = 0;
+    const URL_RE = /https?:\/\/\S+/gi;
+    const HOST_PRIORITY = ['GDFlix','HubCloud','FilePress','DTFlix','TMBCloud','Direct','Download','Shortlink'];
+    for (const msg of messages) {
+      let rawText = '';
+      if (typeof msg.text === 'string') rawText = msg.text;
+      else if (Array.isArray(msg.text)) rawText = msg.text.map(p => {
+        if (typeof p === 'string') return p;
+        if (p.type === 'text_link' && p.href) return `${p.text}\n${p.href}\n`;
+        return p.text || '';
+      }).join('');
+      if (msg.reply_markup?.inline_keyboard) {
+        for (const row of msg.reply_markup.inline_keyboard)
+          for (const btn of (row||[])) if (btn.url) rawText += `\n${btn.url}`;
+      }
+      if (!rawText.trim()) { skipped++; continue; }
+      const urls = rawText.match(URL_RE) || [];
+      const validUrls = urls.map(u=>u.replace(/[)>\],;'"]+$/,'')).filter(u=>{
+        const c=_classifyUrl(u);
+        return c!=='Ignore'&&c!=='Paste'&&!seenUrls.has(u)&&!_isJunkUrl(u);
+      });
+      if (!validUrls.length) { skipped++; continue; }
+      const lines = rawText.split('\n').map(l=>l.trim()).filter(Boolean);
+      const title = lines.find(l=>l&&!l.startsWith('http')&&l.length>3&&!/^[#@]/.test(l)) || '';
+      if (!title) { skipped++; continue; }
+      const year = _extractYear(rawText);
+      const {season, episode} = _extractSeasonEpisode(rawText);
+      const contentType = _detectContentType(rawText);
+      const language = _detectLanguage(rawText);
+      const quality = _normalizeQuality(rawText);
+      const size = _extractSize(rawText);
+      // Find filename — line with .mkv/.mp4 etc.
+      const fnLine = lines.find(l=>/\.(mkv|mp4|avi|zip|rar)\b/i.test(l)&&!l.startsWith('http'))||'';
+      for (const url of validUrls) {
+        const urlType = _classifyUrl(url);
+        const clean = url.replace(/^http:\/\//i,'https://').replace(/\/$/,'');
+        const entry = {
+          messageId: msg.id, title, year, contentType,
+          isSeries: contentType==='series'||contentType==='anime'||season!==null,
+          season, episode, language, quality, size,
+          filename: fnLine||'',
+          host: urlType==='Shortlink'?'Shortlink':urlType,
+          url: clean, bypassedUrl: null,
+          isFast: /gdflix|hubcloud|gdlink|tmbcloud|fpgo|filebee/i.test(clean),
+        };
+        seenUrls.add(clean);
+        if (urlType === 'Shortlink') shortlinks.push(entry);
+        else extracted.push(entry);
+      }
+    }
+    return { links: [...extracted,...shortlinks], skipped };
+  }
+
   async function dashUploadExport() {
     if (!_dashRawFiles.length) { alert('No file selected.'); return; }
     const btn = document.getElementById('dashUploadBtn');
     const msg = document.getElementById('dashUploadMsg');
     msg.style.display = 'block';
     btn.disabled = true;
-
     try {
       const token = localStorage.getItem('xloop_admin_token');
       msg.style.color = 'rgba(255,255,255,.6)';
+      const totalMB = (_dashRawFiles.reduce((s,f)=>s+f.size,0)/1024/1024).toFixed(1);
+      msg.textContent = `📖 Reading ${totalMB} MB file in browser…`;
 
-      const totalMB = (_dashRawFiles.reduce((s, f) => s + f.size, 0) / 1024 / 1024).toFixed(1);
-      msg.textContent = `Uploading ${totalMB} MB to server...`;
+      // Read all files as text
+      let allMessages = [];
+      for (const file of _dashRawFiles) {
+        msg.textContent = `📖 Parsing ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)…`;
+        const text = await file.text();
+        let parsed;
+        try { parsed = JSON.parse(text); }
+        catch(e) { throw new Error(`"${file.name}" is not valid JSON: ${e.message}`); }
+        const msgs = Array.isArray(parsed) ? parsed : (parsed.messages || []);
+        allMessages = allMessages.concat(msgs);
+      }
+      // Dedup by id
+      const msgMap = new Map();
+      for (const m of allMessages) { const k=`${m.channel_id||0}:${m.id}`; if(!msgMap.has(k)) msgMap.set(k,m); }
+      const messages = [...msgMap.values()];
 
-      // ── Use FormData (multipart/form-data) — matches multer upload.array('files') ──
-      const fd = new FormData();
-      _dashRawFiles.forEach(file => fd.append('files', file, file.name));
+      msg.textContent = `⚙️ Extracting links from ${messages.length.toLocaleString()} messages…`;
+      // Yield to UI
+      await new Promise(r=>setTimeout(r,30));
 
-      const res = await fetch('/api/scrape/upload-export', {
+      const { links, skipped } = _parseMessages(messages);
+
+      if (!links.length) throw new Error('No download links found in this export file.');
+
+      const payloadKB = (JSON.stringify(links).length/1024).toFixed(0);
+      msg.textContent = `📡 Sending ${links.length} links (${payloadKB} KB) to server…`;
+
+      const res = await fetch('/api/scrape/save-extracted', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }, // NO Content-Type — browser sets multipart boundary automatically
-        body: fd,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ links, messageCount: messages.length, skipped }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Upload failed');
+      if (!res.ok) throw new Error(data.message || 'Save failed');
       msg.style.color = '#22c55e';
       msg.textContent = data.message;
       dashCheckExportStatus();
