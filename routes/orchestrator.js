@@ -127,37 +127,7 @@ router.get('/start', async (req, res) => {
 
   let importSrc = undefined;
   if (skipScraper) {
-    try {
-      const PipelineCache = require('../models/PipelineCache');
-      const mongoose = require('mongoose');
-
-      if (mongoose.connection.readyState !== 1) {
-        await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
-      }
-
-      const cache = await PipelineCache.findOne({ key: 'extracted_links' }, 'count savedAt').lean();
-      if (cache && cache.count > 0) {
-        const ExtractedLinkM = require('../models/ExtractedLink');
-        const links = await ExtractedLinkM.find({}).lean();
-        const clean = links.map(({ _id, __v, uploadBatch, ...rest }) => rest);
-        const osp = require('path');
-        const fs  = require('fs');
-        const tmpFile = osp.join(process.env.VERCEL ? '/tmp' : __dirname+'/..', 'links_for_bypasser.json');
-        fs.writeFileSync(tmpFile, JSON.stringify(clean));
-        importSrc = tmpFile;
-        emit(`📂 Skip Scraper: loaded ${clean.length} links from MongoDB (${new Date(cache.savedAt).toLocaleDateString()})`);
-      } else {
-        emit(`❌ Skip Scraper: no cached data found. Upload telegram_export.json first.`);
-        pipelineRunning = false;
-        res.end();
-        return;
-      }
-    } catch (err) {
-      emit(`❌ Skip Scraper cache load failed: ${err.message}`);
-      pipelineRunning = false;
-      res.end();
-      return;
-    }
+    emit(`🔄 Skip Scraper: Will re-extract fresh from telegram_export.json`);
   } else {
     emit(`🔄 Full Pipeline: will re-extract fresh from telegram_export.json`);
   }
@@ -200,35 +170,7 @@ router.post('/start', auth, async (req, res) => {
 
   let importSrc = undefined;
   if (skipScraper) {
-    try {
-      const PipelineCache = require('../models/PipelineCache');
-      const mongoose = require('mongoose');
-      if (mongoose.connection.readyState !== 1) {
-        await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
-      }
-      const cache = await PipelineCache.findOne({ key: 'extracted_links' }, 'count savedAt').lean();
-      if (cache && cache.count > 0) {
-        const ExtractedLinkM = require('../models/ExtractedLink');
-        const links = await ExtractedLinkM.find({}).lean();
-        const clean = links.map(({ _id, __v, uploadBatch, ...rest }) => rest);
-        const osp = require('path');
-        const fs  = require('fs');
-        const tmpFile = osp.join(process.env.VERCEL ? '/tmp' : __dirname+'/../', 'links_for_bypasser.json');
-        fs.writeFileSync(tmpFile, JSON.stringify(clean));
-        importSrc = tmpFile;
-        broadcast(`Skip Scraper: loaded ${clean.length} links from MongoDB`);
-      } else {
-        broadcast(`Skip Scraper: no cached data found. Upload telegram_export.json first.`);
-        pipelineRunning = false;
-        setPipelineRunningFlag(false);
-        return;
-      }
-    } catch (err) {
-      broadcast(`Skip Scraper cache load failed: ${err.message}`);
-      pipelineRunning = false;
-      setPipelineRunningFlag(false);
-      return;
-    }
+    broadcast(`🔄 Skip Scraper: Will re-extract fresh from telegram_export.json`);
   }
 
   try {

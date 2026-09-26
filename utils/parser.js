@@ -776,6 +776,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   cleanedTitle=cleanedTitle
     // ── Strip @channel handles and brand watermarks first ──────────────
     .replace(/^@[A-Za-z0-9_]+\s*/g, '')
+    .replace(/^(?:Name|Title)\s*[:\-]\s*/i, '')
     .replace(/\s*(HOiCHOi|Hoichoi)\s*(RAW|Unlimited|Original)\s*[A-Za-z0-9]*\s*$/i, '')
     .replace(/\s*(JoyMaa|JanaSeksPyaar|PodMereUreJabo|RoserGolla|MosirJANA|LiCKW33D|PodMere[A-Za-z]+)\s*$/i, '')
     .replace(/\b(Benzmovies|NaMovies|Friday4KPopcorn|Malli4U\s*Official|Malli4UOfficial|SPiDEY|LRTX|DS4K|LiCKW33D)\b/gi, '')
@@ -808,7 +809,6 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     .replace(/[\[\(][^\]\)]*[\]\)]/g,'').replace(/#[a-zA-Z0-9_]+/g,'')
     .replace(/[._\-]+/g,' ').replace(/\s+/g,' ')
     // ── Stray standalone digits left from season ranges like "1-5" → "5" ──────────
-    .replace(/(?:^|\s)\d{1,2}(?:\s|$)/g, ' ')
     // ── Generic release-group trailer (final pass) ─────────────────────────
     .replace(/\s+[A-Z][a-z]{1,3}[A-Z][a-zA-Z0-9]{2,14}$/, '')   // CamelCase: "TamilMV"
     .replace(/\s+[A-Z]{3,12}(?:\d+[Kk]?)?$/, '')                  // ALL-CAPS: "TEAMX"
