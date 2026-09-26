@@ -292,6 +292,8 @@ function cleanTitleForApi(title) {
   let cleaned = rawClean
     // ── Normalize Ampersands ──────────────────────────────────────────
     .replace(/\s*&\s*/g, ' and ')
+    // ── Split CamelCase (AhanaPellanta -> Ahana Pellanta) ─────────────
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
     // ── Strip leading numbered lists (e.g. "1. ", "1) ") ─────────────────
     // IMPORTANT: Do NOT strip if the number is followed by letters (could be title like "300 Spartans")
     .replace(/^\s*(\d+)[\).}]\s+(?=\w)/g, '')
@@ -344,7 +346,7 @@ function cleanTitleForApi(title) {
     .replace(/\s+[A-Z]{3,12}(?:\d+[Kk]?)?$/, '')                  // ALL-CAPS: "TEAMX", "DS4K"
     .replace(/\s+s$/i, ''); // strip trailing 'S' often left behind
 
-  const JUNK_WORDS = new Set(['audio', 'video', 'track', 'tracks', 'hdr10', 'h265', 'h264', 's01', 'e04', 'cbr', 'vbr', 'mkv', 'mp4']);
+  const JUNK_WORDS = new Set(['audio', 'video', 'track', 'tracks', 'hdr10', 'h265', 'h264', 's01', 'e04', 'cbr', 'vbr', 'mkv', 'mp4', 'requested']);
   if (!cleaned || cleaned.length < 2 || JUNK_WORDS.has(cleaned.toLowerCase())) {
     return rawClean;
   }
@@ -428,6 +430,7 @@ const JUNK_PATTERNS = [
 
   // ── "Updates Channel", "Backup Channel", "Daily Updates" patterns ──────
   /^(?:Daily|Latest|New|Hot|Top|Fresh)\s+(?:Updates?|Movies?|Releases?)\s*$/i,
+  /^#?requested$/i,
 ];
 function isJunkTitle(title) {
   if (!title || title.length < 2) return true;
