@@ -44,13 +44,11 @@ router.get('/stream', (req, res) => {
   const clientId  = Date.now() + Math.random();
   clients.push({ id: clientId, res });
 
-  // Send connection confirmation + replay log buffer
-  res.write(`data: ${JSON.stringify({ text: '📡 Connected to Orchestrator Live Stream' })}\n\n`);
-  for (const line of logBuffer) {
-    res.write(`data: ${JSON.stringify({ text: line })}\n\n`);
-  }
+  // Send connection confirmation only — do NOT replay log buffer
+  // (replaying stale error lines caused confusion on page load)
+  res.write(`data: ${JSON.stringify({ text: 'Connected to Orchestrator Live Stream' })}\n\n`);
   if (pipelineRunning) {
-    res.write(`data: ${JSON.stringify({ text: '⚠️  Pipeline is currently running — logs above are from this run.' })}\n\n`);
+    res.write(`data: ${JSON.stringify({ text: 'Pipeline is currently running.' })}\n\n`);
   }
 
   const heartbeat = setInterval(() => {
@@ -213,13 +211,12 @@ router.post('/heal', auth, async (req, res) => {
 // finish its current unit of work (one import group) then the flag is checked.
 let _stopRequested = false;
 router.post('/stop', auth, (req, res) => {
-  if (!pipelineRunning) {
-    return res.status(400).json({ error: 'No pipeline is running' });
-  }
+  // On Vercel serverless, in-memory pipelineRunning may be false across instances.
+  // Still attempt to mark stop so pipeline can check it if it's running.
   _stopRequested = true;
   pipelineRunning = false;
   setPipelineRunningFlag(false);
-  broadcast('Stop requested by admin. Pipeline will finish current task then exit.');
+  broadcast('Stop requested by admin.');
   res.json({ message: 'Stop requested' });
 });
 
