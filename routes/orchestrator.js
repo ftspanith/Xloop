@@ -243,58 +243,63 @@ router.post('/start', auth, async (req, res) => {
   .finally(() => { pipelineRunning = false; pipelinePromise = null; setPipelineRunningFlag(false); });
 });
 
-// ── Import Batch — processes N title-groups per call (Vercel-timeout safe) ───
-// Frontend chains calls: offset=0 → offset=batchSize → … until done=true
+// -- Import Batch: fully enriched TMDB+OMDB per group (Vercel-timeout safe) --
 router.post('/import-batch', auth, async (req, res) => {
-  const { offset = 0, batchSize = 80 } = req.body || {};
+  const { offset = 0, batchSize = 40 } = req.body || {};
   const mongoose = require('mongoose');
-  const PipelineCache = require('../models/PipelineCache');
   const ExtractedLinkM = require('../models/ExtractedLink');
   const Movie = require('../models/Movie');
   const { cleanTitleForApi } = require('../utils/parser');
+  const { searchTMDB, searchOMDB } = require('../pipeline_full');
 
   try {
     if (mongoose.connection.readyState !== 1) {
       await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
     }
 
-    // Load all extracted links from MongoDB (cached by scraper)
     const links = await ExtractedLinkM.find({}).lean();
     if (!links.length) {
       return res.json({ done: true, added: 0, updated: 0, skipped: 0, total: 0, nextOffset: 0, message: 'No links cached. Run Full Pipeline first.' });
     }
 
-    // Group by title+year (same logic as pipeline_full.js)
     const groups = {};
     for (const item of links) {
       if (item.host === 'Shortlink' && !item.bypassedUrl) continue;
-      const key = `${(item.title || '').toLowerCase().trim()}__${item.year || ''}`;
-      if (!groups[key]) groups[key] = { items: [] };
+      const cTitle = cleanTitleForApi(item.title || '', item.year);
+      if (!cTitle) continue;
+      const key = cTitle.toLowerCase() + '__' + (item.year || '');
+      if (!groups[key]) groups[key] = { items: [], msgDate: item.date || null };
       groups[key].items.push(item);
     }
     const groupEntries = Object.entries(groups);
     const total = groupEntries.length;
-    const batch = groupEntries.slice(offset, offset + batchSize);
-    const nextOffset = offset + batch.length;
+    const thisBatch = groupEntries.slice(offset, offset + batchSize);
+    const nextOffset = offset + thisBatch.length;
     const done = nextOffset >= total;
 
     let added = 0, updated = 0, skipped = 0;
     const logs = [];
-    const emit = (m) => { const c = m.replace(/\x1b\[[0-9;]*m/g, ''); logs.push(c); broadcast(c); };
+    const emit = (m) => {
+      const c = m.replace(/\x1b\[[0-9;]*m/g, '');
+      logs.push(c);
+      broadcast(c);
+    };
 
-    emit(`Batch ${Math.floor(offset/batchSize)+1}: processing groups ${offset+1}–${nextOffset} of ${total}...`);
+    emit('Batch ' + (Math.floor(offset / batchSize) + 1) + ': groups ' + (offset + 1) + '-' + nextOffset + ' of ' + total);
 
-    for (const [, group] of batch) {
+    const QUALITY_ORDER = ['4K', '1080p', '720p', '480p', '360p', 'HD'];
+
+    for (const [, group] of thisBatch) {
       try {
         const rep = group.items[0];
-        const isSer = rep.isSeries || rep.contentType === 'series' || rep.contentType === 'anime';
+        const isSer = !!(rep.isSeries || rep.contentType === 'series' || rep.contentType === 'anime');
         const cleanTitle = cleanTitleForApi(rep.title || '', rep.year);
-        if (!cleanTitle) { skipped++; continue; }
+        if (!cleanTitle || cleanTitle.length < 2) { skipped++; continue; }
 
-        const esc = cleanTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const esc = cleanTitle.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
         let existing = rep.year
-          ? await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' }, year: rep.year }).lean()
-          : await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' } }).lean();
+          ? await Movie.findOne({ title: { $regex: '^' + esc + '$', $options: 'i' }, year: Number(rep.year) }).lean()
+          : await Movie.findOne({ title: { $regex: '^' + esc + '$', $options: 'i' } }).lean();
 
         const dlObjs = group.items.map(it => ({
           url: it.bypassedUrl || it.url || '',
@@ -303,18 +308,61 @@ router.post('/import-batch', auth, async (req, res) => {
           filename: it.filename || '',
           codec: it.codec || '',
           host: it.host || '',
+          size: it.size || '',
+          season: it.season || null,
+          episode: it.episode || null,
         })).filter(d => d.url);
 
         if (!existing) {
+          let meta = {};
+          const season = rep.season || null;
+          const tmdb = await searchTMDB(cleanTitle, rep.year, isSer, season, group.msgDate, rep.imdbId || null, rep.tmdbIdHint || null);
+          if (tmdb) {
+            Object.assign(meta, tmdb);
+            if (!meta.poster || !meta.rating || !meta.imdbId) {
+              const omdb = await searchOMDB(cleanTitle, rep.year, isSer);
+              if (omdb) {
+                if (!meta.poster && omdb.poster) meta.poster = omdb.poster;
+                if (!meta.rating && omdb.rating) meta.rating = omdb.rating;
+                if (!meta.description && omdb.description) meta.description = omdb.description;
+                if (!meta.duration && omdb.duration) meta.duration = omdb.duration;
+                if (!(meta.genre && meta.genre.length) && omdb.genre && omdb.genre.length) meta.genre = omdb.genre;
+                if (omdb.imdbId) meta.imdbId = omdb.imdbId;
+              }
+            }
+          } else {
+            const omdb = await searchOMDB(cleanTitle, rep.year, isSer);
+            if (omdb) Object.assign(meta, omdb, { tmdbId: '' });
+          }
+
+          const genreLower = (meta.genre || []).map(g => (g || '').toLowerCase());
+          const isAnim = genreLower.some(g => /animation|anime/.test(g));
+          const origLang = (meta.originalLanguage || '').toLowerCase();
+          const isEast = /^(japanese|korean|chinese|mandarin|cantonese|ja|ko|zh)$/.test(origLang);
+          const isAnimeContent = rep.contentType === 'anime';
+          let finalType;
+          if ((isAnim && isEast) || (isAnimeContent && (isAnim || isEast)) || isAnimeContent) finalType = 'anime';
+          else if (meta.type === 'series' || isSer) finalType = 'series';
+          else finalType = 'movie';
+
+          const allQualities = dlObjs.map(d => d.quality);
+          const bestQuality = QUALITY_ORDER.find(q => allQualities.includes(q)) || 'HD';
+          const finalTitle = meta.title || rep.title || cleanTitle;
+
           await Movie.create({
-            title: rep.title || cleanTitle,
-            type: isSer ? (rep.contentType || 'series') : 'movie',
-            year: rep.year || null,
-            quality: rep.quality || 'HD',
+            title: finalTitle, tmdbId: meta.tmdbId || '', imdbId: meta.imdbId || '',
+            type: finalType, totalSeasons: meta.totalSeasons || 0,
+            description: meta.description || '', poster: meta.poster || '', backdrop: meta.backdrop || '',
+            rating: meta.rating || 0, year: meta.year || rep.year || null,
+            genre: meta.genre || [], duration: meta.duration || '',
+            quality: bestQuality, language: meta.originalLanguage || '',
+            formats: [...new Set(allQualities)].filter(Boolean),
+            codecs: [...new Set(dlObjs.map(d => d.codec))].filter(c => c && c !== 'Other'),
+            languages: [...new Set(dlObjs.flatMap(d => (d.language || '').split(',').map(l => l.trim())))].filter(Boolean),
             downloads: dlObjs,
           });
           added++;
-          emit(`Added: [${rep.title || cleanTitle}] (${rep.year || '?'})`);
+          emit((meta.poster ? 'Added: ' : 'Added (no poster): ') + '[' + finalTitle + '] (' + (meta.year || rep.year || '?') + ') — ' + finalType);
         } else {
           const existingUrls = new Set((existing.downloads || []).map(d => d.url));
           const newDls = dlObjs.filter(d => !existingUrls.has(d.url));
@@ -323,12 +371,15 @@ router.post('/import-batch', auth, async (req, res) => {
             updated++;
           } else { skipped++; }
         }
-      } catch(e) { emit(`Error: ${e.message}`); skipped++; }
+      } catch (e) {
+        emit('Error (' + ((group.items[0] && group.items[0].title) || '?') + '): ' + e.message);
+        skipped++;
+      }
     }
 
-    emit(`Batch done — Added: ${added} | Updated: ${updated} | Skipped: ${skipped} | Progress: ${nextOffset}/${total}`);
+    emit('Batch done: Added ' + added + ' | Updated ' + updated + ' | Skipped ' + skipped + ' | Progress ' + nextOffset + '/' + total);
     if (done) {
-      emit('All batches complete! Run Heal DB to fill missing posters/metadata.');
+      emit('All batches complete! Imported with TMDB/OMDB posters and full metadata.');
       setPipelineRunningFlag(false);
     }
 
@@ -338,7 +389,6 @@ router.post('/import-batch', auth, async (req, res) => {
     return res.status(500).json({ error: e.message });
   }
 });
-
 // ── Heal Only ────────────────────────────────────────────────────────────────
 router.post('/heal', auth, async (req, res) => {
   if (pipelineRunning) {

@@ -889,4 +889,4 @@ if (IS_MAIN) {
 }
 
 // ── When require()'d by orchestrator route ────────────────────────────────────
-module.exports = { runPipeline: main };
+module.exports = { runPipeline: main, searchTMDB, searchOMDB, fetchWithRetry };
