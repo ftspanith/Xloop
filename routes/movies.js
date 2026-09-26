@@ -37,7 +37,7 @@ async function getTmdbIds(endpoint, cacheKey) {
       params: { api_key: TMDB_KEY, language: 'en-US', page: 2 }
     });
     const ids = [...res.data.results, ...res2.data.results].map(m => m.id.toString());
-    tmdbCache[cacheKey] = { data: ids, expires: Date.now() + 1000 * 60 * 60 * 4 }; // cache for 4 hours
+    tmdbCache[cacheKey] = { data: ids, expires: Date.now() + 1000 * 60 * 15 }; // cache 15 min
     return ids;
   } catch (err) {
     return [];
@@ -74,12 +74,23 @@ function uniqueMovies(movies) {
 
 // ── GET /api/movies/featured ──────────────────────────────────────────────────
 router.get('/featured', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     let rawMovies = await Movie.find({ type: 'movie', isFeatured: true, backdrop: { $ne: '' } })
       .sort({ createdAt: -1 }).limit(15).select('-__v -downloads');
     let movies = uniqueMovies(rawMovies).slice(0, 6);
     
-    // Cross-reference with real-world TMDB Popular if manual featured is empty
+    // First: fall back to newest movies with backdrops (fast, no TMDB needed)
+    if (movies.length < 6) {
+      const recent = await Movie.find({ type: 'movie', backdrop: { $ne: '' } })
+        .sort({ createdAt: -1 }).limit(20).select('-__v -downloads');
+      for (const m of uniqueMovies(recent)) {
+        if (!isDuplicate(m, movies)) movies.push(m);
+        if (movies.length >= 6) break;
+      }
+    }
+
+    // Second: cross-reference with TMDB Popular if still not enough
     if (movies.length < 6) {
       const popularIds = await getTmdbIds('movie/popular', 'featured');
       if (popularIds.length > 0) {
@@ -110,6 +121,7 @@ router.get('/featured', async (req, res) => {
 
 // ── GET /api/movies/trending ──────────────────────────────────────────────────
 router.get('/trending', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     let rawMovies = await Movie.find({ type: 'movie', isTrending: true, poster: { $ne: '' } })
       .sort({ views: -1 }).limit(30).select('-__v -downloads');
@@ -146,6 +158,7 @@ router.get('/trending', async (req, res) => {
 
 // ── GET /api/movies/latest ────────────────────────────────────────────────────
 router.get('/latest', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     let rawMovies = await Movie.find({ type: 'movie' })
       .sort({ createdAt: -1 }).limit(30).select('-__v -downloads');
@@ -167,6 +180,7 @@ router.get('/latest', async (req, res) => {
 
 // ── GET /api/movies/top-rated ─────────────────────────────────────────────────
 router.get('/top-rated', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     let movies = [];
     const topRatedIds = await getTmdbIds('movie/top_rated', 'topRated');
@@ -192,6 +206,7 @@ router.get('/top-rated', async (req, res) => {
 
 // ── GET /api/movies/this-year ─────────────────────────────────────────────────
 router.get('/this-year', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const currentYear = new Date().getFullYear();
     let rawMovies = await Movie.find({ type: 'movie', year: currentYear })
@@ -267,6 +282,7 @@ router.get('/scan-all', auth, async (req, res) => {
 
 // ── GET /api/movies  (list + filters + pagination) ───────────────────────────
 router.get('/', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const { genre, year, quality, type, language, search, sort = 'createdAt', page = 1, limit = 20 } = req.query;
     const isAdmin = !!req.headers['authorization'];

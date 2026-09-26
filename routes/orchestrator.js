@@ -65,9 +65,38 @@ router.get('/stream', (req, res) => {
 });
 
 // ── Status ────────────────────────────────────────────────────────────────────
-router.get('/status', (req, res) => {
-  res.json({ running: pipelineRunning });
+router.get('/status', async (req, res) => {
+  if (pipelineRunning) return res.json({ running: true });
+  try {
+    const PipelineCache = require('../models/PipelineCache');
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1) {
+      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+    }
+    const flag = await PipelineCache.findOne({ key: '_pipeline_running' }).lean();
+    const isRunning = flag && flag.running === true &&
+      (Date.now() - new Date(flag.updatedAt || 0).getTime() < 30 * 60 * 1000);
+    return res.json({ running: !!isRunning });
+  } catch (_) {
+    return res.json({ running: pipelineRunning });
+  }
 });
+
+// Persist running state to MongoDB so all serverless instances agree
+async function setPipelineRunningFlag(running) {
+  try {
+    const PipelineCache = require('../models/PipelineCache');
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1) {
+      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+    }
+    await PipelineCache.findOneAndUpdate(
+      { key: '_pipeline_running' },
+      { $set: { running, updatedAt: new Date() } },
+      { upsert: true }
+    );
+  } catch (_) { /* non-critical */ }
+}
 
 // ── Start pipeline (auth required) ───────────────────────────────────────────
 router.post('/start', auth, async (req, res) => {
@@ -83,7 +112,8 @@ router.post('/start', auth, async (req, res) => {
 
   // Run in-process, stream logs via broadcast()
   pipelineRunning = true;
-  broadcast(`🚀 Starting ${label}...`);
+  setPipelineRunningFlag(true); // persist to MongoDB for cross-instance status
+  broadcast(`Starting ${label}...`);
 
   // For Skip Scraper: load existing links from MongoDB (persists across Lambda instances).
   // For Full Pipeline: importSrc=undefined so pipeline re-extracts fresh (overwrites JSONs).
@@ -142,14 +172,15 @@ router.post('/start', auth, async (req, res) => {
     emitter:   broadcast,
   })
   .then(() => {
-    broadcast('🏁 Pipeline finished successfully.');
+    broadcast('Pipeline finished successfully.');
   })
   .catch(err => {
-    broadcast(`❌ Pipeline error: ${err.message}`);
+    broadcast(`Pipeline error: ${err.message}`);
   })
   .finally(() => {
     pipelineRunning = false;
     pipelinePromise = null;
+    setPipelineRunningFlag(false); // clear MongoDB flag
   });
 });
 
@@ -162,7 +193,7 @@ router.post('/heal', auth, async (req, res) => {
   res.json({ message: 'Healer started' });
 
   pipelineRunning = true;
-  broadcast('🩺 Starting Database Healer (heal-only mode)...');
+  broadcast('Starting Database Healer (heal-only mode)...');
 
   const runPipeline = await getRunPipeline();
   pipelinePromise = runPipeline({
@@ -173,9 +204,9 @@ router.post('/heal', auth, async (req, res) => {
     importSrc: require('path').join(__dirname, '..', 'bypassed_links.json'),
     emitter:  broadcast,
   })
-  .then(() => broadcast('🏁 Healer finished.'))
-  .catch(err => broadcast(`❌ Healer error: ${err.message}`))
-  .finally(() => { pipelineRunning = false; pipelinePromise = null; });
+  .then(() => broadcast('Healer finished.'))
+  .catch(err => broadcast(`Healer error: ${err.message}`))
+  .finally(() => { pipelineRunning = false; pipelinePromise = null; setPipelineRunningFlag(false); });
 });
 
 // ── Stop ─────────────────────────────────────────────────────────────────────
@@ -189,7 +220,8 @@ router.post('/stop', auth, (req, res) => {
   }
   _stopRequested = true;
   pipelineRunning = false;
-  broadcast('🛑 Stop requested by admin. Pipeline will finish current task then exit.');
+  setPipelineRunningFlag(false);
+  broadcast('Stop requested by admin. Pipeline will finish current task then exit.');
   res.json({ message: 'Stop requested' });
 });
 

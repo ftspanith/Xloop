@@ -291,6 +291,14 @@ async function loadHomepage() {
     loadSlider('/api/movies/by-language/Malayalam', 'malayalamSlider', 'movie');
     loadSlider('/api/movies/by-language/English', 'englishSlider', 'movie');
     
+    // Auto-refresh key sliders every 30s so new imports appear without page reload
+    setInterval(() => {
+      loadSlider('/api/movies/this-year', 'featuredSlider', 'movie', true);
+      loadSlider('/api/movies/latest', 'originalsSlider', 'movie');
+      loadSlider('/api/movies?type=series&limit=15&sort=createdAt', 'tvShowsSlider', 'series');
+      loadSlider('/api/movies?type=anime&limit=15&sort=createdAt', 'animeSlider', 'anime');
+    }, 30000);
+
     // Auto-scroll all horizontal sliders every 10s
     setTimeout(() => {
       document.querySelectorAll('.slider').forEach(slider => {
