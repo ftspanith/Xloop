@@ -104,7 +104,8 @@ router.get('/start', async (req, res) => {
 
   const skipScraper = req.query.skipScraper === 'true';
   const resume = req.query.resume === 'true';
-  const skipBypass = req.query.skipBypass === 'true';
+  // If skipBypass is explicitly passed, parse it. Otherwise default to skipScraper.
+  const skipBypass = req.query.skipBypass ? req.query.skipBypass === 'true' : skipScraper;
   const label = skipScraper ? 'Skip Scraper (import-only)' : 'Full Pipeline';
 
   // Setup SSE
@@ -233,7 +234,7 @@ router.post('/start', auth, async (req, res) => {
   try {
     const runPipeline = await getRunPipeline();
     await runPipeline({
-      noBypass:  skipBypass !== undefined ? skipBypass : !!skipScraper,
+      noBypass:  skipBypass,
       noWipe:    !!skipScraper,
       resume:    !!resume,
       importSrc,
@@ -537,3 +538,53 @@ router.post('/clear-logs', auth, (req, res) => {
 });
 
 module.exports = router;
+router.get('/start-local', async (req, res) => {
+  if (pipelineRunning) return res.status(400).json({ error: 'Pipeline is already running' });
+
+  const skipScraper = req.query.skipScraper === 'true';
+  const label = skipScraper ? 'Skip Scraper (Local Mode)' : 'Full Pipeline (Local Mode)';
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  pipelineRunning = true;
+  setPipelineRunningFlag(true);
+
+  const emit = (msg) => {
+    const clean = msg.replace(/\x1b\[[0-9;]*m/g, '');
+    try { res.write(`data: ${JSON.stringify({ text: clean })}\n\n`); } catch(e) {}
+  };
+
+  emit(`🚀 Starting ${label}...`);
+
+  const { spawn } = require('child_process');
+  const readline = require('readline');
+  const path = require('path');
+
+  const args = ['orchestrator.js'];
+  if (skipScraper) args.push('--skip-scraper');
+
+  const activeProcess = spawn('node', args, { cwd: path.join(__dirname, '..') });
+
+  readline.createInterface({ input: activeProcess.stdout }).on('line', line => {
+    if (line.trim()) emit(line);
+  });
+  readline.createInterface({ input: activeProcess.stderr }).on('line', line => {
+    if (line.trim()) emit(`ERROR: ${line}`);
+  });
+
+  activeProcess.on('close', code => {
+    emit(`🏁 Pipeline finished with exit code ${code}`);
+    pipelineRunning = false;
+    setPipelineRunningFlag(false);
+    res.end();
+  });
+
+  req.on('close', () => {
+    if (pipelineRunning && activeProcess) {
+       // if user closes browser, we let the process keep running locally
+    }
+  });
+});

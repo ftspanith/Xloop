@@ -811,7 +811,7 @@
     try {
       appendLog(skipScraper ? 'Starting FAST LOCAL Loop (Skip Scraper mode)...' : 'Starting Full Pipeline...');
       if (window._pipelineES) { window._pipelineES.close(); }
-      window._pipelineES = new EventSource('/api/orchestrator/start?skipScraper=' + skipScraper);
+      window._pipelineES = new EventSource('/api/orchestrator/start-local?skipScraper=' + skipScraper);
       window._pipelineES.onmessage = (e) => {
         try {
             const ev = JSON.parse(e.data);
