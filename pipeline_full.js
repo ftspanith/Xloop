@@ -249,7 +249,7 @@ async function phaseBypass(allEntries, existingBypassed, CONCURRENCY = 3) {
 // ═══════════════════════════════════════════════════════════════════════════
 let _lastApiCall = 0;
 async function apiThrottle() {
-  const wait = 100 - (Date.now() - _lastApiCall);
+  const wait = 500 - (Date.now() - _lastApiCall);
   if (wait > 0) await sleep(wait);
   _lastApiCall = Date.now();
 }
