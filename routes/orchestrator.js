@@ -247,7 +247,7 @@ router.post('/start', auth, async (req, res) => {
 // Each call processes batchSize groups with real poster/metadata lookup.
 // Frontend chains: offset=0 => offset+=batchSize => ... until done=true
 router.post('/import-batch', auth, async (req, res) => {
-  const { offset = 0, batchSize = 15 } = req.body || {};
+  const { offset = 0, batchSize = 5 } = req.body || {};
   const mongoose = require('mongoose');
   const ExtractedLinkM = require('../models/ExtractedLink');
   const Movie = require('../models/Movie');
