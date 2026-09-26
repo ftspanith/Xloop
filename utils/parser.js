@@ -820,7 +820,9 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const _slM = (masterTitle || '').trim().match(/^([A-Z])(?:\s+\(|\s+\[|\.|\s+\d{4})/);
     if (_slM) { cleanedTitle = _slM[1]; _usedNumericFallback = true; }
   }
-  if (!_usedNumericFallback && (!cleanedTitle || cleanedTitle.length < 1 || isJunkTitle(cleanedTitle))) cleanedTitle = '';
+  if (!_usedNumericFallback && (!cleanedTitle || cleanedTitle.length < 1 || isJunkTitle(cleanedTitle))) {
+    return null;
+  }
 
   // Language detection — multi-source
   const audioLang=extractAudioTracks(emojiStripped);
