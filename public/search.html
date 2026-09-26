@@ -157,7 +157,7 @@
 
   <!-- SEARCH HERO -->
   <div class="search-hero">
-    <div class="search-title">🔍 Search XLOOP</div>
+    <div class="search-title"> Search XLOOP</div>
 
     <div class="search-input-outer">
       <form class="search-input-wrap" id="mainSearchForm" autocomplete="off">
@@ -174,9 +174,9 @@
     <!-- Type filter tabs -->
     <div class="type-tabs" id="typeTabs">
       <div class="type-tab active" data-type="">All</div>
-      <div class="type-tab" data-type="movie">🎬 Movies</div>
-      <div class="type-tab" data-type="series">📺 TV Shows</div>
-      <div class="type-tab" data-type="anime">✨ Anime</div>
+      <div class="type-tab" data-type="movie"> Movies</div>
+      <div class="type-tab" data-type="series"> TV Shows</div>
+      <div class="type-tab" data-type="anime"> Anime</div>
     </div>
 
     <div class="search-status" id="searchStatus"></div>
@@ -202,12 +202,12 @@
 
   <!-- Mobile Nav Overlay -->
   <div class="mobile-nav-overlay" id="mobileNavOverlay">
-    <button class="mobile-nav-close" onclick="closeMobileNav()" aria-label="Close menu">✕</button>
-    <a href="/" onclick="closeMobileNav()">🏠 Home</a>
-    <a href="/movies.html" onclick="closeMobileNav()">🎬 Movies</a>
-    <a href="/shows.html" onclick="closeMobileNav()">📺 TV Shows</a>
-    <a href="/anime.html" onclick="closeMobileNav()">✨ Anime</a>
-    <a href="/search.html" onclick="closeMobileNav()">🔍 Search</a>
+    <button class="mobile-nav-close" onclick="closeMobileNav()" aria-label="Close menu"></button>
+    <a href="/" onclick="closeMobileNav()"> Home</a>
+    <a href="/movies.html" onclick="closeMobileNav()"> Movies</a>
+    <a href="/shows.html" onclick="closeMobileNav()"> TV Shows</a>
+    <a href="/anime.html" onclick="closeMobileNav()"> Anime</a>
+    <a href="/search.html" onclick="closeMobileNav()"> Search</a>
     <div class="mobile-nav-search">
       <input type="text" id="mobileNavSearchInput" placeholder="Search titles..."/>
       <button onclick="mobileNavSearch()">Go</button>
@@ -305,7 +305,7 @@
               <img src="${poster}" onerror="this.style.display='none'" alt="${item.title}" loading="lazy">
               <div class="suggestion-item-info">
                 <div class="suggestion-item-title">${item.title}</div>
-                <div class="suggestion-item-meta">${item.year || ''} ${item.rating ? '★ ' + item.rating : ''}</div>
+                <div class="suggestion-item-meta">${item.year || ''} ${item.rating ? ' ' + item.rating : ''}</div>
               </div>
               <span class="suggestion-badge">${badge}</span>
             </div>`;
@@ -350,7 +350,7 @@
         if (!items.length) {
           resultsGrid.innerHTML = `
             <div class="search-empty">
-              <div class="search-empty-icon">🔍</div>
+              <div class="search-empty-icon"></div>
               <h3>No results for "<strong>${q}</strong>"</h3>
               <p>Try different keywords, or check the spelling.</p>
             </div>`;
@@ -362,7 +362,7 @@
           buildPagination(data.total || items.length, page, 24);
         }
       } catch (err) {
-        resultsGrid.innerHTML = `<div class="search-empty"><div class="search-empty-icon">⚠️</div><h3>Search failed</h3><p>${err.message}</p></div>`;
+        resultsGrid.innerHTML = `<div class="search-empty"><div class="search-empty-icon">️</div><h3>Search failed</h3><p>${err.message}</p></div>`;
         setStatus('Search failed. Please try again.');
       }
     }

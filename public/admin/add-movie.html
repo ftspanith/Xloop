@@ -9,7 +9,7 @@
 <body>
   <div class="admin-layout">
     <aside class="admin-sidebar" id="adminSidebar">
-      <div class="admin-logo"><button class="sidebar-close-btn" onclick="closeMobileSidebar()" aria-label="Close menu">✕</button></div>
+      <div class="admin-logo"><button class="sidebar-close-btn" onclick="closeMobileSidebar()" aria-label="Close menu"></button></div>
       <nav class="admin-nav">
         <a href="/admin/dashboard.html">Dashboard</a>
         <a href="/admin/add-movie.html" class="active">+ Add Movie</a>
@@ -23,7 +23,7 @@
     </aside>
     
     <main class="admin-content">
-      <button class="mobile-menu-btn" onclick="openMobileSidebar()" aria-label="Open menu">☰</button>
+      <button class="mobile-menu-btn" onclick="openMobileSidebar()" aria-label="Open menu"></button>
     Add New Movie</h1>
 
       <!-- QUICK PASTE SECTION -->
@@ -47,7 +47,7 @@
             <label class="form-label">Movie Title</label>
             <div style="display:flex; gap:10px;">
               <input type="text" id="title" class="form-input" style="flex:1;" required>
-              <button type="button" class="btn-primary" onclick="autoFillTmdb()" style="white-space:nowrap; padding:0 20px;">🪄 Auto Fill TMDB</button>
+              <button type="button" class="btn-primary" onclick="autoFillTmdb()" style="white-space:nowrap; padding:0 20px;"> Auto Fill TMDB</button>
             </div>
           </div>
           <div class="form-group">
@@ -212,30 +212,30 @@
           const duplicate = data.duplicateCount || 0;
 
           if (data.errors && data.errors.length > 0) {
-            statusEl.textContent = '❌ ' + data.errors[0];
+            statusEl.textContent = ' ' + data.errors[0];
             statusEl.style.color = 'var(--red)';
           } else if (added > 0 || updated > 0) {
             statusEl.textContent = added > 0
-              ? `✅ Added "${data.addedTitle || 'movie'}" successfully!`
-              : `🔄 Updated existing entry with new download link!`;
+              ? ` Added "${data.addedTitle || 'movie'}" successfully!`
+              : ` Updated existing entry with new download link!`;
             statusEl.style.color = '#10b981';
             document.getElementById('quick-paste-text').value = '';
           } else if (duplicate > 0) {
-            statusEl.textContent = '✅ Already in database — no changes needed.';
+            statusEl.textContent = ' Already in database — no changes needed.';
             statusEl.style.color = '#10b981';
             document.getElementById('quick-paste-text').value = '';
           } else if (low > 0) {
-            statusEl.textContent = '⚠️ Could not identify movie with enough confidence. Try adding the movie name explicitly on the first line.';
+            statusEl.textContent = '️ Could not identify movie with enough confidence. Try adding the movie name explicitly on the first line.';
             statusEl.style.color = '#f59e0b';
           } else if (skipped > 0) {
-            statusEl.textContent = '⚠️ Could not detect movie name. Make sure you paste the filename + link together (no blank line between them).';
+            statusEl.textContent = '️ Could not detect movie name. Make sure you paste the filename + link together (no blank line between them).';
             statusEl.style.color = '#f59e0b';
           } else {
-            statusEl.textContent = '⚠️ Nothing was imported. ' + (data.message || '');
+            statusEl.textContent = '️ Nothing was imported. ' + (data.message || '');
             statusEl.style.color = '#f59e0b';
           }
         } catch (err) {
-          statusEl.textContent = '❌ ' + err.message;
+          statusEl.textContent = ' ' + err.message;
           statusEl.style.color = 'var(--red)';
         } finally {
           btn.disabled = false;

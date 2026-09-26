@@ -364,7 +364,7 @@
   <aside class="admin-sidebar" id="adminSidebar">
     <div class="admin-logo">
       XLOOP Admin
-      <button class="sidebar-close-btn" id="sidebarCloseBtn" onclick="closeMobileSidebar()" aria-label="Close menu">✕</button>
+      <button class="sidebar-close-btn" id="sidebarCloseBtn" onclick="closeMobileSidebar()" aria-label="Close menu"></button>
     </div>
     <nav class="admin-nav">
       <a href="/admin/dashboard.html" class="active">Dashboard</a>
@@ -636,7 +636,7 @@
                </div>`
           }
           <div style="position:absolute;top:6px;left:6px;background:${color};color:#fff;font-size:0.65rem;font-weight:800;padding:2px 7px;border-radius:999px;text-transform:uppercase;letter-spacing:.05em;">${item._typeLabel}</div>
-          ${item.rating ? `<div style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,0.75);color:#f59e0b;font-size:0.7rem;font-weight:700;padding:2px 6px;border-radius:5px;">★ ${item.rating}</div>` : ''}
+          ${item.rating ? `<div style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,0.75);color:#f59e0b;font-size:0.7rem;font-weight:700;padding:2px 6px;border-radius:5px;"> ${item.rating}</div>` : ''}
         </div>
         <div style="padding:8px 10px;">
           <div style="font-size:0.78rem;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${item.title}">${item.title}</div>
@@ -701,11 +701,11 @@
 
   function classifyLine(t) {
     if (/ERROR|Fatal:|failed with code [^0]/i.test(t))                return 'err';
-    if (/🏁.*exit code 0|successfully|completed|healed/i.test(t))    return 'success';
-    if (/🏁.*exit code [^0]|failed with code/i.test(t))              return 'err';
+    if (/.*exit code 0|successfully|completed|healed/i.test(t))    return 'success';
+    if (/.*exit code [^0]|failed with code/i.test(t))              return 'err';
     if (/Starting Master|ORCHESTRATOR\]|Starting:/i.test(t))          return 'highlight';
-    if (/^➕ Added:/i.test(t))                                         return 'add';
-    if (/^🔗 Merged link:/i.test(t))                                  return 'merge';
+    if (/^ Added:/i.test(t))                                         return 'add';
+    if (/^ Merged link:/i.test(t))                                  return 'merge';
     if (/Connected|Skipping|Ready|Wiping/i.test(t))                   return 'sys';
     return '';
   }
@@ -771,8 +771,8 @@
         appendLog(text);
 
         // Sync badge based on key messages from broadcast()
-        if (/🚀 Starting|Starting.*Pipeline|Wiping database/i.test(text)) setLive(true);
-        if (/🏁 Pipeline finished|🏁 Healer finished|🛑 Stop requested|❌ Pipeline error/i.test(text)) {
+        if (/ Starting|Starting.*Pipeline|Wiping database/i.test(text)) setLive(true);
+        if (/ Pipeline finished| Healer finished| Stop requested| Pipeline error/i.test(text)) {
           setLive(false);
           syncOrchestratorStatus();
         }
@@ -814,10 +814,10 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.message || 'Failed to start');
-      appendLog('✅ API accepted start request. Waiting for logs...');
+      appendLog(' API accepted start request. Waiting for logs...');
       setLive(true);
     } catch (e) {
-      appendLog(`❌ Error: ${e.message}`);
+      appendLog(` Error: ${e.message}`);
       showToast(e.message, true);
     } finally {
       setBusy(false);
@@ -834,10 +834,10 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.message || 'Failed to heal');
-      appendLog('✅ API accepted heal request. Waiting for logs...');
+      appendLog(' API accepted heal request. Waiting for logs...');
       setLive(true);
     } catch (e) {
-      appendLog(`❌ Error: ${e.message}`);
+      appendLog(` Error: ${e.message}`);
       showToast(e.message, true);
     } finally {
       setBusy(false);
@@ -853,10 +853,10 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.message || 'Failed to stop');
-      appendLog('✅ API accepted stop request.');
+      appendLog(' API accepted stop request.');
       setLive(false);
     } catch (e) {
-      appendLog(`❌ Error: ${e.message}`);
+      appendLog(` Error: ${e.message}`);
       showToast(e.message, true);
     } finally {
       setBusy(false);
@@ -874,10 +874,10 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.message || 'Failed to wipe');
-      appendLog('✅ API accepted wipe request. Waiting for logs...');
+      appendLog(' API accepted wipe request. Waiting for logs...');
       setLive(true);
     } catch (e) {
-      appendLog(`❌ Error: ${e.message}`);
+      appendLog(` Error: ${e.message}`);
       showToast(e.message, true);
     } finally {
       setBusy(false);
@@ -1033,7 +1033,7 @@
       const token = localStorage.getItem('xloop_admin_token');
       msg.style.color = 'rgba(255,255,255,.6)';
       const totalMB = (_dashRawFiles.reduce((s,f)=>s+f.size,0)/1024/1024).toFixed(1);
-      msg.textContent = `📖 Reading ${totalMB} MB file in browser…`;
+      msg.textContent = ` Reading ${totalMB} MB file in browser…`;
 
       // Read all files as text
       let allMessages = [];
@@ -1046,7 +1046,7 @@
       });
 
       for (const file of _dashRawFiles) {
-        msg.textContent = `📖 Parsing ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)…`;
+        msg.textContent = ` Parsing ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)…`;
         await new Promise(r=>setTimeout(r,20)); // yield to UI
         const text = await readFile(file);
         let parsed;
@@ -1060,7 +1060,7 @@
       for (const m of allMessages) { const k=`${m.channel_id||0}:${m.id}`; if(!msgMap.has(k)) msgMap.set(k,m); }
       const messages = [...msgMap.values()];
 
-      msg.textContent = `⚙️ Extracting links from ${messages.length.toLocaleString()} messages…`;
+      msg.textContent = `️ Extracting links from ${messages.length.toLocaleString()} messages…`;
       await new Promise(r=>setTimeout(r,30));
 
       const { links, skipped } = _parseMessages(messages);
@@ -1073,7 +1073,7 @@
       for (let ci = 0; ci < totalChunks; ci++) {
         const chunk = links.slice(ci * CHUNK, (ci + 1) * CHUNK);
         const isFinal = ci === totalChunks - 1;
-        msg.textContent = `📡 Saving chunk ${ci+1}/${totalChunks} (${chunk.length} links)…`;
+        msg.textContent = ` Saving chunk ${ci+1}/${totalChunks} (${chunk.length} links)…`;
         const body = JSON.stringify({
           links: chunk, batchId, isFinal,
           messageCount: isFinal ? messages.length : undefined,
@@ -1112,10 +1112,10 @@
       if (d.available) {
         const date = d.savedAt ? new Date(d.savedAt).toLocaleDateString() : '';
         el.style.color = '#22c55e';
-        el.textContent = `✅ Ready — ${(d.count||0).toLocaleString()} messages${date ? ' · saved '+date : ''}`;
+        el.textContent = ` Ready — ${(d.count||0).toLocaleString()} messages${date ? ' · saved '+date : ''}`;
       } else {
         el.style.color = 'rgba(255,200,0,.8)';
-        el.textContent = '⚠️ Not uploaded yet — choose a file to upload before running Full Pipeline';
+        el.textContent = '️ Not uploaded yet — choose a file to upload before running Full Pipeline';
       }
     } catch(_) {}
   }
@@ -1155,11 +1155,11 @@
     switch (_dashScrapeMode) {
       case 1:
         cmd  += ' --mode=1';
-        desc  = '⚠️ Full scrape — all channels, all history. Takes 1–3 hours.';
+        desc  = '️ Full scrape — all channels, all history. Takes 1–3 hours.';
         break;
       case 4:
         cmd  += ' --mode=4';
-        desc  = '⚡ Daily update — only new messages since last scrape. Fastest option.';
+        desc  = ' Daily update — only new messages since last scrape. Fastest option.';
         break;
       case 2:
         cmd  += ` --mode=2 --channels=${chInput}`;
@@ -1191,7 +1191,7 @@
       // Flash button
       const btn = event.target;
       const orig = btn.textContent;
-      btn.textContent = '✅ Copied!';
+      btn.textContent = ' Copied!';
       btn.style.background = 'rgba(34,197,94,0.2)';
       setTimeout(() => { btn.textContent = orig; btn.style.background = 'rgba(255,255,255,.1)'; }, 1500);
     }).catch(() => {

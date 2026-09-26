@@ -130,7 +130,7 @@
  <aside class="admin-sidebar" id="adminSidebar">
   <div class="admin-logo">
    XLOOP Admin
-   <button class="sidebar-close-btn" id="sidebarCloseBtn" onclick="closeMobileSidebar()" aria-label="Close menu">✕</button>
+   <button class="sidebar-close-btn" id="sidebarCloseBtn" onclick="closeMobileSidebar()" aria-label="Close menu"></button>
   </div>
   <nav class="admin-nav">
   <a href="/admin/dashboard.html">Dashboard</a>
@@ -150,7 +150,7 @@
  <main class="admin-content">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
    <div style="display:flex;align-items:center;gap:12px;">
-    <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="openMobileSidebar()" aria-label="Open menu">☰</button>
+    <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="openMobileSidebar()" aria-label="Open menu"></button>
     <h1 class="admin-page-title" style="margin:0;">Master Orchestrator</h1>
    </div>
    <span id="orchStatus"><span class="status-dot"></span> IDLE</span>
@@ -167,13 +167,13 @@
 
   <div class="orch-modes" id="modeCards">
   <div class="orch-mode-card selected" onclick="selectMode(false)" id="modeCard-full">
-   <div class="mode-icon">🚀</div>
+   <div class="mode-icon"></div>
    <div class="mode-title">Full Pipeline</div>
    <div class="mode-desc">Scrape Telegram → Extract Links → Import → Heal DB. Best for a fresh run.</div>
    <span class="mode-badge">FULL</span>
   </div>
   <div class="orch-mode-card" onclick="selectMode(true)" id="modeCard-skip">
-   <div class="mode-icon">⚡</div>
+   <div class="mode-icon"></div>
    <div class="mode-title">Skip Scraper</div>
    <div class="mode-desc">Use existing <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:3px;">telegram_export.json</code> — skips Telegram API scraping.</div>
    <span class="mode-badge">FAST</span>
@@ -209,7 +209,7 @@
   </div>
 
   <div id="doneBanner">
-  <h4>🎉 Pipeline Complete!</h4>
+  <h4> Pipeline Complete!</h4>
   <p id="doneSummary">All steps finished successfully.</p>
   <p style="margin-top:10px;"><a href="/admin/manager.html">→ Open Content Manager</a> &nbsp;|&nbsp; <a href="/admin/fix-posters.html">→ Fix Missing Posters</a></p>
   </div>
@@ -219,7 +219,7 @@
 <!-- Wipe Confirm Modal -->
 <div class="modal-overlay" id="wipeModal">
  <div class="modal-box">
-  <div class="modal-icon">🗑️</div>
+  <div class="modal-icon">️</div>
   <h3>Wipe Entire Database?</h3>
   <p>This will <strong>permanently delete</strong> all movies and series from MongoDB. This <strong>cannot be undone</strong>. Make sure you have a backup.</p>
   <div class="modal-btns">
@@ -267,12 +267,12 @@
  }
 
  function classifyLine(t) {
-  if (/✅|completed successfully/i.test(t))          return 'log-ok';
-  if (/❌|ERROR:|failed with code [^0]/i.test(t))    return 'log-err';
-  if (/⚠️|warning|missing|unknown/i.test(t))         return 'log-warn';
-  if (/🚀|\[ORCHESTRATOR\]/i.test(t))                return 'log-head';
-  if (/^➕ Added:/i.test(t))                         return 'log-add';
-  if (/^🔗 Merged/i.test(t))                         return 'log-merge';
+  if (/|completed successfully/i.test(t))          return 'log-ok';
+  if (/|ERROR:|failed with code [^0]/i.test(t))    return 'log-err';
+  if (/️|warning|missing|unknown/i.test(t))         return 'log-warn';
+  if (/|\[ORCHESTRATOR\]/i.test(t))                return 'log-head';
+  if (/^ Added:/i.test(t))                         return 'log-add';
+  if (/^ Merged/i.test(t))                         return 'log-merge';
   if (/^⏭|skipping/i.test(t))                       return 'log-skip';
   return '';
  }
@@ -280,11 +280,11 @@
  function parseStat(t) {
   let m;
   if ((m = t.match(/Extracted\s+([\d,]+)\s+direct/i)))       setStat('statExtracted', m[1]);
-  if ((m = t.match(/🎬 Movies\s*:\s*([\d,]+)/i)))            setStat('statMovies', m[1]);
-  if ((m = t.match(/📦 Season Packs\s*:\s*([\d,]+)/i)))      setStat('statPacks', m[1]);
+  if ((m = t.match(/ Movies\s*:\s*([\d,]+)/i)))            setStat('statMovies', m[1]);
+  if ((m = t.match(/ Season Packs\s*:\s*([\d,]+)/i)))      setStat('statPacks', m[1]);
   if ((m = t.match(/Unique title groups:\s*([\d,]+)/i)))      setStat('statGroups', m[1]);
-  if (/^➕ Added:/i.test(t)) { cAdded++; document.getElementById('statAdded').textContent = cAdded.toLocaleString(); }
-  if (/^🔄 Updated:/i.test(t)) { cUpdated++; document.getElementById('statUpdated').textContent = cUpdated.toLocaleString(); }
+  if (/^ Added:/i.test(t)) { cAdded++; document.getElementById('statAdded').textContent = cAdded.toLocaleString(); }
+  if (/^ Updated:/i.test(t)) { cUpdated++; document.getElementById('statUpdated').textContent = cUpdated.toLocaleString(); }
  }
 
  function setStat(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
@@ -322,7 +322,7 @@
    } catch(_) {}
   };
   eventSource.onerror = () => {
-   if (isRunning) appendLog('⚠️ Connection lost — attempting to reconnect...');
+   if (isRunning) appendLog('️ Connection lost — attempting to reconnect...');
   };
  }
 
@@ -353,8 +353,8 @@
    appendLog(text);
    // Only react to finish/error signals AFTER server confirmed pipeline started
    if (!pipelineStarted) return;
-   if (/🎉 Pipeline complete|Pipeline finished/i.test(text)) onFinished(text);
-   if (/💥 Pipeline stopped|exit code [^0]/i.test(text)) onFinished(text, true);
+   if (/ Pipeline complete|Pipeline finished/i.test(text)) onFinished(text);
+   if (/ Pipeline stopped|exit code [^0]/i.test(text)) onFinished(text, true);
   });
 
   try {
@@ -365,14 +365,14 @@
    });
    if (!res.ok) {
     const d = await res.json();
-    appendLog(`❌ ERROR: ${d.error || d.message || 'Failed to start pipeline'}`);
+    appendLog(` ERROR: ${d.error || d.message || 'Failed to start pipeline'}`);
     onFinished('', true);
    } else {
-    appendLog('✅ API accepted start request. Streaming logs...');
+    appendLog(' API accepted start request. Streaming logs...');
     pipelineStarted = true; // Now safe to act on finish/error events
    }
   } catch(e) {
-   appendLog(`❌ ERROR: ${e.message}`);
+   appendLog(` ERROR: ${e.message}`);
    onFinished('', true);
   }
  }
@@ -384,8 +384,8 @@
     method: 'POST',
     headers: { 'Authorization': `Bearer ${getToken()}` }
    });
-   appendLog('🛑 Stop command sent.');
-  } catch(e) { appendLog(`❌ ERROR: ${e.message}`); }
+   appendLog(' Stop command sent.');
+  } catch(e) { appendLog(` ERROR: ${e.message}`); }
   onFinished('', true);
  }
 
@@ -425,7 +425,7 @@
 
   connectStream((text) => {
    appendLog(text);
-   if (/Wipe finished/i.test(text)) { onFinished(text); showToast('✅ Database wiped!'); }
+   if (/Wipe finished/i.test(text)) { onFinished(text); showToast(' Database wiped!'); }
    if (/exit code [^0]/i.test(text)) { onFinished(text, true); }
   });
 
@@ -436,12 +436,12 @@
    });
    if (!res.ok) {
     const d = await res.json();
-    appendLog(`❌ ERROR: ${d.error || d.message || 'Wipe failed'}`);
+    appendLog(` ERROR: ${d.error || d.message || 'Wipe failed'}`);
     onFinished('', true);
    } else {
-    appendLog('✅ API accepted wipe request. Streaming logs...');
+    appendLog(' API accepted wipe request. Streaming logs...');
    }
-  } catch(e) { appendLog(`❌ ERROR: ${e.message}`); onFinished('', true); }
+  } catch(e) { appendLog(` ERROR: ${e.message}`); onFinished('', true); }
  }
 
  // - Page load: check if pipeline already running -
@@ -457,12 +457,12 @@
     document.getElementById('startBtn').disabled = true;
     document.getElementById('stopBtn').disabled = false;
     document.getElementById('wipeBtn').disabled = true;
-    appendLog('📡 Pipeline already running — reconnecting to stream...');
+    appendLog(' Pipeline already running — reconnecting to stream...');
     connectStream((text) => {
      appendLog(text);
-     if (/🎉 Pipeline finished successfully|Pipeline finished/i.test(text)) onFinished(text);
-     if (/💥 Pipeline stopped due to an error/i.test(text)) onFinished(text, true);
-     if (/Wipe finished/i.test(text)) { onFinished(text); showToast('✅ Database wiped!'); }
+     if (/ Pipeline finished successfully|Pipeline finished/i.test(text)) onFinished(text);
+     if (/ Pipeline stopped due to an error/i.test(text)) onFinished(text, true);
+     if (/Wipe finished/i.test(text)) { onFinished(text); showToast(' Database wiped!'); }
     });
    }
   } catch(_) {}

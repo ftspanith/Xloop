@@ -322,7 +322,7 @@
       ? '<img class="result-poster" src="' + m.poster + '" alt="" onerror="this.style.display=\'none\'">'
       : '<div class="result-poster-ph">' + (m.title||'?')[0].toUpperCase() + '</div>';
     const meta = [m.year, m.quality, m.language].filter(Boolean).join(' · ');
-    const icon = added ? '✓' : '+';
+    const icon = added ? '' : '+';
     const onclick = added ? '' : 'addItem(' + JSON.stringify(m._id) + ',' + JSON.stringify(m.title) + ',' + JSON.stringify(m.year||'') + ',' + JSON.stringify(m.poster||'') + ',' + JSON.stringify(m.type||'movie') + ')';
     return '<div class="result-item' + (added?' added':'') + '" onclick="' + onclick + '" data-id="' + m._id + '">'
       + poster
@@ -351,7 +351,7 @@
       const added = items.some(x => x._id === el.dataset.id);
       el.classList.toggle('added', added);
       const btn = el.querySelector('.result-add');
-      if (btn) btn.textContent = added ? '✓' : '+';
+      if (btn) btn.textContent = added ? '' : '+';
       if (added) el.setAttribute('onclick', '');
     });
   }

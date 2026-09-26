@@ -574,7 +574,7 @@ async function loadEpisodes(downloads, fallbackImg, language, type, id) {
     if (sd.packs && sd.packs.length > 0) {
       html += `
         <button class="ep-btn pack-btn" onclick="selectSeasonPack(${currentSeason})" title="Full Season Pack Download">
-          📦 Season Pack
+           Season Pack
           <span style="font-size:0.72em; opacity:0.75; display:block;">${sd.packs.length} file${sd.packs.length > 1 ? 's' : ''}</span>
         </button>`;
     }
