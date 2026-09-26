@@ -224,20 +224,26 @@ router.post('/stop', auth, (req, res) => {
 });
 
 // ── Wipe DB ───────────────────────────────────────────────────────────────────
-router.post('/wipe', auth, (req, res) => {
+router.post('/wipe', auth, async (req, res) => {
   if (pipelineRunning) {
     return res.status(400).json({ error: 'Pipeline is already running' });
   }
 
   const mongoose = require('mongoose');
   const Movie    = require('../models/Movie');
+  
+  if (mongoose.connection.readyState !== 1) {
+    await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
+  }
 
-  res.json({ message: 'Wipe started' });
-  broadcast('🧨 Wiping database...');
-
-  Movie.deleteMany({})
-    .then(r => broadcast(`✅ Wiped ${r.deletedCount} entries from database.`))
-    .catch(e => broadcast(`❌ Wipe error: ${e.message}`));
+  try {
+    const result = await Movie.deleteMany({});
+    broadcast(`✅ Wiped ${result.deletedCount} entries from database.`);
+    return res.json({ message: 'Wipe finished', deletedCount: result.deletedCount });
+  } catch(e) {
+    broadcast(`❌ Wipe error: ${e.message}`);
+    return res.status(500).json({ error: e.message });
+  }
 });
 
 // ── Clear Logs ────────────────────────────────────────────────────────────────

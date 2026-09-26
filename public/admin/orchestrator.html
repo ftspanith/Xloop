@@ -418,12 +418,6 @@
   document.getElementById('wipeBtn').disabled = true;
   setStatus('running', 'WIPING DB...');
 
-  connectStream((text) => {
-   appendLog(text);
-   if (/Wipe finished/i.test(text)) { onFinished(text); showToast(' Database wiped!'); }
-   if (/exit code [^0]/i.test(text)) { onFinished(text, true); }
-  });
-
   try {
    const res = await fetch('/api/orchestrator/wipe', {
     method: 'POST',
@@ -434,7 +428,10 @@
     appendLog(` ERROR: ${d.error || d.message || 'Wipe failed'}`);
     onFinished('', true);
    } else {
-    appendLog(' API accepted wipe request. Streaming logs...');
+    const d = await res.json();
+    appendLog(`✅ Wiped ${d.deletedCount} entries from database.`);
+    onFinished('Wipe finished'); 
+    showToast(' Database wiped!');
    }
   } catch(e) { appendLog(` ERROR: ${e.message}`); onFinished('', true); }
  }
