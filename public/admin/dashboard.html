@@ -914,28 +914,17 @@
       const token = localStorage.getItem('xloop_admin_token');
       msg.style.color = 'rgba(255,255,255,.6)';
 
-      let body;
-      if (_dashRawFiles.length === 1) {
-        // ── Single file: stream the File blob directly — no FileReader, no memory copy ──
-        msg.textContent = `Uploading ${(_dashRawFiles[0].size/1024/1024).toFixed(1)} MB to server...`;
-        body = _dashRawFiles[0]; // Browser streams this directly
-      } else {
-        // ── Multiple files: wrap in a JSON array using Blobs (zero string parsing) ──
-        msg.textContent = `Uploading ${_dashRawFiles.length} files and merging on server...`;
-        const parts = [];
-        parts.push(new Blob(['['], { type: 'application/json' }));
-        _dashRawFiles.forEach((file, i) => {
-          if (i > 0) parts.push(new Blob([','], { type: 'application/json' }));
-          parts.push(file);
-        });
-        parts.push(new Blob([']'], { type: 'application/json' }));
-        body = new Blob(parts, { type: 'application/json' });
-      }
+      const totalMB = (_dashRawFiles.reduce((s, f) => s + f.size, 0) / 1024 / 1024).toFixed(1);
+      msg.textContent = `Uploading ${totalMB} MB to server...`;
+
+      // ── Use FormData (multipart/form-data) — matches multer upload.array('files') ──
+      const fd = new FormData();
+      _dashRawFiles.forEach(file => fd.append('files', file, file.name));
 
       const res = await fetch('/api/scrape/upload-export', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body,
+        headers: { 'Authorization': `Bearer ${token}` }, // NO Content-Type — browser sets multipart boundary automatically
+        body: fd,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Upload failed');
