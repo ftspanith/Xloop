@@ -700,13 +700,14 @@
   }
 
   function classifyLine(t) {
-    if (/ERROR|Fatal:|failed with code [^0]/i.test(t))                return 'err';
+    if (/ERROR|Fatal:|failed with code [^0]/i.test(t))             return 'err';
     if (/.*exit code 0|successfully|completed|healed/i.test(t))    return 'success';
     if (/.*exit code [^0]|failed with code/i.test(t))              return 'err';
-    if (/Starting Master|ORCHESTRATOR\]|Starting:/i.test(t))          return 'highlight';
-    if (/^ Added:/i.test(t))                                         return 'add';
-    if (/^ Merged link:/i.test(t))                                  return 'merge';
-    if (/Connected|Skipping|Ready|Wiping/i.test(t))                   return 'sys';
+    if (/Starting Master|ORCHESTRATOR\]|Starting:/i.test(t))       return 'highlight';
+    if (/^\[NEW\]/i.test(t))                                       return 'add';
+    if (/^\[MERGED\]/i.test(t))                                    return 'merge';
+    if (/^\[UPDATED\]/i.test(t))                                   return 'merge';
+    if (/Connected|Skipping|Ready|Wiping/i.test(t))                return 'sys';
     return '';
   }
 

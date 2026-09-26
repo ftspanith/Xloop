@@ -601,7 +601,7 @@ async function phaseImport(allEntries, RESUME = false) {
           if (res) {
             recomputeAggregates(res);
             existing = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, {new: true});
-            _emitter(`🔗 Merged: [${dbRec.title}] ${quality} → ${host}`);
+            _emitter(`[MERGED] ${dbRec.title} | ${quality} ➔ ${host}`);
             updated++;
           } else skipped++;
         } else {
@@ -611,7 +611,7 @@ async function phaseImport(allEntries, RESUME = false) {
           if (res) {
             recomputeAggregates(res);
             existing = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, {new: true});
-            _emitter(`🔄 Updated: [${dbRec.title}] ${quality} → ${host}`);
+            _emitter(`[UPDATED] ${dbRec.title} | ${quality} ➔ ${host}`);
             updated++;
           }
         }
@@ -632,7 +632,7 @@ async function phaseImport(allEntries, RESUME = false) {
           downloads: [newDl],
         });
         added++; existing = newDoc;
-        _emitter(`➕ Added: [${meta.title}] (${meta.year || '?'}) ${quality} → ${host}`);
+        _emitter(`[NEW] ${meta.title} (${meta.year || '?'}) | ${quality} ➔ ${host}`);
       } catch (e) {
         _emitter(`❌ DB error "${meta.title}": ${e.message}`);
         skipped++;
@@ -659,10 +659,10 @@ async function phaseImport(allEntries, RESUME = false) {
   saveCheckpoint(batchDoneKeys); // final checkpoint save
   _emitter(`   Importing: ${groupEntries.length}/${groupEntries.length} — Done!`);
 
-  _emitter(`\n  ${C.green}➕ Added   : ${added}${C.reset}`);
-  _emitter(`  ${C.cyan}🔄 Updated : ${updated}${C.reset}`);
-  _emitter(`  ${C.gray}⏭️  Skipped : ${skipped}${C.reset}`);
-  if (noMeta) _emitter(`  ${C.yellow}❓ No meta : ${noMeta}${C.reset}`);
+  _emitter(`\n  ${C.green}[+] Added   : ${added}${C.reset}`);
+  _emitter(`  ${C.cyan}[~] Updated : ${updated}${C.reset}`);
+  _emitter(`  ${C.gray}[-] Skipped : ${skipped}${C.reset}`);
+  if (noMeta) _emitter(`  ${C.yellow}[?] No meta : ${noMeta}${C.reset}`);
   // Clean checkpoint on full success
   try { if (fs.existsSync(CHECKPOINT_FILE)) fs.unlinkSync(CHECKPOINT_FILE); } catch(_) {}
 }

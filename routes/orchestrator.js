@@ -398,7 +398,7 @@ router.post('/import-batch', auth, async (req, res) => {
                 const upd = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, {new: true});
                 existing = upd;
                 updated++;
-                emit(`Merged: [${res.title}] ${quality} → ${host}`);
+                emit(`[MERGED] ${res.title} | ${quality} ➔ ${host}`);
               } else skipped++;
             } else {
               const op = { $push: { downloads: newDl } };
@@ -409,7 +409,7 @@ router.post('/import-batch', auth, async (req, res) => {
                 const upd2 = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, {new: true});
                 existing = upd2;
                 updated++;
-                emit(`Updated: [${res.title}] ${quality} → ${host}`);
+                emit(`[UPDATED] ${res.title} | ${quality} ➔ ${host}`);
               }
             }
           } else {
@@ -425,7 +425,7 @@ router.post('/import-batch', auth, async (req, res) => {
             });
             added++;
             existing = newDoc;
-            emit((meta.poster ? 'Added 🖼: ' : 'Added ❓: ') + `[${finalTitle}] (${meta.year || rep.year || '?'}) ${quality} → ${host}`);
+            emit(`[NEW] ${finalTitle} (${meta.year || rep.year || '?'}) | ${quality} ➔ ${host} | POSTER: ${meta.poster ? 'YES' : 'NO'}`);
           }
         }
       } catch (e) {
