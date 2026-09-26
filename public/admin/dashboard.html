@@ -820,8 +820,11 @@
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ offset, batchSize: 5 })
           });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Batch failed');
+          const text = await res.text();
+          let data;
+          try { data = JSON.parse(text); } catch(e) {}
+          if (!res.ok) throw new Error(data?.error || `Batch failed (Status ${res.status}): ${text.substring(0, 50)}`);
+          if (!data) throw new Error('Empty or invalid JSON response');
           (data.logs || []).forEach(l => appendLog(l));
           totalAdded += data.added || 0;
           totalUpdated += data.updated || 0;
