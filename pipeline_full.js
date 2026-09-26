@@ -600,7 +600,7 @@ async function phaseImport(allEntries, RESUME = false) {
           const res = await Movie.findOneAndUpdate({ _id: dbRec._id, [`downloads.${matchedIdx}.links.url`]: { $ne: finalUrl } }, op, { new: true });
           if (res) {
             recomputeAggregates(res);
-            await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } });
+            existing = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, {new: true});
             _emitter(`🔗 Merged: [${dbRec.title}] ${quality} → ${host}`);
             updated++;
           } else skipped++;
@@ -610,7 +610,7 @@ async function phaseImport(allEntries, RESUME = false) {
           const res = await Movie.findByIdAndUpdate(dbRec._id, op, { new: true });
           if (res) {
             recomputeAggregates(res);
-            await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } });
+            existing = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, {new: true});
             _emitter(`🔄 Updated: [${dbRec.title}] ${quality} → ${host}`);
             updated++;
           }
@@ -889,4 +889,4 @@ if (IS_MAIN) {
 }
 
 // ── When require()'d by orchestrator route ────────────────────────────────────
-module.exports = { runPipeline: main, searchTMDB, searchOMDB, fetchWithRetry };
+module.exports = { runPipeline: main, searchTMDB, searchOMDB, fetchWithRetry, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates };

@@ -395,7 +395,8 @@ router.post('/import-batch', auth, async (req, res) => {
               const res = await Movie.findOneAndUpdate({ _id: dbRec._id, [`downloads.${matchedIdx}.links.url`]: { $ne: finalUrl } }, op, { new: true });
               if (res) {
                 recomputeAggregates(res);
-                await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } });
+                const upd = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, {new: true});
+                existing = upd;
                 updated++;
                 emit(`Merged: [${res.title}] ${quality} → ${host}`);
               } else skipped++;
@@ -405,7 +406,8 @@ router.post('/import-batch', auth, async (req, res) => {
               const res = await Movie.findByIdAndUpdate(dbRec._id, op, { new: true });
               if (res) {
                 recomputeAggregates(res);
-                await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } });
+                const upd2 = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, {new: true});
+                existing = upd2;
                 updated++;
                 emit(`Updated: [${res.title}] ${quality} → ${host}`);
               }
