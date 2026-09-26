@@ -230,17 +230,24 @@ router.post('/start', auth, async (req, res) => {
     }
   }
 
-  const runPipeline = await getRunPipeline();
-  runPipeline({
-    noBypass: skipBypass !== undefined ? skipBypass : !!skipScraper,
-    noWipe:   !!skipScraper,
-    resume:   !!resume,
-    importSrc,
-    emitter:  broadcast,
-  })
-  .then(() => broadcast('Pipeline finished successfully.'))
-  .catch(err => broadcast(`Pipeline error: ${err.message}`))
-  .finally(() => { pipelineRunning = false; pipelinePromise = null; setPipelineRunningFlag(false); });
+  try {
+    const runPipeline = await getRunPipeline();
+    await runPipeline({
+      noBypass:  skipBypass !== undefined ? skipBypass : !!skipScraper,
+      noWipe:    !!skipScraper,
+      resume:    !!resume,
+      importSrc,
+      emitter:   emit,
+    });
+    emit('Pipeline finished successfully.');
+  } catch (err) {
+    emit(`Pipeline error: ${err.message}`);
+  } finally {
+    pipelineRunning = false;
+    pipelinePromise = null;
+    setPipelineRunningFlag(false);
+    res.end();
+  }
 });
 
 // -- Import Batch: fully enriched TMDB+OMDB per group (Vercel-timeout safe) --

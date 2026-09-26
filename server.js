@@ -32,7 +32,7 @@ app.use(compression({
   threshold: 1024,    // only compress responses > 1KB
   filter: (req, res) => {
     // Don't compress SSE streams
-    if (req.path.includes('/stream')) return false;
+    if (req.path.includes('/stream') || req.path.includes('/start')) return false;
     return compression.filter(req, res);
   }
 }));
