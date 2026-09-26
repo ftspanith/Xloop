@@ -292,13 +292,11 @@ function cleanTitleForApi(title) {
   let cleaned = rawClean
     // ── Normalize Ampersands ──────────────────────────────────────────
     .replace(/\s*&\s*/g, ' and ')
-    // ── Split CamelCase (AhanaPellanta -> Ahana Pellanta) ─────────────
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
     // ── Strip leading numbered lists (e.g. "1. ", "1) ") ─────────────────
     // IMPORTANT: Do NOT strip if the number is followed by letters (could be title like "300 Spartans")
     .replace(/^\s*(\d+)[\).}]\s+(?=\w)/g, '')
     // ── Strip Website URLs (e.g. www.telugumv.sbs) ────────────────────────
-    .replace(/\b(?:www\.)?[a-zA-Z0-9-]+\.[a-zA-Z]{2,6}\b/gi, '')
+    .replace(/\b(?:www\.)?[a-zA-Z0-9-]+\.(?:com|org|net|in|co|me|sbs|xyz|cc|to|tv|site|link|info)\b/gi, '')
     .replace(/\b(?:www|sbs|telugumv)\b/gi, '')
     // ── Strip leading @channel handles first ──────────────────────────────
     .replace(/^@[A-Za-z0-9_]+\s*/g, '')
@@ -317,8 +315,8 @@ function cleanTitleForApi(title) {
     .replace(/\b(Rahul4K|JeRi|TK\s*\d+\s*\d+|AAC\s*\d+\s*\d+|ATV|ETV|JIOHS|DE3PM|DUDU|iP0|iP[12]|JHS|MSD4K|MKV4U|MKV4K|DHD|YTS|YIFY|RARBG|PSA|FGT|NTG|EVO|ION10|CMRG|FLUX|TEPES|SiGMA|ROCCaT|SPARKS|VEXT|ULTRAHDCLUB|SMURF|OFT|mkvcage|AGAT|MZABI|SiGMA|MRTRJ|MRN|TOMMY|GalaxyTV|Pahe|HONE|QxR|BRRip|R4RBG|SALT\s+AND\s+STARDUST)\b/gi,'')
     .replace(/\b(ManoramaMax|EtvWin|NaMovies|TamilBlasters|Isaimini|Kuttymovies|TamilRockers|Movierulz|HDHub4u|Filmyzilla|Cinemavilla|Tamilgun|ConradsHome|4X4RYA|SNXT|MMAX|AWS|AVMA|LIONS|APTV|4KDVS|HiDt|SPHD|FraMeSToR|ALiEN|Malli4U|Malli4UOfficial|Official2|Official|TeluguDrives|MoviesWorld|LGP|ANToNi|CBR|VBR|BDMV|LUMiX|OutKast|BlackSpider|PrimeFix|SKST|DarQ|ZoroSenpai)\b/gi,'')
     // ── Audio codec + channel format: DDP5.1, AAC 2.0, DD 5 1, etc ─────────────
-    .replace(/\b(AAC|DDP|DD|AC3|DTS|FLAC)\s*[._]?\s*\d\s*[._]?\s*\d\b/gi,'')
-    .replace(/\b(AAC|DDP|DD|AC3|DTS|FLAC)\b/gi,'')
+    .replace(/\b(AAC|DDP|DD\+?|DD|AC3|DTS|FLAC)\s*[._]?\s*\d\s*[._]?\s*\d\b/gi,'')
+    .replace(/\b(AAC|DDP|DD\+?|DD|AC3|DTS|FLAC)\b/gi,'')
     // ── Stray audio/video channel numbers: "5 1", "2 0", "7 1" after codec strip ──
     .replace(/\b[2-9]\s+[01]\b/g, '')
     .replace(/\bH\s*26[45]\b/gi,'')
@@ -338,6 +336,8 @@ function cleanTitleForApi(title) {
     // ── Final stray digit pairs and cleanup ───────────────────────────────
     .replace(/\b\d\s+\d\b/g, '')
     .replace(/[^a-zA-Z0-9 \-']/g,' ')
+    // ── Split CamelCase for unspaced titles (AhanaPellanta -> Ahana Pellanta) ─────────────
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/\s+/g,' ')
     .trim()
     // ── Generic release-group trailer (CamelCase or ALL-CAPS single word) ──
