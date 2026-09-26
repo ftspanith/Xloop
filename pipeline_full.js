@@ -249,7 +249,7 @@ async function phaseBypass(allEntries, existingBypassed, CONCURRENCY = 3) {
 // ═══════════════════════════════════════════════════════════════════════════
 let _lastApiCall = 0;
 async function apiThrottle() {
-  const wait = 270 - (Date.now() - _lastApiCall);
+  const wait = 100 - (Date.now() - _lastApiCall);
   if (wait > 0) await sleep(wait);
   _lastApiCall = Date.now();
 }
@@ -362,14 +362,9 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   const strategies = [];
   if (hintYear) {
     strategies.push({ ep: typeEp, params: { query: cleanTitle, year: hintYear } });
-    strategies.push({ ep: typeEp, params: { query: cleanTitle, year: hintYear - 1 } });
-    strategies.push({ ep: typeEp, params: { query: cleanTitle, year: hintYear + 1 } });
   }
   strategies.push({ ep: typeEp,  params: { query: cleanTitle } });
-  if (hintYear) strategies.push({ ep: 'multi', params: { query: cleanTitle, year: hintYear } });
   strategies.push({ ep: 'multi', params: { query: cleanTitle } });
-  if (hintYear) strategies.push({ ep: otherEp, params: { query: cleanTitle, year: hintYear } });
-  strategies.push({ ep: otherEp, params: { query: cleanTitle } });
 
   for (const { ep, params } of strategies) {
     const result = await fetchWithRetry(async () => {
