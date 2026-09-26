@@ -243,6 +243,102 @@ router.post('/start', auth, async (req, res) => {
   .finally(() => { pipelineRunning = false; pipelinePromise = null; setPipelineRunningFlag(false); });
 });
 
+// ── Import Batch — processes N title-groups per call (Vercel-timeout safe) ───
+// Frontend chains calls: offset=0 → offset=batchSize → … until done=true
+router.post('/import-batch', auth, async (req, res) => {
+  const { offset = 0, batchSize = 80 } = req.body || {};
+  const mongoose = require('mongoose');
+  const PipelineCache = require('../models/PipelineCache');
+  const ExtractedLinkM = require('../models/ExtractedLink');
+  const Movie = require('../models/Movie');
+  const { cleanTitleForApi } = require('../utils/parser');
+
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
+    }
+
+    // Load all extracted links from MongoDB (cached by scraper)
+    const links = await ExtractedLinkM.find({}).lean();
+    if (!links.length) {
+      return res.json({ done: true, added: 0, updated: 0, skipped: 0, total: 0, nextOffset: 0, message: 'No links cached. Run Full Pipeline first.' });
+    }
+
+    // Group by title+year (same logic as pipeline_full.js)
+    const groups = {};
+    for (const item of links) {
+      if (item.host === 'Shortlink' && !item.bypassedUrl) continue;
+      const key = `${(item.title || '').toLowerCase().trim()}__${item.year || ''}`;
+      if (!groups[key]) groups[key] = { items: [] };
+      groups[key].items.push(item);
+    }
+    const groupEntries = Object.entries(groups);
+    const total = groupEntries.length;
+    const batch = groupEntries.slice(offset, offset + batchSize);
+    const nextOffset = offset + batch.length;
+    const done = nextOffset >= total;
+
+    let added = 0, updated = 0, skipped = 0;
+    const logs = [];
+    const emit = (m) => { const c = m.replace(/\x1b\[[0-9;]*m/g, ''); logs.push(c); broadcast(c); };
+
+    emit(`Batch ${Math.floor(offset/batchSize)+1}: processing groups ${offset+1}–${nextOffset} of ${total}...`);
+
+    for (const [, group] of batch) {
+      try {
+        const rep = group.items[0];
+        const isSer = rep.isSeries || rep.contentType === 'series' || rep.contentType === 'anime';
+        const cleanTitle = cleanTitleForApi(rep.title || '');
+        if (!cleanTitle) { skipped++; continue; }
+
+        const esc = cleanTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        let existing = rep.year
+          ? await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' }, year: rep.year }).lean()
+          : await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' } }).lean();
+
+        const dlObjs = group.items.map(it => ({
+          url: it.bypassedUrl || it.url || '',
+          quality: it.quality || 'HD',
+          language: it.language || '',
+          filename: it.filename || '',
+          codec: it.codec || '',
+          host: it.host || '',
+        })).filter(d => d.url);
+
+        if (!existing) {
+          await Movie.create({
+            title: rep.title || cleanTitle,
+            type: isSer ? (rep.contentType || 'series') : 'movie',
+            year: rep.year || null,
+            quality: rep.quality || 'HD',
+            downloads: dlObjs,
+          });
+          added++;
+          emit(`Added: [${rep.title || cleanTitle}] (${rep.year || '?'})`);
+        } else {
+          const existingUrls = new Set((existing.downloads || []).map(d => d.url));
+          const newDls = dlObjs.filter(d => !existingUrls.has(d.url));
+          if (newDls.length) {
+            await Movie.updateOne({ _id: existing._id }, { $push: { downloads: { $each: newDls } } });
+            updated++;
+          } else { skipped++; }
+        }
+      } catch(e) { emit(`Error: ${e.message}`); skipped++; }
+    }
+
+    emit(`Batch done — Added: ${added} | Updated: ${updated} | Skipped: ${skipped} | Progress: ${nextOffset}/${total}`);
+    if (done) {
+      emit('All batches complete! Run Heal DB to fill missing posters/metadata.');
+      setPipelineRunningFlag(false);
+    }
+
+    return res.json({ done, added, updated, skipped, total, nextOffset, logs });
+  } catch (e) {
+    setPipelineRunningFlag(false);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Heal Only ────────────────────────────────────────────────────────────────
 router.post('/heal', auth, async (req, res) => {
   if (pipelineRunning) {

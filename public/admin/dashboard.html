@@ -804,23 +804,62 @@
   // ── API helpers ───────────────────────────────────────────
   async function startOrchestrator(skipScraper = false) {
     setBusy(true);
-    const skipBypass = document.getElementById('chkSkipBypass')?.checked || false;
-    try {
-      appendLog('Sending start command...');
-      const res = await fetch('/api/orchestrator/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('xloop_admin_token')}` },
-        body: JSON.stringify({ skipScraper, skipBypass })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || data.message || 'Failed to start');
-      appendLog(' API accepted start request. Waiting for logs...');
-      setLive(true);
-    } catch (e) {
-      appendLog(` Error: ${e.message}`);
-      showToast(e.message, true);
-    } finally {
-      setBusy(false);
+    const token = localStorage.getItem('xloop_admin_token');
+
+    if (skipScraper) {
+      // Use batched import — processes 80 groups per call, chains automatically
+      appendLog('Starting batched import (Skip Scraper mode)...');
+      let offset = 0;
+      let totalAdded = 0, totalUpdated = 0;
+
+      const runBatch = async () => {
+        try {
+          const res = await fetch('/api/orchestrator/import-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ offset, batchSize: 80 })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Batch failed');
+          (data.logs || []).forEach(l => appendLog(l));
+          totalAdded += data.added || 0;
+          totalUpdated += data.updated || 0;
+          if (!data.done) {
+            offset = data.nextOffset;
+            await new Promise(r => setTimeout(r, 200)); // small pause between batches
+            await runBatch();
+          } else {
+            appendLog(`All done! Total added: ${totalAdded} | Updated: ${totalUpdated}`);
+            setLive(false);
+            setBusy(false);
+          }
+        } catch(e) {
+          appendLog(` Error: ${e.message}`);
+          showToast(e.message, true);
+          setBusy(false);
+        }
+      };
+      await runBatch();
+    } else {
+      // Full pipeline via GET SSE (keeps connection open for long runs)
+      try {
+        appendLog('Starting Full Pipeline...');
+        if (window._pipelineES) { window._pipelineES.close(); }
+        window._pipelineES = new EventSource('/api/orchestrator/start?skipScraper=false');
+        window._pipelineES.onmessage = (e) => {
+          try {
+            const ev = JSON.parse(e.data);
+            if (ev.text) appendLog(ev.text);
+            if (/Pipeline finished/i.test(ev.text || '')) { setLive(false); setBusy(false); window._pipelineES.close(); }
+          } catch(_) {}
+        };
+        window._pipelineES.onerror = () => { setLive(false); setBusy(false); };
+        setLive(true);
+      } catch (e) {
+        appendLog(` Error: ${e.message}`);
+        showToast(e.message, true);
+        setBusy(false);
+      }
     }
   }
 
