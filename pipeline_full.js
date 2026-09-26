@@ -456,8 +456,8 @@ async function phaseImport(allEntries, RESUME = false) {
     return e.bypassedUrl && DIRECT_HOST_RE.test(e.bypassedUrl);
   });
   const stillShort = allEntries.length - valid.length;
-  console.log(`\n  Importable entries : ${C.green}${valid.length}${C.reset}`);
-  if (stillShort > 0) console.log(`  Skipped (no bypass): ${C.yellow}${stillShort}${C.reset}`);
+  _emitter(`\n  Importable entries : ${C.green}${valid.length}${C.reset}`);
+  if (stillShort > 0) _emitter(`  Skipped (no bypass): ${C.yellow}${stillShort}${C.reset}`);
 
   let added = 0, updated = 0, skipped = 0, noMeta = 0;
 
@@ -469,14 +469,14 @@ async function phaseImport(allEntries, RESUME = false) {
     if (item.date && (!groups[key].msgDate || item.date < groups[key].msgDate)) groups[key].msgDate = item.date;
     groups[key].items.push(item);
   }
-  console.log(`  Unique title groups: ${Object.keys(groups).length}`);
+  _emitter(`  Unique title groups: ${Object.keys(groups).length}`);
 
   // ── Checkpoint: load already-processed groups for --resume ────────────────────────
   let processedKeys = new Set();
   if (RESUME && fs.existsSync(CHECKPOINT_FILE)) {
     try {
       processedKeys = new Set(JSON.parse(fs.readFileSync(CHECKPOINT_FILE, 'utf8')));
-      console.log(`  ⏭️  Resuming: ${processedKeys.size} groups already done — skipping them`);
+      _emitter(`  ⏭️  Resuming: ${processedKeys.size} groups already done — skipping them`);
     } catch(_) { warn('Could not read checkpoint file — starting fresh'); }
   } else if (!RESUME && fs.existsSync(CHECKPOINT_FILE)) {
     // Clean checkpoint on fresh run
@@ -484,7 +484,7 @@ async function phaseImport(allEntries, RESUME = false) {
   }
 
   const groupEntries = Object.entries(groups).filter(([key]) => !processedKeys.has(key));
-  console.log(`  Processing: ${groupEntries.length} groups\n`);
+  _emitter(`  Processing: ${groupEntries.length} groups\n`);
 
   // Save checkpoint every N groups so crashes can resume from near where they stopped
   const CHECKPOINT_EVERY = 50;
@@ -497,16 +497,34 @@ async function phaseImport(allEntries, RESUME = false) {
     const rep   = group.items[0];
     const isSer = rep.isSeries || rep.contentType === 'series' || rep.contentType === 'anime';
 
-    const esc = (rep.title || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Apply full cleaning to fix crude client-side titles
+    let cleanTitle = rep.title || '';
+    if (cleanTitle) {
+      if (/[._]/.test(cleanTitle)) {
+        const spaced = cleanTitle.replace(/[._]/g, ' ');
+        const TECH_TOKEN_RE = /\b(2160p|1080p|720p|480p|360p|4K|UHD|WEB[-\s]?DL|WEBRip|BluRay|BDRip|HDRip|REMUX|HEVC|x265|x264|AV1|AVC|AMZN|NF|DSNP|ZEE5|SUNNXT|JIOHS|TK|SS|AHA|ARTL|HMAX|HOTSTAR|CRKL|PCOK|DPLS|DDPd?|AAC|DTS|FLAC|DD5|DD2|HDR|SDR|DV|HLG)\b/i;
+        const techMatch = TECH_TOKEN_RE.exec(spaced);
+        if (techMatch && techMatch.index > 3) cleanTitle = spaced.substring(0, techMatch.index);
+        else cleanTitle = spaced;
+      }
+      if (rep.year) {
+        const yStr = String(rep.year);
+        const yi   = cleanTitle.indexOf(yStr);
+        if (yi > 3 && /[\s.\-_(]/.test(cleanTitle[yi - 1] || '')) cleanTitle = cleanTitle.substring(0, yi).trim();
+      }
+      cleanTitle = cleanTitleForApi(cleanTitle);
+    }
+
+    const esc = (cleanTitle || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     let existing = null;
     if (rep.year)  existing = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' }, year: rep.year });
-    if (!existing) existing = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' } });
+    if (!existing && cleanTitle) existing = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' } });
 
     let meta = {};
     if (existing) {
       meta = { tmdbId: existing.tmdbId, title: existing.title, type: existing.type };
-    } else if (rep.title) {
-      const tmdb = await searchTMDB(rep.title, rep.year, isSer, rep.season, group.msgDate, rep.imdbId || null, rep.tmdbIdHint || null);
+    } else if (cleanTitle) {
+      const tmdb = await searchTMDB(cleanTitle, rep.year, isSer, rep.season, group.msgDate, rep.imdbId || null, rep.tmdbIdHint || null);
       if (tmdb) {
         Object.assign(meta, tmdb);
         if (!meta.poster || !meta.rating || !meta.imdbId) {
@@ -527,9 +545,9 @@ async function phaseImport(allEntries, RESUME = false) {
     }
 
     if (!meta.title) {
-      if (!rep.title) { noMeta += group.items.length; return; }
-      meta = { title: rep.title, year: rep.year || null, type: isSer ? 'series' : 'movie', tmdbId: '', imdbId: '', poster: '', backdrop: '', rating: 0, description: '', genre: [], duration: '' };
-      console.log(`⚠️  No TMDB — raw title: "${meta.title}"`);
+      if (!cleanTitle) { noMeta += group.items.length; return; }
+      meta = { title: cleanTitle, year: rep.year || null, type: isSer ? 'series' : 'movie', tmdbId: '', imdbId: '', poster: '', backdrop: '', rating: 0, description: '', genre: [], duration: '' };
+      _emitter(`⚠️  No TMDB — raw title: "${meta.title}"`);
     }
 
     const tmdbGenres  = (meta.genre || []).map(g => (g||'').toLowerCase());
@@ -593,7 +611,7 @@ async function phaseImport(allEntries, RESUME = false) {
           if (res) {
             recomputeAggregates(res);
             await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } });
-            console.log(`🔗 Merged: [${dbRec.title}] ${quality} → ${host}`);
+            _emitter(`🔗 Merged: [${dbRec.title}] ${quality} → ${host}`);
             updated++;
           } else skipped++;
         } else {
@@ -603,7 +621,7 @@ async function phaseImport(allEntries, RESUME = false) {
           if (res) {
             recomputeAggregates(res);
             await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } });
-            console.log(`🔄 Updated: [${dbRec.title}] ${quality} → ${host}`);
+            _emitter(`🔄 Updated: [${dbRec.title}] ${quality} → ${host}`);
             updated++;
           }
         }
@@ -624,9 +642,9 @@ async function phaseImport(allEntries, RESUME = false) {
           downloads: [newDl],
         });
         added++; existing = newDoc;
-        console.log(`➕ Added: [${meta.title}] (${meta.year || '?'}) ${quality} → ${host}`);
+        _emitter(`➕ Added: [${meta.title}] (${meta.year || '?'}) ${quality} → ${host}`);
       } catch (e) {
-        console.error(`❌ DB error "${meta.title}": ${e.message}`);
+        _emitter(`❌ DB error "${meta.title}": ${e.message}`);
         skipped++;
       }
     }
@@ -644,17 +662,17 @@ async function phaseImport(allEntries, RESUME = false) {
       if (batchDoneKeys.length % CHECKPOINT_EVERY === 0) saveCheckpoint(batchDoneKeys);
     });
     active2.push(p); gi++;
-    if (gi % 100 === 0) process.stdout.write(`\r   Importing: ${gi}/${groupEntries.length}...`);
+    if (gi % 100 === 0) _emitter(`   Importing: ${gi}/${groupEntries.length}...`);
     await sleep(50);
   }
   await Promise.all(active2);
   saveCheckpoint(batchDoneKeys); // final checkpoint save
-  process.stdout.write(`\r   Importing: ${groupEntries.length}/${groupEntries.length} — Done!         \n`);
+  _emitter(`   Importing: ${groupEntries.length}/${groupEntries.length} — Done!`);
 
-  console.log(`\n  ${C.green}➕ Added   : ${added}${C.reset}`);
-  console.log(`  ${C.cyan}🔄 Updated : ${updated}${C.reset}`);
-  console.log(`  ${C.gray}⏭️  Skipped : ${skipped}${C.reset}`);
-  if (noMeta) console.log(`  ${C.yellow}❓ No meta : ${noMeta}${C.reset}`);
+  _emitter(`\n  ${C.green}➕ Added   : ${added}${C.reset}`);
+  _emitter(`  ${C.cyan}🔄 Updated : ${updated}${C.reset}`);
+  _emitter(`  ${C.gray}⏭️  Skipped : ${skipped}${C.reset}`);
+  if (noMeta) _emitter(`  ${C.yellow}❓ No meta : ${noMeta}${C.reset}`);
   // Clean checkpoint on full success
   try { if (fs.existsSync(CHECKPOINT_FILE)) fs.unlinkSync(CHECKPOINT_FILE); } catch(_) {}
 }
