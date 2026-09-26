@@ -832,15 +832,17 @@ async function main(opts = {}) {
   sep();
   log('STEP 4 — Importing all entries → MongoDB...');
 
-  // Save to PipelineCache so Skip Scraper works across Lambda invocations on Vercel
+  // Save metadata to PipelineCache so Skip Scraper knows data is available.
+  // NOTE: do NOT save data:allEntries — 47k+ entries would exceed MongoDB's 16MB doc limit.
+  // The actual links are stored in the ExtractedLink collection (one doc per link).
   try {
     const PipelineCache = require('./models/PipelineCache');
     await PipelineCache.findOneAndUpdate(
       { key: 'bypassed_links' },
-      { key: 'bypassed_links', data: allEntries, count: allEntries.length, savedAt: new Date() },
+      { key: 'bypassed_links', data: { count: allEntries.length }, count: allEntries.length, savedAt: new Date() },
       { upsert: true, new: true }
     );
-    log(`💾 Saved ${allEntries.length} entries to MongoDB cache (for Skip Scraper)`);
+    log(`💾 Saved ${allEntries.length} entries metadata to MongoDB cache (for Skip Scraper)`);
   } catch (cacheErr) {
     warn(`Cache save failed (non-fatal): ${cacheErr.message}`);
   }
