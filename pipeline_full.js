@@ -578,10 +578,19 @@ async function phaseImport(allEntries, RESUME = false) {
         for (let j = 0; j < dbRec.downloads.length; j++) {
           const ex = dbRec.downloads[j];
           const qualOk   = ex.quality === quality;
-          const langOk   = (ex.language || '') === (language || '');
           const seasOk   = (finalType === 'series' || finalType === 'anime') ? (ex.season == correctSeason && ex.episode == (item.episode ?? null)) : true;
-          const sizeOk   = ex.size === size || (newMB > 0 && toMB(ex.size) > 0 && Math.abs(newMB - toMB(ex.size)) < 2) || (!ex.size && !size);
-          if (qualOk && langOk && seasOk && sizeOk) { matchedIdx = j; break; }
+          
+          const exactSizeMatch = (newMB > 0 && toMB(ex.size) > 0 && Math.abs(newMB - toMB(ex.size)) < 2);
+          const langOk   = (ex.language || '') === (language || '');
+          const sizeOk   = ex.size === size || exactSizeMatch || (!ex.size && !size);
+          
+          if (qualOk && seasOk && (exactSizeMatch || (sizeOk && langOk))) { 
+             matchedIdx = j; 
+             if (language && language !== 'Multi' && (!ex.language || ex.language === 'Multi')) {
+                ex.language = language;
+             }
+             break; 
+          }
         }
         const metaSet = {};
         if (!dbRec.backdrop    && meta.backdrop)    metaSet.backdrop    = meta.backdrop;
@@ -593,6 +602,9 @@ async function phaseImport(allEntries, RESUME = false) {
         if (finalType === 'anime' && dbRec.type === 'series') metaSet.type = 'anime';
 
         if (matchedIdx >= 0) {
+          if (dbRec.downloads[matchedIdx].language) {
+              metaSet[`downloads.${matchedIdx}.language`] = dbRec.downloads[matchedIdx].language;
+          }
           const existLinks = dbRec.downloads[matchedIdx]?.links || [];
           if (existLinks.length >= 3 || existLinks.map(l => l.host).includes(host)) { skipped++; continue; }
           const op = { $addToSet: { [`downloads.${matchedIdx}.links`]: newDl.links[0] } };

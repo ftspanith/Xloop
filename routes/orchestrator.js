@@ -335,7 +335,7 @@ router.post('/import-batch', auth, async (req, res) => {
         else if (meta.type === 'series' || isSer) finalType = 'series';
         else finalType = 'movie';
 
-        const finalTitle = meta.title || rep.title || cleanTitle;
+        const finalTitle = meta.title || cleanTitle || rep.title;
         const origLang2 = meta.originalLanguage || meta.language || '';
 
         // Insert / Merge items
@@ -372,10 +372,20 @@ router.post('/import-batch', auth, async (req, res) => {
             for (let j = 0; j < dbRec.downloads.length; j++) {
               const ex = dbRec.downloads[j];
               const qualOk = ex.quality === quality;
-              const langOk = (ex.language || '') === (language || '');
               const seasOk = (finalType === 'series' || finalType === 'anime') ? (ex.season == correctSeason && ex.episode == (item.episode ?? null)) : true;
-              const sizeOk = ex.size === size || (newMB > 0 && toMB(ex.size) > 0 && Math.abs(newMB - toMB(ex.size)) < 2) || (!ex.size && !size);
-              if (qualOk && langOk && seasOk && sizeOk) { matchedIdx = j; break; }
+              
+              const exactSizeMatch = (newMB > 0 && toMB(ex.size) > 0 && Math.abs(newMB - toMB(ex.size)) < 2);
+              const langOk = (ex.language || '') === (language || '');
+              const sizeOk = ex.size === size || exactSizeMatch || (!ex.size && !size);
+              
+              if (qualOk && seasOk && (exactSizeMatch || (sizeOk && langOk))) { 
+                 matchedIdx = j; 
+                 // If we merged based on exact size but language was missing in existing, let's capture the language
+                 if (language && language !== 'Multi' && (!ex.language || ex.language === 'Multi')) {
+                    ex.language = language; // update in memory
+                 }
+                 break; 
+              }
             }
 
             const metaSet = {};
@@ -388,6 +398,9 @@ router.post('/import-batch', auth, async (req, res) => {
             if (finalType === 'anime' && dbRec.type === 'series') metaSet.type = 'anime';
 
             if (matchedIdx >= 0) {
+              if (dbRec.downloads[matchedIdx].language) {
+                  metaSet[`downloads.${matchedIdx}.language`] = dbRec.downloads[matchedIdx].language;
+              }
               const existLinks = dbRec.downloads[matchedIdx]?.links || [];
               if (existLinks.length >= 3 || existLinks.map(l => l.host).includes(host)) { skipped++; continue; }
               const op = { $addToSet: { [`downloads.${matchedIdx}.links`]: newDl.links[0] } };
