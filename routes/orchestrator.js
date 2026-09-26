@@ -288,7 +288,7 @@ router.post('/import-batch', auth, async (req, res) => {
       try {
         const rep = group.items[0];
         const isSer = rep.isSeries || rep.contentType === 'series' || rep.contentType === 'anime';
-        const cleanTitle = cleanTitleForApi(rep.title || '');
+        const cleanTitle = cleanTitleForApi(rep.title || '', rep.year);
         if (!cleanTitle) { skipped++; continue; }
 
         const esc = cleanTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

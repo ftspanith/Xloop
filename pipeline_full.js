@@ -497,23 +497,7 @@ async function phaseImport(allEntries, RESUME = false) {
     const rep   = group.items[0];
     const isSer = rep.isSeries || rep.contentType === 'series' || rep.contentType === 'anime';
 
-    // Apply full cleaning to fix crude client-side titles
-    let cleanTitle = rep.title || '';
-    if (cleanTitle) {
-      if (/[._]/.test(cleanTitle)) {
-        const spaced = cleanTitle.replace(/[._]/g, ' ');
-        const TECH_TOKEN_RE = /\b(2160p|1080p|720p|480p|360p|4K|UHD|WEB[-\s]?DL|WEBRip|BluRay|BDRip|HDRip|REMUX|HEVC|x265|x264|AV1|AVC|AMZN|NF|DSNP|ZEE5|SUNNXT|JIOHS|TK|SS|AHA|ARTL|HMAX|HOTSTAR|CRKL|PCOK|DPLS|DDPd?|AAC|DTS|FLAC|DD5|DD2|HDR|SDR|DV|HLG)\b/i;
-        const techMatch = TECH_TOKEN_RE.exec(spaced);
-        if (techMatch && techMatch.index > 3) cleanTitle = spaced.substring(0, techMatch.index);
-        else cleanTitle = spaced;
-      }
-      if (rep.year) {
-        const yStr = String(rep.year);
-        const yi   = cleanTitle.indexOf(yStr);
-        if (yi > 3 && /[\s.\-_(]/.test(cleanTitle[yi - 1] || '')) cleanTitle = cleanTitle.substring(0, yi).trim();
-      }
-      cleanTitle = cleanTitleForApi(cleanTitle);
-    }
+    let cleanTitle = cleanTitleForApi(rep.title || '', rep.year);
 
     const esc = (cleanTitle || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     let existing = null;

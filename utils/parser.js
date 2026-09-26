@@ -286,9 +286,25 @@ function extractSeasonEpisode(str) {
 }
 
 // ─── CLEAN TITLE FOR API ─────────────────────────────────────────────────────
-function cleanTitleForApi(title) {
+function cleanTitleForApi(title, year = null) {
   if (!title) return '';
-  const rawClean = stripEmojis(title);
+  let rawClean = stripEmojis(title);
+
+  // Pre-clean dots/underscores like pipeline_full does
+  if (/[._]/.test(rawClean)) {
+    const spaced = rawClean.replace(/[._]/g, ' ');
+    const TECH_TOKEN_RE = /\b(2160p|1080p|720p|480p|360p|4K|UHD|WEB[-\s]?DL|WEBRip|BluRay|BDRip|HDRip|REMUX|HEVC|x265|x264|AV1|AVC|AMZN|NF|DSNP|ZEE5|SUNNXT|JIOHS|TK|SS|AHA|ARTL|HMAX|HOTSTAR|CRKL|PCOK|DPLS|DDPd?|AAC|DTS|FLAC|DD5|DD2|HDR|SDR|DV|HLG)\b/i;
+    const techMatch = TECH_TOKEN_RE.exec(spaced);
+    if (techMatch && techMatch.index > 3) rawClean = spaced.substring(0, techMatch.index);
+    else rawClean = spaced;
+  }
+  
+  if (year) {
+    const yStr = String(year);
+    const yi   = rawClean.indexOf(yStr);
+    if (yi > 3 && /[\s.\-_(]/.test(rawClean[yi - 1] || '')) rawClean = rawClean.substring(0, yi).trim();
+  }
+
   let cleaned = rawClean
     // ── Normalize Ampersands ──────────────────────────────────────────
     .replace(/\s*&\s*/g, ' and ')
