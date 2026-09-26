@@ -99,89 +99,87 @@ async function setPipelineRunningFlag(running) {
 }
 
 // ── Start pipeline (auth required) ───────────────────────────────────────────
-router.post('/start', auth, async (req, res) => {
+router.get('/start', async (req, res) => {
   if (pipelineRunning) {
     return res.status(400).json({ error: 'Pipeline is already running' });
   }
 
-  const { skipScraper, resume, skipBypass } = req.body || {};
+  const skipScraper = req.query.skipScraper === 'true';
+  const resume = req.query.resume === 'true';
+  const skipBypass = req.query.skipBypass === 'true';
   const label = skipScraper ? 'Skip Scraper (import-only)' : 'Full Pipeline';
 
-  // Respond immediately — pipeline runs async in background
-  res.json({ message: `${label} started` });
+  // Setup SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
 
-  // Run in-process, stream logs via broadcast()
   pipelineRunning = true;
-  setPipelineRunningFlag(true); // persist to MongoDB for cross-instance status
-  broadcast(`Starting ${label}...`);
+  setPipelineRunningFlag(true);
+  
+  const emit = (msg) => {
+    // Strip ANSI color codes
+    const clean = msg.replace(/\x1b\[[0-9;]*m/g, '');
+    try { res.write(`data: ${JSON.stringify({ text: clean })}\n\n`); } catch(e) {}
+  };
 
-  // For Skip Scraper: load existing links from MongoDB (persists across Lambda instances).
-  // For Full Pipeline: importSrc=undefined so pipeline re-extracts fresh (overwrites JSONs).
+  emit(`Starting ${label}...`);
+
   let importSrc = undefined;
   if (skipScraper) {
     try {
       const PipelineCache = require('../models/PipelineCache');
       const mongoose = require('mongoose');
 
-      // Connect to DB to check cache
       if (mongoose.connection.readyState !== 1) {
         await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
       }
 
       const cache = await PipelineCache.findOne({ key: 'extracted_links' }, 'count savedAt').lean();
       if (cache && cache.count > 0) {
-        // Load all links from ExtractedLink collection (one doc per link — no 16MB limit)
         const ExtractedLinkM = require('../models/ExtractedLink');
         const links = await ExtractedLinkM.find({}).lean();
         const clean = links.map(({ _id, __v, uploadBatch, ...rest }) => rest);
         const osp = require('path');
         const fs  = require('fs');
-        const tmpFile = osp.join('/tmp', 'links_for_bypasser.json');
+        const tmpFile = osp.join(process.env.VERCEL ? '/tmp' : __dirname+'/..', 'links_for_bypasser.json');
         fs.writeFileSync(tmpFile, JSON.stringify(clean));
         importSrc = tmpFile;
-        broadcast(`📂 Skip Scraper: loaded ${clean.length} links from MongoDB (${new Date(cache.savedAt).toLocaleDateString()})`);
+        emit(`📂 Skip Scraper: loaded ${clean.length} links from MongoDB (${new Date(cache.savedAt).toLocaleDateString()})`);
       } else {
-        // Try local filesystem fallback for local dev
-        const osp = require('path');
-        const fs  = require('fs');
-        const localFile = osp.join(__dirname, '..', 'links_for_bypasser.json');
-        if (fs.existsSync(localFile)) {
-          importSrc = localFile;
-          broadcast(`📂 Skip Scraper: using local links_for_bypasser.json`);
-        } else {
-          broadcast(`❌ Skip Scraper: no cached data found. Upload telegram_export.json first.`);
-          pipelineRunning = false;
-          return;
-        }
+        emit(`❌ Skip Scraper: no cached data found. Upload telegram_export.json first.`);
+        pipelineRunning = false;
+        res.end();
+        return;
       }
     } catch (err) {
-      broadcast(`❌ Skip Scraper cache load failed: ${err.message}`);
+      emit(`❌ Skip Scraper cache load failed: ${err.message}`);
       pipelineRunning = false;
+      res.end();
       return;
     }
   } else {
-    broadcast(`🔄 Full Pipeline: will re-extract fresh from telegram_export.json`);
+    emit(`🔄 Full Pipeline: will re-extract fresh from telegram_export.json`);
   }
 
-  const runPipeline = await getRunPipeline();
-  pipelinePromise = runPipeline({
-    noBypass:  skipBypass !== undefined ? skipBypass : !!skipScraper,
-    noWipe:    !!skipScraper,
-    resume:    !!resume,
-    importSrc,            // undefined for Full Pipeline (fresh), file path for Skip Scraper
-    emitter:   broadcast,
-  })
-  .then(() => {
-    broadcast('Pipeline finished successfully.');
-  })
-  .catch(err => {
-    broadcast(`Pipeline error: ${err.message}`);
-  })
-  .finally(() => {
+  try {
+    const runPipeline = await getRunPipeline();
+    await runPipeline({
+      noBypass:  skipBypass !== undefined ? skipBypass : !!skipScraper,
+      noWipe:    !!skipScraper,
+      resume:    !!resume,
+      importSrc,
+      emitter:   emit,
+    });
+    emit('Pipeline finished successfully.');
+  } catch (err) {
+    emit(`Pipeline error: ${err.message}`);
+  } finally {
     pipelineRunning = false;
-    pipelinePromise = null;
-    setPipelineRunningFlag(false); // clear MongoDB flag
-  });
+    setPipelineRunningFlag(false);
+    res.end();
+  }
 });
 
 // ── Heal Only ────────────────────────────────────────────────────────────────

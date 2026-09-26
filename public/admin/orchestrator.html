@@ -329,7 +329,7 @@
  // - Start pipeline -
  async function startPipeline(resume = false) {
   if (isRunning) return;
-  isRunning = true; cAdded = 0; cUpdated = 0; pipelineStarted = false;
+  isRunning = true; cAdded = 0; cUpdated = 0; pipelineStarted = true;
   document.getElementById('logBox').innerHTML = '';
   document.getElementById('doneBanner').classList.remove('visible');
   document.getElementById('startBtn').disabled = true;
@@ -340,8 +340,6 @@
   document.getElementById('modeCards').style.pointerEvents = 'none';
   setStatus('running', resume ? 'RESUMING...' : 'RUNNING');
 
-  // Clear server-side log buffer first so stale "finished" lines from a
-  // previous run don't replay via SSE and prematurely trigger onFinished()
   try {
    await fetch('/api/orchestrator/clear-logs', {
     method: 'POST',
@@ -349,32 +347,29 @@
    });
   } catch(_) {}
 
-  connectStream((text) => {
-   appendLog(text);
-   // Only react to finish/error signals AFTER server confirmed pipeline started
-   if (!pipelineStarted) return;
-   if (/ Pipeline complete|Pipeline finished/i.test(text)) onFinished(text);
-   if (/ Pipeline stopped|exit code [^0]/i.test(text)) onFinished(text, true);
-  });
-
-  try {
-   const res = await fetch('/api/orchestrator/start', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-    body: JSON.stringify({ skipScraper, resume })
-   });
-   if (!res.ok) {
-    const d = await res.json();
-    appendLog(` ERROR: ${d.error || d.message || 'Failed to start pipeline'}`);
-    onFinished('', true);
-   } else {
-    appendLog(' API accepted start request. Streaming logs...');
-    pipelineStarted = true; // Now safe to act on finish/error events
+  if (eventSource) { eventSource.close(); eventSource = null; }
+  
+  const qs = `?skipScraper=${skipScraper}&resume=${resume}`;
+  eventSource = new EventSource('/api/orchestrator/start' + qs);
+  
+  eventSource.onmessage = (e) => {
+   try {
+    const ev = JSON.parse(e.data);
+    const text = ev.text || '';
+    if (text) {
+      appendLog(text);
+      if (/ Pipeline complete|Pipeline finished/i.test(text)) onFinished(text);
+      if (/ Pipeline stopped|exit code [^0]/i.test(text)) onFinished(text, true);
+    }
+   } catch(_) {}
+  };
+  
+  eventSource.onerror = () => {
+   if (isRunning) {
+     appendLog('⚠️ Connection closed or Vercel timeout reached (max 10s-60s). Check DB manually.');
+     onFinished('', true);
    }
-  } catch(e) {
-   appendLog(` ERROR: ${e.message}`);
-   onFinished('', true);
-  }
+  };
  }
 
  // - Stop pipeline -
