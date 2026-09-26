@@ -180,6 +180,69 @@ router.get('/start', async (req, res) => {
   }
 });
 
+// ── Start pipeline (POST — backward compat for dashboard.html) ────────────────
+// dashboard.html uses POST; orchestrator.html uses GET EventSource.
+// This POST version just kicks off via the shared broadcast channel.
+router.post('/start', auth, async (req, res) => {
+  if (pipelineRunning) {
+    return res.status(400).json({ error: 'Pipeline is already running' });
+  }
+
+  const { skipScraper, resume, skipBypass } = req.body || {};
+  const label = skipScraper ? 'Skip Scraper (import-only)' : 'Full Pipeline';
+
+  res.json({ message: `${label} started` });
+
+  pipelineRunning = true;
+  setPipelineRunningFlag(true);
+  broadcast(`Starting ${label}...`);
+
+  let importSrc = undefined;
+  if (skipScraper) {
+    try {
+      const PipelineCache = require('../models/PipelineCache');
+      const mongoose = require('mongoose');
+      if (mongoose.connection.readyState !== 1) {
+        await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
+      }
+      const cache = await PipelineCache.findOne({ key: 'extracted_links' }, 'count savedAt').lean();
+      if (cache && cache.count > 0) {
+        const ExtractedLinkM = require('../models/ExtractedLink');
+        const links = await ExtractedLinkM.find({}).lean();
+        const clean = links.map(({ _id, __v, uploadBatch, ...rest }) => rest);
+        const osp = require('path');
+        const fs  = require('fs');
+        const tmpFile = osp.join(process.env.VERCEL ? '/tmp' : __dirname+'/../', 'links_for_bypasser.json');
+        fs.writeFileSync(tmpFile, JSON.stringify(clean));
+        importSrc = tmpFile;
+        broadcast(`Skip Scraper: loaded ${clean.length} links from MongoDB`);
+      } else {
+        broadcast(`Skip Scraper: no cached data found. Upload telegram_export.json first.`);
+        pipelineRunning = false;
+        setPipelineRunningFlag(false);
+        return;
+      }
+    } catch (err) {
+      broadcast(`Skip Scraper cache load failed: ${err.message}`);
+      pipelineRunning = false;
+      setPipelineRunningFlag(false);
+      return;
+    }
+  }
+
+  const runPipeline = await getRunPipeline();
+  runPipeline({
+    noBypass: skipBypass !== undefined ? skipBypass : !!skipScraper,
+    noWipe:   !!skipScraper,
+    resume:   !!resume,
+    importSrc,
+    emitter:  broadcast,
+  })
+  .then(() => broadcast('Pipeline finished successfully.'))
+  .catch(err => broadcast(`Pipeline error: ${err.message}`))
+  .finally(() => { pipelineRunning = false; pipelinePromise = null; setPipelineRunningFlag(false); });
+});
+
 // ── Heal Only ────────────────────────────────────────────────────────────────
 router.post('/heal', auth, async (req, res) => {
   if (pipelineRunning) {
