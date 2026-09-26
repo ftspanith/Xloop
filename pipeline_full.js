@@ -188,7 +188,7 @@ async function bypassUrl(url) {
 // ═══════════════════════════════════════════════════════════════════════════
 // PHASE 1: BYPASS ALL SHORTLINKS
 // ═══════════════════════════════════════════════════════════════════════════
-async function phaseBypass(allEntries, existingBypassed) {
+async function phaseBypass(allEntries, existingBypassed, CONCURRENCY = 3) {
   const alreadyBypassed = new Map(existingBypassed.map(e => [e.url, e.bypassedUrl]));
   const pending = allEntries.filter(e => e.host === 'Shortlink' && !alreadyBypassed.has(e.url));
 
@@ -786,7 +786,7 @@ async function main(opts = {}) {
   sep();
   if (!NO_BYPASS) {
     log(`STEP 2 — Bypassing shortlinks (concurrency=${CONCURRENCY})...`);
-    await phaseBypass(allEntries, existingBypassed);
+    await phaseBypass(allEntries, existingBypassed, CONCURRENCY);
     ok('Bypass phase complete');
   } else {
     warn('STEP 2 — Bypass skipped (--no-bypass)');
