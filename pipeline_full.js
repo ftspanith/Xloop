@@ -717,6 +717,45 @@ async function main(opts = {}) {
   if (!TMDB_KEY) warn('TMDB_API_KEY not set — posters will be blank!');
   if (!process.env.MONGODB_URI) warn('MONGODB_URI not set — defaulting to localhost');
 
+  // STEP 0.5: MongoDB connect (must happen BEFORE Wipe and Extract)
+  sep();
+  log('Connecting to MongoDB...');
+  const MONGO_OPTS = {
+    serverSelectionTimeoutMS: 15_000,
+    connectTimeoutMS:         15_000,
+    socketTimeoutMS:          60_000,
+    heartbeatFrequencyMS:     10_000,
+    family:                   4,
+    maxPoolSize:              5,
+    minPoolSize:              1,
+    retryWrites:              true,
+  };
+  let mongoConnected = false;
+  if (mongoose.connection.readyState === 1) {
+    mongoConnected = true;
+    ok('MongoDB already connected');
+  } else {
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/xloop', MONGO_OPTS);
+        mongoConnected = true;
+        break;
+      } catch (err) {
+        warn(`MongoDB connect attempt ${attempt}/5 failed: ${err.message}`);
+        if (attempt < 5) { log(`Retrying in ${attempt * 5}s...`); await sleep(attempt * 5000); }
+      }
+    }
+    if (!mongoConnected) { fail('Could not connect to MongoDB after 5 attempts. Aborting.'); throw new Error('MongoDB connection failed'); }
+    mongoose.connection.on('disconnected', async () => {
+      warn('MongoDB disconnected mid-run — attempting reconnect...');
+      for (let i = 1; i <= 5; i++) {
+        try { await sleep(i * 3000); await mongoose.connect(process.env.MONGODB_URI, MONGO_OPTS); log('MongoDB reconnected.'); break; }
+        catch(_) { warn(`Reconnect attempt ${i}/5 failed`); }
+      }
+    });
+    ok('MongoDB connected');
+  }
+
   // STEP 0: Wipe
   sep();
   if (!NO_WIPE) {
@@ -812,39 +851,9 @@ async function main(opts = {}) {
     for (const e of allEntries) { if (!e.bypassedUrl && bmap.has(e.url)) e.bypassedUrl = bmap.get(e.url); }
   }
 
-  // STEP 3: MongoDB connect
+  // STEP 3: Legacy DB Connection Step (Moved to top)
   sep();
-  log('STEP 3 — Connecting to MongoDB...');
-  const MONGO_OPTS = {
-    serverSelectionTimeoutMS: 15_000,
-    connectTimeoutMS:         15_000,
-    socketTimeoutMS:          60_000,
-    heartbeatFrequencyMS:     10_000,
-    family:                   4,
-    maxPoolSize:              5,
-    minPoolSize:              1,
-    retryWrites:              true,
-  };
-  let mongoConnected = false;
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    try {
-      await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/xloop', MONGO_OPTS);
-      mongoConnected = true;
-      break;
-    } catch (err) {
-      warn(`MongoDB connect attempt ${attempt}/5 failed: ${err.message}`);
-      if (attempt < 5) { log(`Retrying in ${attempt * 5}s...`); await sleep(attempt * 5000); }
-    }
-  }
-  if (!mongoConnected) { fail('Could not connect to MongoDB after 5 attempts. Aborting.'); throw new Error('MongoDB connection failed'); }
-  mongoose.connection.on('disconnected', async () => {
-    warn('MongoDB disconnected mid-run — attempting reconnect...');
-    for (let i = 1; i <= 5; i++) {
-      try { await sleep(i * 3000); await mongoose.connect(process.env.MONGODB_URI, MONGO_OPTS); log('MongoDB reconnected.'); break; }
-      catch(_) { warn(`Reconnect attempt ${i}/5 failed`); }
-    }
-  });
-  ok('MongoDB connected');
+  log('STEP 3 — MongoDB connection verified.');
 
   // STEP 4: Import
   sep();

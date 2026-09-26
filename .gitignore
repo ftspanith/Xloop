@@ -1,2 +1,4 @@
 .scrape_progress.json
 xloop_*.json
+.vercel
+.env*

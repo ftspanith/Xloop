@@ -95,7 +95,7 @@ router.get('/featured', async (req, res) => {
     }
 
     if (movies.length < 6) {
-      const fallback = await Movie.find({ type: 'movie', backdrop: { $ne: '' }, rating: { $gte: 6.5 } })
+      const fallback = await Movie.find({ type: 'movie' })
         .sort({ views: -1, createdAt: -1 }).limit(20).select('-__v -downloads');
       for (const f of fallback) {
         if (!isDuplicate(f, movies)) movies.push(f);
@@ -147,12 +147,12 @@ router.get('/trending', async (req, res) => {
 // ── GET /api/movies/latest ────────────────────────────────────────────────────
 router.get('/latest', async (req, res) => {
   try {
-    let rawMovies = await Movie.find({ type: 'movie', poster: { $ne: '' }, rating: { $gte: 5 } })
+    let rawMovies = await Movie.find({ type: 'movie' })
       .sort({ createdAt: -1 }).limit(30).select('-__v -downloads');
     let movies = uniqueMovies(rawMovies).slice(0, 15);
     
     if (movies.length < 15) {
-      let fallback = await Movie.find({ type: 'movie', poster: { $ne: '' } })
+      let fallback = await Movie.find({ type: 'movie' })
         .sort({ createdAt: -1 }).limit(30).select('-__v -downloads');
       for (const f of fallback) {
         if (!isDuplicate(f, movies)) movies.push(f);
@@ -177,7 +177,7 @@ router.get('/top-rated', async (req, res) => {
     }
     
     if (movies.length < 15) {
-      const fallback = await Movie.find({ type: 'movie', poster: { $ne: '' }, rating: { $gte: 7 } })
+      const fallback = await Movie.find({ type: 'movie' })
         .sort({ views: -1, rating: -1 }).limit(30).select('-__v -downloads');
       for (const f of fallback) {
         if (!isDuplicate(f, movies)) movies.push(f);
@@ -194,12 +194,12 @@ router.get('/top-rated', async (req, res) => {
 router.get('/this-year', async (req, res) => {
   try {
     const currentYear = new Date().getFullYear();
-    let rawMovies = await Movie.find({ type: 'movie', year: currentYear, poster: { $ne: '' }, rating: { $gte: 5.5 } })
+    let rawMovies = await Movie.find({ type: 'movie', year: currentYear })
       .sort({ rating: -1, createdAt: -1 }).limit(30).select('-__v -downloads');
     let movies = uniqueMovies(rawMovies).slice(0, 15);
     
     if (movies.length < 15) {
-      let fallback = await Movie.find({ type: 'movie', year: currentYear, poster: { $ne: '' } })
+      let fallback = await Movie.find({ type: 'movie', year: currentYear })
         .sort({ createdAt: -1 }).limit(30).select('-__v -downloads');
       for (const f of fallback) {
         if (!isDuplicate(f, movies)) movies.push(f);
@@ -208,7 +208,7 @@ router.get('/this-year', async (req, res) => {
     }
     
     if (movies.length < 15) {
-      let fallback = await Movie.find({ type: 'movie', year: { $gte: currentYear - 1 }, poster: { $ne: '' }, rating: { $gte: 6 } })
+      let fallback = await Movie.find({ type: 'movie', year: { $gte: currentYear - 1 } })
         .sort({ rating: -1, createdAt: -1 }).limit(30).select('-__v -downloads');
       for (const f of fallback) {
         if (!isDuplicate(f, movies)) movies.push(f);
