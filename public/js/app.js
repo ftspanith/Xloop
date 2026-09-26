@@ -206,29 +206,33 @@ async function loadHomepage() {
         
         setTimeout(() => {
           bg.style.backgroundImage = `url(${hero.backdrop || hero.poster})`;
-          bg.style.opacity = 0.5;
+          bg.style.opacity = 0.55;
+          
+          const rating = hero.rating ? `<span class="rating" style="display:flex;align-items:center;gap:4px;color:#f5c518;font-weight:700;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="#f5c518"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            ${hero.rating}
+          </span><span style="width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,0.4);display:inline-block;"></span>` : '';
+
+          const metaParts = [hero.year, hero.quality || 'HD', hero.duration].filter(Boolean);
           
           content.innerHTML = `
-            <div class="hero-badge">Featured</div>
+            <div class="hero-badge" style="display:inline-block;background:#e50914;color:#fff;font-size:0.65rem;font-weight:800;letter-spacing:1.5px;padding:3px 10px;border-radius:4px;text-transform:uppercase;margin-bottom:10px;">Featured</div>
             <h1 class="hero-title">${hero.title}</h1>
-            <div class="hero-meta">
-              <span class="rating"> ${hero.rating}</span>
-              <span class="dot"></span>
-              <span>${hero.year}</span>
-              <span class="dot"></span>
-              <span>${hero.quality || 'HD'}</span>
-              <span class="dot"></span>
-              <span>${hero.duration || ''}</span>
+            <div class="hero-meta" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+              ${rating}
+              ${metaParts.map((p,i) => `<span style="color:rgba(255,255,255,0.75);font-size:0.82rem;">${p}</span>${i < metaParts.length-1 ? '<span style="width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,0.4);display:inline-block;"></span>' : ''}`).join('')}
             </div>
-            <div class="hero-genres">
-              ${(hero.genre||[]).map(g => `<span class="genre-pill">${g}</span>`).join('')}
+            <div class="hero-genres" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+              ${(hero.genre||[]).slice(0,3).map(g => `<span style="font-size:0.72rem;padding:3px 10px;border-radius:99px;border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.7);">${g}</span>`).join('')}
             </div>
-            <p class="hero-desc">${hero.description || ''}</p>
-            <div class="hero-btns">
-              <a href="/watch.html?id=${hero._id}&type=${hero.type}" class="btn-watch" style="background: #E50914; border-radius: 4px; padding: 12px 28px; font-weight: bold; color: white;">
-                 Get Links
+            <p class="hero-desc" style="font-size:0.85rem;color:rgba(255,255,255,0.7);line-height:1.55;margin-bottom:18px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${hero.description || ''}</p>
+            <div class="hero-btns" style="display:flex;gap:10px;flex-wrap:wrap;">
+              <a href="/watch.html?id=${hero._id}&type=${hero.type}" class="btn-watch" style="display:inline-flex;align-items:center;gap:7px;background:#e50914;color:#fff;padding:10px 22px;border-radius:6px;font-size:0.88rem;font-weight:700;white-space:nowrap;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Get Links
               </a>
-              <a href="/watch.html?id=${hero._id}&type=${hero.type}" class="btn-info" style="background: rgba(255,255,255,0.2); border-radius: 4px; padding: 12px 28px; border: none; font-weight: bold; color: white;">
+              <a href="/watch.html?id=${hero._id}&type=${hero.type}" class="btn-info" style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,0.15);color:#fff;padding:10px 22px;border-radius:6px;font-size:0.88rem;font-weight:700;border:1px solid rgba(255,255,255,0.2);white-space:nowrap;backdrop-filter:blur(4px);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 More Info
               </a>
             </div>
@@ -236,7 +240,7 @@ async function loadHomepage() {
           content.style.opacity = 1;
           
           if (dots) {
-            dots.innerHTML = featured.map((_, i) => `<span class="dot ${i === heroIdx ? 'active' : ''}" onclick="setHero(${i})" style="cursor:pointer; width:10px; height:10px; background: ${i === heroIdx ? 'white' : 'rgba(255,255,255,0.3)'}; border-radius:50%; display:inline-block; margin:0 5px; transition:0.3s;"></span>`).join('');
+            dots.innerHTML = featured.map((_, i) => `<button class="hero-dot ${i === heroIdx ? 'active' : ''}" onclick="setHero(${i})" aria-label="Slide ${i+1}"></button>`).join('');
           }
         }, 300);
       };
@@ -472,34 +476,35 @@ window.initCustomSelects = function (opts) {
   }
 };
 
-// Mobile Menu Logic
+// Mobile Menu Logic — works for pages with inline overlay (index.html) and without
 function openMobileNav() {
   let menu = document.getElementById('mobileNavOverlay');
   if (!menu) {
+    // Pages like movies.html, shows.html, anime.html etc — create overlay dynamically
     menu = document.createElement('div');
     menu.id = 'mobileNavOverlay';
+    menu.className = 'mobile-nav-overlay';
     menu.innerHTML = `
-      <div class="mobile-nav-content">
-        <button class="mobile-nav-close" onclick="closeMobileNav()">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-        <a href="/" class="nav-logo" style="margin-bottom:30px; display:block; font-size:1.8rem; text-align:center;">XLOOP</a>
-        <a href="/">Home</a>
-        <a href="/movies.html">Movies</a>
-        <a href="/shows.html">TV Shows</a>
-        <a href="/anime.html">Anime</a>
-        <a href="/search.html">Search</a>
-        <a href="/admin/login.html" style="color:var(--accent); margin-top:20px;">Admin Login</a>
-      </div>
+      <button class="mobile-nav-close" onclick="closeMobileNav()" aria-label="Close">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+      <a href="/" class="nav-logo" style="font-size:2rem;letter-spacing:-1px;margin-bottom:16px;">XLOOP</a>
+      <a href="/" onclick="closeMobileNav()">Home</a>
+      <a href="/movies.html" onclick="closeMobileNav()">Movies</a>
+      <a href="/shows.html" onclick="closeMobileNav()">TV Shows</a>
+      <a href="/anime.html" onclick="closeMobileNav()">Anime</a>
+      <a href="/search.html" onclick="closeMobileNav()">Search</a>
     `;
     document.body.appendChild(menu);
   }
-  menu.classList.add('visible');
+  menu.classList.add('open');
   document.body.style.overflow = 'hidden';
 }
 
 function closeMobileNav() {
   const menu = document.getElementById('mobileNavOverlay');
-  if (menu) menu.classList.remove('visible');
+  if (menu) menu.classList.remove('open');
   document.body.style.overflow = '';
 }
