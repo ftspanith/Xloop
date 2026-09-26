@@ -278,42 +278,48 @@ router.get('/export-status', auth, async (req, res) => {
 });
 
 // ── POST /api/scrape/save-extracted — save pre-extracted links from client-side parsing ──
-// Used when the raw telegram_export.json is > 4.5MB (Vercel body limit).
-// The browser parses the JSON and extracts links client-side, then posts only the
-// compact extracted array here. Express body limit is set to 20MB to handle large batches.
-router.post('/save-extracted', auth, express.json({ limit: '20mb' }), async (req, res) => {
+// Supports chunked uploads: client sends 400 links at a time with the same batchId.
+// On isFinal=true, cleans up old batches and updates PipelineCache.
+router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req, res) => {
   try {
-    const { links, messageCount, skipped } = req.body;
-    if (!Array.isArray(links) || links.length === 0) {
-      return res.status(400).json({ message: 'No links provided.' });
+    const { links, batchId: incomingBatchId, isFinal, messageCount, skipped } = req.body;
+    if (!Array.isArray(links)) {
+      return res.status(400).json({ message: 'No links array provided.' });
     }
 
     const ExtractedLink = require('../models/ExtractedLink');
     const PipelineCache = require('../models/PipelineCache');
-    const batchId = `batch_${Date.now()}`;
 
+    // Use provided batchId (subsequent chunks) or create new one (first chunk)
+    const batchId = incomingBatchId || `batch_${Date.now()}`;
+
+    // Tag and insert this chunk
     links.forEach(e => { e.uploadBatch = batchId; });
-
-    const CHUNK = 500;
-    for (let i = 0; i < links.length; i += CHUNK) {
-      await ExtractedLink.insertMany(links.slice(i, i + CHUNK), { ordered: false });
+    if (links.length > 0) {
+      const CHUNK = 500;
+      for (let i = 0; i < links.length; i += CHUNK) {
+        await ExtractedLink.insertMany(links.slice(i, i + CHUNK), { ordered: false });
+      }
     }
-    await ExtractedLink.deleteMany({ uploadBatch: { $ne: batchId } });
 
-    await PipelineCache.findOneAndUpdate(
-      { key: 'extracted_links' },
-      { key: 'extracted_links', data: { batchId, count: links.length }, count: links.length, savedAt: new Date() },
-      { upsert: true, new: true }
-    );
+    // Only finalize on the last chunk
+    if (isFinal) {
+      await ExtractedLink.deleteMany({ uploadBatch: { $ne: batchId } });
+      const totalCount = await ExtractedLink.countDocuments({ uploadBatch: batchId });
+      await PipelineCache.findOneAndUpdate(
+        { key: 'extracted_links' },
+        { key: 'extracted_links', data: { batchId, count: totalCount }, count: totalCount, savedAt: new Date() },
+        { upsert: true, new: true }
+      );
+      try { fs.writeFileSync(path.join(os.tmpdir(), 'links_for_bypasser.json'), '[]'); } catch(_) {}
+      return res.json({
+        message: `✅ Extracted ${totalCount} links from ${messageCount || '?'} messages (${skipped || 0} skipped). Saved to MongoDB. Run Full Pipeline now.`,
+        count: totalCount, batchId,
+      });
+    }
 
-    try {
-      fs.writeFileSync(path.join(os.tmpdir(), 'links_for_bypasser.json'), JSON.stringify(links));
-    } catch(_) {}
-
-    res.json({
-      message: `✅ Extracted ${links.length} links from ${messageCount || '?'} messages (${skipped || 0} skipped). Saved to MongoDB. Run Full Pipeline now.`,
-      count: links.length,
-    });
+    // Intermediate chunk — return batchId so client reuses it
+    return res.json({ batchId, inserted: links.length });
   } catch (err) {
     res.status(500).json({ message: `Save failed: ${err.message}` });
   }

@@ -1037,9 +1037,18 @@
 
       // Read all files as text
       let allMessages = [];
+      // ── Safari-safe file reader (File.text() can crash on large files in Safari) ──
+      const readFile = file => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = () => reject(new Error('Could not read file: ' + file.name));
+        reader.readAsText(file, 'utf-8');
+      });
+
       for (const file of _dashRawFiles) {
         msg.textContent = `📖 Parsing ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)…`;
-        const text = await file.text();
+        await new Promise(r=>setTimeout(r,20)); // yield to UI
+        const text = await readFile(file);
         let parsed;
         try { parsed = JSON.parse(text); }
         catch(e) { throw new Error(`"${file.name}" is not valid JSON: ${e.message}`); }
@@ -1052,26 +1061,41 @@
       const messages = [...msgMap.values()];
 
       msg.textContent = `⚙️ Extracting links from ${messages.length.toLocaleString()} messages…`;
-      // Yield to UI
       await new Promise(r=>setTimeout(r,30));
 
       const { links, skipped } = _parseMessages(messages);
-
       if (!links.length) throw new Error('No download links found in this export file.');
 
-      const payloadKB = (JSON.stringify(links).length/1024).toFixed(0);
-      msg.textContent = `📡 Sending ${links.length} links (${payloadKB} KB) to server…`;
-
-      const res = await fetch('/api/scrape/save-extracted', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ links, messageCount: messages.length, skipped }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Save failed');
-      msg.style.color = '#22c55e';
-      msg.textContent = data.message;
-      dashCheckExportStatus();
+      // ── Chunk send: 400 links/chunk ≈ 1MB — safely under Vercel's 4.5MB limit ──
+      const CHUNK = 400;
+      const totalChunks = Math.ceil(links.length / CHUNK);
+      let batchId = null;
+      for (let ci = 0; ci < totalChunks; ci++) {
+        const chunk = links.slice(ci * CHUNK, (ci + 1) * CHUNK);
+        const isFinal = ci === totalChunks - 1;
+        msg.textContent = `📡 Saving chunk ${ci+1}/${totalChunks} (${chunk.length} links)…`;
+        const body = JSON.stringify({
+          links: chunk, batchId, isFinal,
+          messageCount: isFinal ? messages.length : undefined,
+          skipped: isFinal ? skipped : undefined,
+        });
+        const res = await fetch('/api/scrape/save-extracted', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body,
+        });
+        // Safe parse — server may return plain text error (e.g. 413 from Vercel gateway)
+        const raw = await res.text();
+        let data;
+        try { data = JSON.parse(raw); } catch(_) { throw new Error(raw.slice(0,200)); }
+        if (!res.ok) throw new Error(data.message || 'Save failed');
+        if (!batchId) batchId = data.batchId;
+        if (isFinal) {
+          msg.style.color = '#22c55e';
+          msg.textContent = data.message;
+          dashCheckExportStatus();
+        }
+      }
     } catch (err) {
       msg.style.color = '#ef4444';
       msg.textContent = `Failed: ${err.message}`;
