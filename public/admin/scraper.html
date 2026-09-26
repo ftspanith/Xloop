@@ -355,7 +355,7 @@
     btn.disabled = true;
     btn.textContent = 'Uploading...';
     prog.style.color = 'rgba(255,255,255,.6)';
-    prog.textContent = '⏳ Parsing and uploading to MongoDB...';
+    prog.textContent = ' Parsing and uploading to MongoDB...';
     try {
       let parsed;
       try { parsed = JSON.parse(_exportFileData); } catch(e) { throw new Error('Invalid JSON file'); }
@@ -549,7 +549,7 @@
     doneBanner.classList.remove('visible');
     logBox.innerHTML = '';
     logStatus.className = 'running';
-    logStatus.textContent = '⏳ Running';
+    logStatus.textContent = ' Running';
 
     const body = {
       mode:     selectedMode,

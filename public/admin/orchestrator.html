@@ -273,7 +273,7 @@
   if (/|\[ORCHESTRATOR\]/i.test(t))                return 'log-head';
   if (/^ Added:/i.test(t))                         return 'log-add';
   if (/^ Merged/i.test(t))                         return 'log-merge';
-  if (/^⏭|skipping/i.test(t))                       return 'log-skip';
+  if (/^|skipping/i.test(t))                       return 'log-skip';
   return '';
  }
 

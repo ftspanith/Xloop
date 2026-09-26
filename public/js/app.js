@@ -471,3 +471,35 @@ window.initCustomSelects = function (opts) {
     document.addEventListener('click', () => closeAll());
   }
 };
+
+// Mobile Menu Logic
+function openMobileNav() {
+  let menu = document.getElementById('mobileNavOverlay');
+  if (!menu) {
+    menu = document.createElement('div');
+    menu.id = 'mobileNavOverlay';
+    menu.innerHTML = `
+      <div class="mobile-nav-content">
+        <button class="mobile-nav-close" onclick="closeMobileNav()">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <a href="/" class="nav-logo" style="margin-bottom:30px; display:block; font-size:1.8rem; text-align:center;">XLOOP</a>
+        <a href="/">Home</a>
+        <a href="/movies.html">Movies</a>
+        <a href="/shows.html">TV Shows</a>
+        <a href="/anime.html">Anime</a>
+        <a href="/search.html">Search</a>
+        <a href="/admin/login.html" style="color:var(--accent); margin-top:20px;">Admin Login</a>
+      </div>
+    `;
+    document.body.appendChild(menu);
+  }
+  menu.classList.add('visible');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeMobileNav() {
+  const menu = document.getElementById('mobileNavOverlay');
+  if (menu) menu.classList.remove('visible');
+  document.body.style.overflow = '';
+}

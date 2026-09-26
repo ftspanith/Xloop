@@ -659,7 +659,7 @@ async function submitManualAdd(overwrite=false) {
   if (!links.length) return showStatus('add-status', 'Please add at least one download URL.', 'error');
 
   const { tmdbKey, omdbKey } = getKeys();
-  showStatus('add-status', '⏳ Saving...', 'loading');
+  showStatus('add-status', ' Saving...', 'loading');
 
   const payload = {
     title, year: year ? parseInt(year) : null,
@@ -686,7 +686,7 @@ async function submitQuickPaste() {
   if (!text) return showStatus('quick-paste-status', 'Paste some text first!', 'error');
 
   const { tmdbKey, omdbKey } = getKeys();
-  showStatus('quick-paste-status', '⏳ Processing...', 'loading');
+  showStatus('quick-paste-status', ' Processing...', 'loading');
 
   const payload = {
     messages: [{ text }],
@@ -822,7 +822,7 @@ async function saveEdit() {
     isTrending:  document.getElementById('edit-trending').checked,
     downloads:   editMovieData.downloads,
   };
-  showStatus('edit-status', '⏳ Saving...', 'loading');
+  showStatus('edit-status', ' Saving...', 'loading');
   const data = await apiCall('PATCH', `/api/import/update-movie/${id}`, body);
   if (data.movie) {
     showStatus('edit-status', ' Saved successfully!', 'success');
@@ -835,7 +835,7 @@ async function saveEdit() {
 async function deleteMovie() {
   if (!confirm(' Are you sure you want to PERMANENTLY delete this movie and all its download links?')) return;
   const id = document.getElementById('edit-id').value;
-  showStatus('edit-status', '⏳ Deleting...', 'loading');
+  showStatus('edit-status', ' Deleting...', 'loading');
   const data = await apiCall('DELETE', `/api/import/delete-movie/${id}`);
   showStatus('edit-status', data.message || 'Deleted!', 'success');
   setTimeout(() => { closeModal(); loadSearch(); }, 800);

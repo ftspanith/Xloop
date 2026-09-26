@@ -196,7 +196,7 @@
 
         const btn = document.querySelector('button[onclick="submitQuickPaste()"]');
         btn.disabled = true;
-        statusEl.textContent = '⏳ Fetching from TMDB...';
+        statusEl.textContent = ' Fetching from TMDB...';
         statusEl.style.color = 'var(--text2)';
 
         try {
@@ -254,7 +254,7 @@
 
         const btn = document.querySelector('button[onclick="autoFillTmdb()"]');
         const oldText = btn.textContent;
-        btn.textContent = '⏳ Fetching...';
+        btn.textContent = ' Fetching...';
         btn.disabled = true;
 
         try {
