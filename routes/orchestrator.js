@@ -75,7 +75,7 @@ router.post('/start', auth, async (req, res) => {
     return res.status(400).json({ error: 'Pipeline is already running' });
   }
 
-  const { skipScraper, resume } = req.body || {};
+  const { skipScraper, resume, skipBypass } = req.body || {};
   const label = skipScraper ? 'Skip Scraper (import-only)' : 'Full Pipeline';
 
   // Respond immediately — pipeline runs async in background
@@ -135,7 +135,7 @@ router.post('/start', auth, async (req, res) => {
 
   const runPipeline = await getRunPipeline();
   pipelinePromise = runPipeline({
-    noBypass:  !!skipScraper,
+    noBypass:  skipBypass !== undefined ? skipBypass : !!skipScraper,
     noWipe:    !!skipScraper,
     resume:    !!resume,
     importSrc,            // undefined for Full Pipeline (fresh), file path for Skip Scraper

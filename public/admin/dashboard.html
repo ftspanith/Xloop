@@ -435,6 +435,13 @@
         <span id="orchLiveStatus" class="orch-status-badge"><span class="dot"></span>Offline</span>
       </div>
 
+      <div style="padding: 0 22px 10px; display: flex; gap: 15px; align-items: center;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text2); cursor: pointer;">
+          <input type="checkbox" id="chkSkipBypass" checked style="accent-color: var(--accent); width: 16px; height: 16px;">
+          Skip Shortlink Bypass (Faster)
+        </label>
+      </div>
+
       <div class="orch-card-actions">
         <button class="orch-action-btn orch-btn-primary" id="btnStartOrch" onclick="startOrchestrator()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -805,12 +812,13 @@
   // ── API helpers ───────────────────────────────────────────
   async function startOrchestrator(skipScraper = false) {
     setBusy(true);
+    const skipBypass = document.getElementById('chkSkipBypass')?.checked || false;
     try {
       appendLog('Sending start command...');
       const res = await fetch('/api/orchestrator/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('xloop_admin_token')}` },
-        body: JSON.stringify({ skipScraper })
+        body: JSON.stringify({ skipScraper, skipBypass })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.message || 'Failed to start');
