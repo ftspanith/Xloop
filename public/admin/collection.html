@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Collection Builder — XLOOP Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: var(--bg); color: var(--text); font-family: 'Inter','Outfit',sans-serif; }
+    .admin-layout { display: flex; min-height: 100vh; }
+    .admin-sidebar {
+      width: 220px; flex-shrink: 0;
+      background: rgba(0,0,0,0.4);
+      border-right: 1px solid rgba(255,255,255,0.07);
+      padding: 28px 0; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    }
+    .sidebar-logo { font-size:1.3rem; font-weight:900; letter-spacing:-1px; color:#fff; padding:0 22px 24px; display:flex; align-items:center; gap:8px; }
+    .sidebar-logo span { color: var(--accent); }
+    .sidebar-label { font-size:.62rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:rgba(255,255,255,.3); padding:0 22px 8px; margin-top:8px; }
+    .sidebar-link { display:flex; align-items:center; gap:10px; padding:11px 22px; font-size:.85rem; font-weight:600; color:rgba(255,255,255,.55); text-decoration:none; transition:all .18s; border-left:3px solid transparent; }
+    .sidebar-link:hover { color:#fff; background:rgba(255,255,255,.05); }
+    .sidebar-link.active { color:#fff; border-left-color:var(--accent); background:rgba(229,9,20,.1); }
+    .sidebar-link svg { flex-shrink:0; opacity:.7; }
+    .sidebar-link.active svg { opacity:1; }
+    .admin-main { flex:1; padding:36px 40px; max-width:calc(100vw - 220px); overflow-x:hidden; overflow-y:auto; }
+    .page-title { font-size:1.6rem; font-weight:900; letter-spacing:-.5px; display:flex; align-items:center; gap:12px; margin-bottom:6px; }
+    .page-badge { font-size:.65rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; background:rgba(229,9,20,.15); border:1px solid rgba(229,9,20,.3); color:var(--accent); padding:3px 10px; border-radius:999px; }
+    .page-sub { font-size:.85rem; color:var(--text2); margin-bottom:32px; }
+    .coll-layout { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
+    @media(max-width:1100px){ .coll-layout { grid-template-columns:1fr; } }
+    .panel { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:22px; margin-bottom:20px; }
+    .panel:last-child { margin-bottom:0; }
+    .panel-title { font-size:.72rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--text2); display:flex; align-items:center; gap:8px; margin-bottom:18px; }
+    .panel-title::before { content:''; display:inline-block; width:3px; height:14px; background:var(--accent); border-radius:2px; }
+    .field-label { font-size:.72rem; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.06em; display:block; margin-bottom:7px; }
+    .field-input { width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:10px; color:var(--text); padding:11px 14px; font-size:.9rem; font-family:inherit; outline:none; transition:border-color .2s; box-sizing:border-box; }
+    .field-input:focus { border-color:rgba(229,9,20,.5); background:rgba(255,255,255,.08); }
+    .field-input::placeholder { color:rgba(255,255,255,.3); }
+    .search-row { display:flex; gap:10px; margin-bottom:14px; }
+    .search-row .field-input { flex:1; }
+    .btn-search { padding:11px 18px; border-radius:10px; border:none; background:var(--accent); color:#fff; font-size:.85rem; font-weight:700; cursor:pointer; transition:all .2s; white-space:nowrap; display:flex; align-items:center; gap:6px; }
+    .btn-search:hover { background:#ff1a26; transform:translateY(-1px); }
+    .btn-search:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+    .search-results { max-height:320px; overflow-y:auto; border:1px solid rgba(255,255,255,.08); border-radius:12px; background:rgba(0,0,0,.25); }
+    .search-results::-webkit-scrollbar { width:4px; }
+    .search-results::-webkit-scrollbar-thumb { background:rgba(255,255,255,.12); border-radius:99px; }
+    .result-item { display:flex; align-items:center; gap:12px; padding:10px 14px; cursor:pointer; transition:background .15s; border-bottom:1px solid rgba(255,255,255,.05); }
+    .result-item:last-child { border-bottom:none; }
+    .result-item:hover:not(.added) { background:rgba(255,255,255,.06); }
+    .result-item.added { opacity:.4; cursor:not-allowed; }
+    .result-poster { width:34px; height:50px; object-fit:cover; border-radius:5px; flex-shrink:0; background:rgba(255,255,255,.08); }
+    .result-poster-ph { width:34px; height:50px; flex-shrink:0; background:rgba(229,9,20,.1); border-radius:5px; display:flex; align-items:center; justify-content:center; font-size:.7rem; font-weight:700; color:var(--accent); }
+    .result-info { flex:1; min-width:0; }
+    .result-title { font-size:.88rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .result-meta { font-size:.72rem; color:var(--text2); margin-top:2px; }
+    .result-add { flex-shrink:0; width:28px; height:28px; border-radius:50%; border:1.5px solid rgba(229,9,20,.4); background:rgba(229,9,20,.1); color:var(--accent); display:flex; align-items:center; justify-content:center; font-size:1.1rem; font-weight:700; transition:all .2s; }
+    .result-item:not(.added):hover .result-add { background:var(--accent); color:#fff; border-color:var(--accent); }
+    .result-item.added .result-add { background:rgba(255,255,255,.06); color:rgba(255,255,255,.3); border-color:transparent; font-size:.8rem; }
+    .search-empty { padding:28px; text-align:center; font-size:.82rem; color:var(--text2); }
+    .coll-panel-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+    .coll-count { font-size:.72rem; color:var(--text2); font-weight:600; }
+    .coll-list { min-height:60px; }
+    .coll-empty { padding:28px 16px; text-align:center; border:2px dashed rgba(255,255,255,.1); border-radius:12px; font-size:.82rem; color:var(--text2); }
+    .coll-item { display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:10px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07); margin-bottom:8px; cursor:grab; transition:all .18s; user-select:none; }
+    .coll-item:active { cursor:grabbing; }
+    .coll-item.dragging { opacity:.35; }
+    .coll-item.drag-over { border-color:var(--accent); background:rgba(229,9,20,.07); }
+    .coll-num { width:26px; height:26px; border-radius:50%; background:rgba(229,9,20,.15); border:1px solid rgba(229,9,20,.3); color:var(--accent); font-size:.72rem; font-weight:900; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .coll-item-poster { width:30px; height:44px; object-fit:cover; border-radius:4px; flex-shrink:0; }
+    .coll-item-poster-ph { width:30px; height:44px; flex-shrink:0; background:rgba(255,255,255,.06); border-radius:4px; }
+    .coll-item-info { flex:1; min-width:0; }
+    .coll-item-title { font-size:.84rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .coll-item-meta { font-size:.7rem; color:var(--text2); margin-top:2px; }
+    .coll-drag-handle { color:rgba(255,255,255,.2); flex-shrink:0; }
+    .coll-item-remove { flex-shrink:0; width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,.1); background:transparent; color:rgba(255,255,255,.35); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .18s; font-size:.85rem; }
+    .coll-item-remove:hover { background:rgba(239,68,68,.15); color:#f87171; border-color:rgba(239,68,68,.3); }
+    .format-options { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+    .fmt-toggle { display:flex; align-items:center; gap:6px; padding:6px 13px; border-radius:999px; border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.04); font-size:.75rem; font-weight:600; color:var(--text2); cursor:pointer; transition:all .18s; user-select:none; }
+    .fmt-toggle.on { background:rgba(229,9,20,.12); border-color:rgba(229,9,20,.35); color:#ff7070; }
+    .fmt-dot { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.2); transition:background .18s; }
+    .fmt-toggle.on .fmt-dot { background:var(--accent); }
+    .actions-row { display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
+    .btn-generate { flex:1; padding:13px 20px; border-radius:12px; border:none; background:var(--accent); color:#fff; font-size:.9rem; font-weight:800; cursor:pointer; transition:all .2s; display:flex; align-items:center; justify-content:center; gap:8px; }
+    .btn-generate:hover:not(:disabled) { background:#ff1a26; transform:translateY(-2px); box-shadow:0 8px 24px rgba(229,9,20,.35); }
+    .btn-generate:disabled { opacity:.4; cursor:not-allowed; }
+    .btn-secondary { padding:13px 16px; border-radius:12px; border:1px solid rgba(255,255,255,.1); background:transparent; color:var(--text2); font-size:.85rem; font-weight:700; cursor:pointer; transition:all .2s; }
+    .btn-secondary:hover { background:rgba(255,255,255,.06); color:var(--text); }
+    .gen-progress { margin-top:14px; padding:13px 16px; background:rgba(0,0,0,.25); border-radius:10px; border:1px solid rgba(255,255,255,.07); font-size:.78rem; color:var(--text2); display:none; }
+    .gen-progress.show { display:block; }
+    .progress-bar-wrap { height:4px; background:rgba(255,255,255,.08); border-radius:99px; margin-top:10px; overflow:hidden; }
+    .progress-bar { height:100%; background:var(--accent); border-radius:99px; width:0%; transition:width .4s ease; }
+    .output-section { margin-top:28px; }
+    .output-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px; }
+    .output-stats { font-size:.75rem; color:var(--text2); margin-left:10px; }
+    .output-stats b { color:var(--accent); }
+    .copy-btns { display:flex; gap:8px; }
+    .btn-copy { display:flex; align-items:center; gap:6px; padding:9px 18px; border-radius:10px; border:1px solid rgba(255,255,255,.15); background:rgba(255,255,255,.07); color:var(--text); font-size:.8rem; font-weight:700; cursor:pointer; transition:all .2s; }
+    .btn-copy:hover { background:rgba(255,255,255,.12); }
+    .btn-copy.copied { background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.3); color:#4ade80; }
+    .btn-copy-accent { display:flex; align-items:center; gap:6px; padding:9px 16px; border-radius:10px; border:1px solid rgba(229,9,20,.3); background:rgba(229,9,20,.1); color:var(--accent); font-size:.8rem; font-weight:700; cursor:pointer; transition:all .2s; }
+    .btn-copy-accent:hover { background:rgba(229,9,20,.2); }
+    .btn-copy-accent.copied { background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.3); color:#4ade80; }
+    .output-box { width:100%; box-sizing:border-box; min-height:360px; background:#0b0b0d; border:1px solid rgba(255,255,255,.1); border-radius:14px; color:rgba(255,255,255,.85); font-family:'Courier New','Consolas',monospace; font-size:.82rem; line-height:1.75; padding:20px 22px; resize:vertical; outline:none; transition:border-color .2s; }
+    .output-box:focus { border-color:rgba(229,9,20,.35); }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .spinner { width:13px; height:13px; border:2px solid rgba(255,255,255,.2); border-top-color:currentColor; border-radius:50%; animation:spin .7s linear infinite; display:inline-block; }
+    .toast { position:fixed; bottom:24px; right:24px; background:rgba(20,20,24,.96); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:12px 20px; font-size:.85rem; font-weight:600; color:#fff; z-index:9999; transform:translateY(60px); opacity:0; transition:all .3s cubic-bezier(.2,.8,.2,1); display:flex; align-items:center; gap:9px; }
+    .toast.show { transform:translateY(0); opacity:1; }
+    .toast.ok { border-color:rgba(34,197,94,.3); }
+    .toast.err { border-color:rgba(239,68,68,.3); }
+    .admin-main::-webkit-scrollbar { width:5px; }
+    .admin-main::-webkit-scrollbar-thumb { background:rgba(255,255,255,.1); border-radius:99px; }
+  </style>
+</head>
+<body>
+<div class="admin-layout">
+
+  <!-- Sidebar -->
+  <aside class="admin-sidebar">
+    <div class="sidebar-logo">XL<span>OO</span>P <small style="font-size:.5rem;opacity:.35;font-weight:500;letter-spacing:.05em">ADMIN</small></div>
+    <div class="sidebar-label">Main</div>
+    <a href="/admin/dashboard.html" class="sidebar-link">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard
+    </a>
+    <a href="/admin/manager.html" class="sidebar-link">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Content Manager
+    </a>
+    <div class="sidebar-label" style="margin-top:12px">Tools</div>
+    <a href="/admin/collection.html" class="sidebar-link active">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Collection Builder
+    </a>
+    <a href="/admin/bulk-import.html" class="sidebar-link">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Bulk Import
+    </a>
+    <a href="/admin/orchestrator.html" class="sidebar-link">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Orchestrator
+    </a>
+    <a href="/admin/scraper.html" class="sidebar-link">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>Scraper
+    </a>
+    <a href="/admin/fix-posters.html" class="sidebar-link">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Fix Posters
+    </a>
+  </aside>
+
+  <!-- Main -->
+  <main class="admin-main">
+    <div class="page-title">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      Collection Builder
+      <span class="page-badge">Admin Tool</span>
+    </div>
+    <p class="page-sub">Build actor/director collections — generates a formatted link list ready to copy for Telegram or JustPaste.</p>
+
+    <div class="coll-layout">
+
+      <!-- LEFT -->
+      <div>
+        <!-- Setup -->
+        <div class="panel">
+          <div class="panel-title">Collection Setup</div>
+          <label class="field-label">Collection Name</label>
+          <input type="text" id="collName" class="field-input"
+            placeholder="e.g. PAWAN KALYAN COLLECTION"
+            style="margin-bottom:18px;font-size:.95rem;font-weight:700;letter-spacing:.03em">
+
+          <div class="panel-title" style="margin-bottom:12px">Output Format</div>
+          <div class="format-options">
+            <div class="fmt-toggle on" id="ft-numbering" onclick="toggleFmt(this,'opt-numbering')"><div class="fmt-dot"></div>Numbering</div>
+            <div class="fmt-toggle on" id="ft-filename"  onclick="toggleFmt(this,'opt-filename')"><div class="fmt-dot"></div>Filename</div>
+            <div class="fmt-toggle on" id="ft-size"      onclick="toggleFmt(this,'opt-size')"><div class="fmt-dot"></div>File Size</div>
+            <div class="fmt-toggle on" id="ft-host"      onclick="toggleFmt(this,'opt-host')"><div class="fmt-dot"></div>Host Label</div>
+            <div class="fmt-toggle"    id="ft-sep"       onclick="toggleFmt(this,'opt-sep')"><div class="fmt-dot"></div>Separators</div>
+          </div>
+          <input type="hidden" id="opt-numbering" value="1">
+          <input type="hidden" id="opt-filename"  value="1">
+          <input type="hidden" id="opt-size"      value="1">
+          <input type="hidden" id="opt-host"      value="1">
+          <input type="hidden" id="opt-sep"       value="0">
+        </div>
+
+        <!-- Search -->
+        <div class="panel">
+          <div class="panel-title">Search &amp; Add Movies</div>
+          <div class="search-row">
+            <input type="text" id="searchInput" class="field-input" placeholder="Search title…" autocomplete="off"
+              onkeydown="if(event.key==='Enter')doSearch()">
+            <button class="btn-search" id="searchBtn" onclick="doSearch()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>Search
+            </button>
+          </div>
+          <div class="search-results" id="searchResults">
+            <div class="search-empty">Search for a movie to add it to the collection.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT -->
+      <div>
+        <div class="panel">
+          <div class="coll-panel-header">
+            <div class="panel-title" style="margin-bottom:0">Collection Items</div>
+            <span class="coll-count" id="itemCount">0 movies</span>
+          </div>
+
+          <div class="coll-list" id="collList">
+            <div class="coll-empty" id="collEmpty">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3;margin-bottom:8px"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><br>
+              No movies added yet.<br>Search and add movies from the left.
+            </div>
+          </div>
+
+          <div class="gen-progress" id="genProgress">
+            <span id="genProgressText">Fetching links…</span>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar" id="progressBar"></div>
+            </div>
+          </div>
+
+          <div class="actions-row">
+            <button class="btn-generate" id="generateBtn" onclick="generateCollection()" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              Generate Collection
+            </button>
+            <button class="btn-secondary" onclick="clearAll()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+              Clear
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Output -->
+    <div class="output-section" id="outputSection" style="display:none">
+      <div class="panel">
+        <div class="output-header">
+          <div style="display:flex;align-items:center">
+            <div class="panel-title" style="margin-bottom:0">Generated Output</div>
+            <span class="output-stats" id="outputStats"></span>
+          </div>
+          <div class="copy-btns">
+            <button class="btn-copy-accent" id="btnCopyAccent" onclick="copyOut('accent')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy Text
+            </button>
+            <button class="btn-copy" id="btnCopy" onclick="copyOut('all')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy All
+            </button>
+          </div>
+        </div>
+        <textarea class="output-box" id="outputBox" readonly spellcheck="false"></textarea>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"><span id="toastIcon"></span><span id="toastMsg"></span></div>
+
+<script>
+  const TOKEN = localStorage.getItem('xloop_token');
+  if (!TOKEN) window.location.href = '/admin/login.html';
+  const AH = { 'Authorization': 'Bearer ' + TOKEN };
+
+  let items = [];
+  let dragSrc = null;
+
+  // Format toggles
+  function toggleFmt(el, hidId) {
+    const on = el.classList.toggle('on');
+    document.getElementById(hidId).value = on ? '1' : '0';
+    el.querySelector('.fmt-dot').style.background = on ? 'var(--accent)' : 'rgba(255,255,255,.2)';
+  }
+  // Init dot colours
+  document.querySelectorAll('.fmt-toggle.on .fmt-dot').forEach(d => d.style.background = 'var(--accent)');
+
+  // Toast
+  let toastT;
+  function toast(msg, type='ok') {
+    const el = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = msg;
+    document.getElementById('toastIcon').innerHTML = type === 'ok'
+      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+    el.className = 'toast show ' + type;
+    clearTimeout(toastT);
+    toastT = setTimeout(() => el.classList.remove('show'), 2600);
+  }
+
+  // Search
+  let debounce;
+  document.getElementById('searchInput').addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(doSearch, 380);
+  });
+
+  async function doSearch() {
+    const q = document.getElementById('searchInput').value.trim();
+    if (!q) return;
+    const btn = document.getElementById('searchBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    const box = document.getElementById('searchResults');
+    box.innerHTML = '<div class="search-empty"><span class="spinner" style="width:16px;height:16px;border-width:2.5px"></span></div>';
+    try {
+      const r = await fetch('/api/movies?search=' + encodeURIComponent(q) + '&type=all&limit=15', { headers: AH });
+      const d = await r.json();
+      const list = d.movies || [];
+      box.innerHTML = list.length
+        ? list.map(m => resultRow(m)).join('')
+        : '<div class="search-empty">No results for "' + escH(q) + '"</div>';
+    } catch(e) {
+      box.innerHTML = '<div class="search-empty" style="color:#f87171">Search error. Check connection.</div>';
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>Search';
+  }
+
+  function resultRow(m) {
+    const added = items.some(x => x._id === m._id);
+    const poster = m.poster
+      ? '<img class="result-poster" src="' + m.poster + '" alt="" onerror="this.style.display=\'none\'">'
+      : '<div class="result-poster-ph">' + (m.title||'?')[0].toUpperCase() + '</div>';
+    const meta = [m.year, m.quality, m.language].filter(Boolean).join(' · ');
+    const icon = added ? '✓' : '+';
+    const onclick = added ? '' : 'addItem(' + JSON.stringify(m._id) + ',' + JSON.stringify(m.title) + ',' + JSON.stringify(m.year||'') + ',' + JSON.stringify(m.poster||'') + ',' + JSON.stringify(m.type||'movie') + ')';
+    return '<div class="result-item' + (added?' added':'') + '" onclick="' + onclick + '" data-id="' + m._id + '">'
+      + poster
+      + '<div class="result-info"><div class="result-title">' + escH(m.title) + '</div><div class="result-meta">' + escH(meta) + '</div></div>'
+      + '<div class="result-add">' + icon + '</div></div>';
+  }
+
+  function addItem(id, title, year, poster, type) {
+    if (items.some(x => x._id === id)) return;
+    items.push({ _id: id, title, year, poster, type, downloads: null });
+    renderList();
+    syncSearchMarkers();
+    document.getElementById('generateBtn').disabled = false;
+    toast('Added: ' + title);
+  }
+
+  function removeItem(id) {
+    items = items.filter(x => x._id !== id);
+    renderList();
+    syncSearchMarkers();
+    document.getElementById('generateBtn').disabled = items.length === 0;
+  }
+
+  function syncSearchMarkers() {
+    document.querySelectorAll('.result-item').forEach(el => {
+      const added = items.some(x => x._id === el.dataset.id);
+      el.classList.toggle('added', added);
+      const btn = el.querySelector('.result-add');
+      if (btn) btn.textContent = added ? '✓' : '+';
+      if (added) el.setAttribute('onclick', '');
+    });
+  }
+
+  function renderList() {
+    const list = document.getElementById('collList');
+    const empty = document.getElementById('collEmpty');
+    document.getElementById('itemCount').textContent = items.length + ' movie' + (items.length !== 1 ? 's' : '');
+    if (!items.length) {
+      list.innerHTML = '';
+      list.appendChild(empty);
+      return;
+    }
+    list.innerHTML = items.map((m, i) =>
+      '<div class="coll-item" draggable="true" data-idx="' + i + '"'
+      + ' ondragstart="dStart(event,' + i + ')" ondragover="dOver(event,' + i + ')"'
+      + ' ondrop="dDrop(event,' + i + ')" ondragleave="dLeave(event)" ondragend="dEnd()">'
+      + '<div class="coll-num">' + (i+1) + '</div>'
+      + (m.poster ? '<img class="coll-item-poster" src="' + m.poster + '" alt="" onerror="this.style.display=\'none\'">'
+                  : '<div class="coll-item-poster-ph"></div>')
+      + '<div class="coll-item-info"><div class="coll-item-title">' + escH(m.title) + '</div>'
+      + '<div class="coll-item-meta">' + (m.year||'') + ' · ' + (m.type||'movie')
+      + (m.downloads !== null ? ' · <span style="color:var(--accent)">' + (m.downloads||[]).length + ' variants</span>' : '')
+      + '</div></div>'
+      + '<svg class="coll-drag-handle" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="6" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="18"/></svg>'
+      + '<button class="coll-item-remove" onclick="removeItem(\'' + m._id + '\')" title="Remove">×</button>'
+      + '</div>'
+    ).join('');
+  }
+
+  // Drag & drop
+  function dStart(e, i) { dragSrc = i; e.dataTransfer.effectAllowed = 'move'; e.currentTarget.classList.add('dragging'); }
+  function dOver(e, i) { e.preventDefault(); document.querySelectorAll('.coll-item').forEach(el => el.classList.remove('drag-over')); e.currentTarget.classList.add('drag-over'); }
+  function dLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+  function dDrop(e, i) { e.preventDefault(); if (dragSrc === null || dragSrc === i) return; const m = items.splice(dragSrc, 1)[0]; items.splice(i, 0, m); dragSrc = null; renderList(); }
+  function dEnd() { dragSrc = null; document.querySelectorAll('.coll-item').forEach(el => el.classList.remove('dragging','drag-over')); }
+
+  function clearAll() {
+    if (!items.length) return;
+    if (!confirm('Clear all collection items?')) return;
+    items = [];
+    renderList();
+    syncSearchMarkers();
+    document.getElementById('generateBtn').disabled = true;
+    document.getElementById('outputSection').style.display = 'none';
+  }
+
+  // Generate
+  async function generateCollection() {
+    const name = (document.getElementById('collName').value.trim() || 'COLLECTION').toUpperCase();
+    const btn = document.getElementById('generateBtn');
+    const prog = document.getElementById('genProgress');
+    const bar = document.getElementById('progressBar');
+    const txt = document.getElementById('genProgressText');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Generating…';
+    prog.classList.add('show');
+    const total = items.length;
+    for (let i = 0; i < total; i++) {
+      const item = items[i];
+      txt.textContent = 'Fetching: ' + item.title + ' (' + (i+1) + '/' + total + ')…';
+      bar.style.width = Math.round((i / total) * 80) + '%';
+      if (item.downloads === null) {
+        try {
+          const r = await fetch('/api/movies/' + item._id, { headers: AH });
+          if (r.ok) { const d = await r.json(); item.downloads = d.downloads || []; }
+          else item.downloads = [];
+        } catch(e) { item.downloads = []; }
+      }
+    }
+    bar.style.width = '100%';
+    txt.textContent = 'Building output…';
+    await new Promise(r => setTimeout(r, 300));
+    const out = buildOutput(name, items);
+    document.getElementById('outputBox').value = out;
+    document.getElementById('outputSection').style.display = 'block';
+    const totalLinks = items.reduce((a,m) => a + (m.downloads||[]).reduce((b,d) => b + (d.links||[]).length, 0), 0);
+    const totalVars  = items.reduce((a,m) => a + (m.downloads||[]).length, 0);
+    document.getElementById('outputStats').innerHTML =
+      ' — <b>' + items.length + '</b> movies · <b>' + totalVars + '</b> variants · <b>' + totalLinks + '</b> links';
+    prog.classList.remove('show');
+    bar.style.width = '0%';
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Regenerate';
+    renderList();
+    document.getElementById('outputSection').scrollIntoView({ behavior:'smooth', block:'start' });
+    toast('Collection generated!');
+  }
+
+  function buildOutput(name, items) {
+    const showNum  = document.getElementById('opt-numbering').value === '1';
+    const showFile = document.getElementById('opt-filename').value === '1';
+    const showSize = document.getElementById('opt-size').value === '1';
+    const showHost = document.getElementById('opt-host').value === '1';
+    const showSep  = document.getElementById('opt-sep').value === '1';
+    const monoName = toMono(name);
+    const lines = [monoName, ''];
+    items.forEach((movie, idx) => {
+      const prefix = showNum ? (idx + 1) + ') ' : '';
+      lines.push(prefix + movie.title + (movie.year ? ' (' + movie.year + ')' : ''));
+      const dls = movie.downloads || [];
+      if (!dls.length) { lines.push('[No download links available]'); }
+      else {
+        dls.forEach(dl => {
+          let label = '';
+          if (showFile && dl.filename) {
+            label = dl.filename + (showSize && dl.size ? ' [' + dl.size + ']' : '');
+          } else {
+            const parts = [dl.quality, dl.language, dl.codec].filter(Boolean);
+            label = (parts.join(' · ') || 'Download') + (showSize && dl.size ? ' [' + dl.size + ']' : '');
+          }
+          lines.push(label);
+          const lks = dl.links || [];
+          if (!lks.length) { lines.push('[No links]'); }
+          else { lks.forEach(lk => lines.push((showHost && lk.host && lk.host !== 'Download' ? '[' + lk.host + '] ' : '') + (lk.url || ''))); }
+        });
+      }
+      if (showSep && idx < items.length - 1) { lines.push(''); lines.push('─'.repeat(50)); }
+      lines.push('');
+    });
+    return lines.join('\n').trimEnd();
+  }
+
+  function toMono(s) {
+    const M = {A:'𝙰',B:'𝙱',C:'𝙲',D:'𝙳',E:'𝙴',F:'𝙵',G:'𝙶',H:'𝙷',I:'𝙸',J:'𝙹',K:'𝙺',L:'𝙻',M:'𝙼',N:'𝙽',O:'𝙾',P:'𝙿',Q:'𝚀',R:'𝚁',S:'𝚂',T:'𝚃',U:'𝚄',V:'𝚅',W:'𝚆',X:'𝚇',Y:'𝚈',Z:'𝚉',' ':' ','0':'𝟶','1':'𝟷','2':'𝟸','3':'𝟹','4':'𝟺','5':'𝟻','6':'𝟼','7':'𝟽','8':'𝟾','9':'𝟿'};
+    return [...s].map(c => M[c] || c).join('');
+  }
+
+  async function copyOut(btnId) {
+    const text = document.getElementById('outputBox').value;
+    if (!text) return;
+    try { await navigator.clipboard.writeText(text); }
+    catch(e) { const ta = document.getElementById('outputBox'); ta.select(); document.execCommand('copy'); }
+    const el = document.getElementById(btnId === 'accent' ? 'btnCopyAccent' : 'btnCopy');
+    const orig = el.innerHTML;
+    el.classList.add('copied');
+    el.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
+    setTimeout(() => { el.classList.remove('copied'); el.innerHTML = orig; }, 2000);
+    toast('Copied to clipboard!');
+  }
+
+  function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  renderList();
+</script>
+</body>
+</html>
