@@ -66,8 +66,8 @@ const sep  = ()  => _emitter('─'.repeat(64));
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// Only accept these as valid bypassed direct URLs
-const DIRECT_HOST_RE = /gdflix|hubcloud|drive\.google|gofile|terabox|mega\.nz|1fichier|filemoon|streamtape|pixeldrain|krakenfiles/i;
+// Only accept these as valid bypassed direct URLs (reliable cloud hosts only)
+const DIRECT_HOST_RE = /gdflix|hubcloud|1fichier|filemoon|streamtape|pixeldrain|krakenfiles|buzzheavier|doodstream|mixdrop/i;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BYPASS ENGINE  (ported from bypass_bot.js — bypassSofturl)

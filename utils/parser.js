@@ -77,7 +77,7 @@ const DIRECT_RE = [
   /tmbcloud\.(dev|online|lol)/i,
   /files\.catbox\.moe/i, /gdtot\.(dad|one|sbs)/i,
   /extralink\.cfd/i, /neolinks\.sbs/i, /gtlinks\.me/i,
-  /filebee\.xyz/i, /gofile\.io\/d\//i,
+  /filebee\.xyz/i,
   /streamtape\.(com|co)/i, /mixdrop\.(co|to|ag)/i,
   /dood\.(la|so|pm|to|watch|re)/i, /buzzheavier\.com/i,
   /pixeldrain\.com\/u\//i, /1fichier\.com/i,
@@ -98,7 +98,9 @@ const PASTE_RE = [
   /katb\.in/i,/justpaste\.it/i,/rentry\.co/i,/hastebin\./i,
 ];
 const IGNORE_RE = [
-  /t\.me\//i,/telegram\.me\//i,/youtube\.com/i,/youtu\.be/i,
+  /t\.me\//i,/telegram\.me\//i,
+  /youtube\.com/i,/youtu\.be/i,/yt\.be/i,/youtube-nocookie\.com/i,
+  /gofile\.io/i,
   /drive\.google\.com/i,/image\.tmdb\.org/i,/m\.media-amazon\.com/i,
   /hotstar/i,/jiohotstar\./i,/jiocinema\./i,
   /primevideo\./i,/netflix\./i,/play\.google\./i,
