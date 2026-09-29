@@ -328,7 +328,7 @@ function cleanTitleForApi(title, year = null) {
   // Pre-clean dots/underscores like pipeline_full does
   if (/[._]/.test(rawClean)) {
     const spaced = rawClean.replace(/[._]/g, ' ');
-    const TECH_TOKEN_RE = /\b(2160p|1080p|720p|480p|360p|4K|UHD|WEB[-\s]?DL|WEBRip|BluRay|BDRip|HDRip|REMUX|HEVC|x265|x264|AV1|AVC|AMZN|NF|DSNP|ZEE5|SUNNXT|JIOHS|TK|SS|AHA|ARTL|HMAX|HOTSTAR|CRKL|PCOK|DPLS|DDPd?|AAC|DTS|FLAC|DD5|DD2|HDR|SDR|DV|HLG)\b/i;
+    const TECH_TOKEN_RE = /\b(2160p|1080p|720p|480p|360p|4K|UHD|WEB[-\s]?DL|WEBRip|BluRay|BDRip|HDRip|REMUX|HEVC|x265|x264|AV1|AVC|DVDRip|DVDScr|DVDBD|DVD5|DVD9|\bDVD\b|AMZN|NF|DSNP|ZEE5|SUNNXT|JIOHS|TK|SS|AHA|ARTL|HMAX|HOTSTAR|CRKL|PCOK|DPLS|DDPd?|AAC|DTS|FLAC|DD5|DD2|HDR|SDR|DV|HLG)\b/i;
     const techMatch = TECH_TOKEN_RE.exec(spaced);
     if (techMatch && techMatch.index > 3) rawClean = spaced.substring(0, techMatch.index);
     else rawClean = spaced;
@@ -358,7 +358,7 @@ function cleanTitleForApi(title, year = null) {
     // ── Language words ────────────────────────────────────────────────
     .replace(/\b(telugu|tamil|hindi|malayalam|kannada|bengali|english|marathi|japanese|korean|chinese|arabic|turkish|spanish|french|german|punjabi|dual|multi)\b/gi,'')
     // ── Resolution / quality ─────────────────────────────────────────
-    .replace(/\b(2160p|1080p|720p|480p|360p|4[Kk]|UHD|WEB[\s._-]*DL|WEB[\s._-]*RIP|HDRip|HDTV|BluRay|BD[\s._-]*Rip|WEBRip|HEVC|x265|x264|H\.265|H\.264|H[\s._-]*265|H[\s._-]*264|AVC|HDR|HDR10P|DV|Remux|HLG|SDR|AV1|FLAC|AAC|DDP|DTS|Atmos|DD5|DD2)\b/gi,'')
+    .replace(/\b(2160p|1080p|720p|480p|360p|4[Kk]|UHD|WEB[\s._-]*DL|WEB[\s._-]*RIP|HDRip|HDTV|BluRay|BD[\s._-]*Rip|WEBRip|HEVC|x265|x264|H\.265|H\.264|H[\s._-]*265|H[\s._-]*264|AVC|HDR|HDR10P|DV|Remux|HLG|SDR|AV1|FLAC|AAC|DDP|DTS|Atmos|DD5|DD2|DVD[\s._-]*Rip|DVD[\s._-]*Scr|DVDBD|DVD5|DVD9|\bDVD\b)\b/gi,'')
     // ── Edition / Cut variants ────────────────────────────────────────
     .replace(/\b(IMAX|Remastered|Anniversary|Director.?s?\s*Cut|Extended\s*Cut|Special\s*Edition|Theatrical\s*Cut|Uncut|Unrated|Open\s*Matte|Hybrid|Fan\s*Edit|Edition)\b/gi,'')
     // ── Streaming platform codes (standalone 2-4 letter tags) ─────────────────

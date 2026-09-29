@@ -1016,29 +1016,31 @@ async function main(opts = {}) {
       // Try MongoDB cache (extracted_links saved during upload)
       log('STEP 1 — Checking MongoDB for pre-extracted links...');
       try {
+        const ExtractedLink = require('./models/ExtractedLink');
         const PipelineCache = require('./models/PipelineCache');
-        // First try extracted_links (set by upload endpoint — no raw export needed)
-        let cached = await PipelineCache.findOne({ key: 'extracted_links' }).lean();
-        if (cached && cached.count > 0) {
-          // Load all links from ExtractedLink collection (no 16MB limit)
-          const ExtractedLink = require('./models/ExtractedLink');
+
+        // Always check ExtractedLink collection directly (PipelineCache count can be stale after wipe)
+        const linkCount = await ExtractedLink.countDocuments({});
+        if (linkCount > 0) {
+          // Load all links from ExtractedLink collection
           const links = await ExtractedLink.find({}).lean();
-          if (links.length > 0) {
-            // Strip internal MongoDB fields before writing to file
-            const clean = links.map(({_id, __v, uploadBatch, ...rest}) => rest);
-            fs.writeFileSync(LINKS_FILE, JSON.stringify(clean));
-            ok(`Loaded ${clean.length} pre-extracted links from MongoDB. Skipping extraction step.`);
-          } else {
-            throw new Error('ExtractedLink collection is empty');
-          }
+          const clean = links.map(({_id, __v, uploadBatch, ...rest}) => rest);
+          fs.writeFileSync(LINKS_FILE, JSON.stringify(clean));
+          ok(`Loaded ${clean.length} pre-extracted links from MongoDB. Skipping extraction step.`);
+          // Re-sync the PipelineCache count in case it was reset by wipe
+          await PipelineCache.findOneAndUpdate(
+            { key: 'extracted_links' },
+            { $set: { count: clean.length, 'data.count': clean.length } },
+            { upsert: false }
+          );
         } else if (fs.existsSync(EXPORT_FILE)) {
-          // Fall back: run extract_links.js from raw export in /tmp
-          log('STEP 1 — Parsing telegram_export.json...');
+          // Fall back: parse raw export file from /tmp
+          log('STEP 1 — Parsing telegram_export.json from /tmp...');
           await runScript(path.join(ROOT, 'extract_links.js'));
           ok('Extraction done → links_for_bypasser.json');
         } else {
-          // Try loading raw export from MongoDB and run extraction
-          cached = await PipelineCache.findOne({ key: 'telegram_export' }).lean();
+          // Try loading raw export from MongoDB PipelineCache
+          const cached = await PipelineCache.findOne({ key: 'telegram_export' }).lean();
           if (cached && cached.data) {
             fs.writeFileSync(EXPORT_FILE, JSON.stringify(cached.data));
             log('STEP 1 — Parsing telegram_export.json from MongoDB cache...');

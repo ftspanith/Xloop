@@ -519,13 +519,7 @@ router.post('/wipe', auth, async (req, res) => {
     // 1. Wipe Movie collection
     const result = await Movie.deleteMany({});
 
-    // 2. Wipe ExtractedLink, Series, Episode collections
-    let elWiped = 0;
-    try {
-      const ExtractedLink = require('../models/ExtractedLink');
-      const elResult = await ExtractedLink.deleteMany({});
-      elWiped = elResult.deletedCount || 0;
-    } catch (_) {}
+    // 2. Wipe Series, Episode collections (NOT ExtractedLink — Skip Scraper still needs those!)
     try {
       const Series = require('../models/Series');
       await Series.deleteMany({});
@@ -535,10 +529,15 @@ router.post('/wipe', auth, async (req, res) => {
       await Episode.deleteMany({});
     } catch (_) {}
 
-    // 3. Wipe pipeline state from PipelineCache (do NOT delete uploaded files like telegram_export)
+    // 3. Wipe pipeline state from PipelineCache (preserve extracted_links & telegram_export — Skip Scraper needs them!)
     try {
       const PipelineCache = require('../models/PipelineCache');
       await PipelineCache.deleteMany({ key: { $in: ['_pipeline_running', '_pipeline_progress', 'bypassed_links'] } });
+      // Reset progress fields but keep extracted_links and telegram_export
+      await PipelineCache.updateOne(
+        { key: 'pipeline_progress' },
+        { $set: { data: { offset: 0, total: 0, label: '' } } }
+      );
     } catch (_) {}
 
     // 4. Clear checkpoint + tmp files so next run starts clean
@@ -558,9 +557,9 @@ router.post('/wipe', auth, async (req, res) => {
     pipelineProgress = { offset: 0, total: 0, label: '' };
     await setPipelineRunningFlag(false, { offset: 0, total: 0, label: '' });
 
-    const msg = `[DONE] Wiped ${result.deletedCount} movies${elWiped ? ` + ${elWiped} extracted links` : ''} — DB fully clean.`;
+    const msg = `[DONE] Wiped ${result.deletedCount} movies + series — DB fully clean. Uploaded JSON preserved for Skip Scraper.`;
     broadcast(msg);
-    return res.json({ message: 'Wipe finished', deletedCount: result.deletedCount, elWiped });
+    return res.json({ message: 'Wipe finished', deletedCount: result.deletedCount });
   } catch (e) {
     broadcast(`[ERROR] Wipe error: ${e.message}`);
     return res.status(500).json({ error: e.message });
