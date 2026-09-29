@@ -535,10 +535,10 @@ router.post('/wipe', auth, async (req, res) => {
       await Episode.deleteMany({});
     } catch (_) {}
 
-    // 3. Wipe PipelineCache completely (clears status, progress, everything)
+    // 3. Wipe pipeline state from PipelineCache (do NOT delete uploaded files like telegram_export)
     try {
       const PipelineCache = require('../models/PipelineCache');
-      await PipelineCache.deleteMany({});
+      await PipelineCache.deleteMany({ key: { $in: ['_pipeline_running', '_pipeline_progress', 'bypassed_links'] } });
     } catch (_) {}
 
     // 4. Clear checkpoint + tmp files so next run starts clean
