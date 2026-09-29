@@ -13,10 +13,11 @@ async function getRunPipeline() {
   return _runPipeline;
 }
 
-let pipelineRunning = false;  // is a pipeline running?
-let pipelinePromise = null;   // the in-flight Promise
-let clients = [];     // active SSE connections
-let logBuffer = [];     // last 500 lines for replay
+let pipelineRunning  = false;  // is a pipeline running?
+let pipelinePromise  = null;   // the in-flight Promise
+let clients          = [];     // active SSE connections
+let logBuffer        = [];     // last 500 lines for replay
+let pipelineProgress = { offset: 0, total: 0, label: '' }; // live progress
 const MAX_LOG_HISTORY = 500;
 
 // ── Broadcast a log line to all SSE clients ───────────────────────────────────
@@ -64,7 +65,7 @@ router.get('/stream', (req, res) => {
 
 // ── Status ────────────────────────────────────────────────────────────────────
 router.get('/status', async (req, res) => {
-  if (pipelineRunning) return res.json({ running: true });
+  if (pipelineRunning) return res.json({ running: true, ...pipelineProgress });
   try {
     const PipelineCache = require('../models/PipelineCache');
     const mongoose = require('mongoose');
@@ -74,14 +75,20 @@ router.get('/status', async (req, res) => {
     const flag = await PipelineCache.findOne({ key: '_pipeline_running' }).lean();
     const isRunning = flag && flag.running === true &&
       (Date.now() - new Date(flag.updatedAt || 0).getTime() < 30 * 60 * 1000);
-    return res.json({ running: !!isRunning });
+    const progress = await PipelineCache.findOne({ key: '_pipeline_progress' }).lean();
+    return res.json({
+      running: !!isRunning,
+      offset: progress?.offset || 0,
+      total:  progress?.total  || 0,
+      label:  progress?.label  || '',
+    });
   } catch (_) {
-    return res.json({ running: pipelineRunning });
+    return res.json({ running: pipelineRunning, ...pipelineProgress });
   }
 });
 
-// Persist running state to MongoDB so all serverless instances agree
-async function setPipelineRunningFlag(running) {
+// Persist running state + progress to MongoDB so all serverless instances agree
+async function setPipelineRunningFlag(running, progressData = null) {
   try {
     const PipelineCache = require('../models/PipelineCache');
     const mongoose = require('mongoose');
@@ -93,6 +100,13 @@ async function setPipelineRunningFlag(running) {
       { $set: { running, updatedAt: new Date() } },
       { upsert: true }
     );
+    if (progressData) {
+      await PipelineCache.findOneAndUpdate(
+        { key: '_pipeline_progress' },
+        { $set: { ...progressData, updatedAt: new Date() } },
+        { upsert: true }
+      );
+    }
   } catch (_) { /* non-critical */ }
 }
 
@@ -115,22 +129,28 @@ router.get('/start', async (req, res) => {
   res.flushHeaders();
 
   pipelineRunning = true;
+  pipelineProgress = { offset: 0, total: 0, label };
   setPipelineRunningFlag(true);
 
   const emit = (msg) => {
-    // Strip ANSI color codes
     const clean = msg.replace(/\x1b\[[0-9;]*m/g, '');
+    // Parse [PROGRESS] lines to update in-memory state
+    const progMatch = clean.match(/\[PROGRESS\]\s+(\d+)\s*\/\s*(\d+)/);
+    if (progMatch) {
+      pipelineProgress.offset = parseInt(progMatch[1]);
+      pipelineProgress.total  = parseInt(progMatch[2]);
+    }
     try { res.write(`data: ${JSON.stringify({ text: clean })}\n\n`); } catch (e) { }
   };
 
-  emit(`Starting ${label}...`);
+  emit(`🚀 Starting ${label}...`);
+  if (skipScraper) {
+    emit(`🔄 Skip Scraper: re-extracting from telegram_export.json (skipping Telegram API scrape)`);
+  } else {
+    emit(`🔄 Full Pipeline: scraping Telegram → extracting → importing`);
+  }
 
   let importSrc = undefined;
-  if (skipScraper) {
-    emit(`🔄 Skip Scraper: Will re-extract fresh from telegram_export.json`);
-  } else {
-    emit(`🔄 Full Pipeline: will re-extract fresh from telegram_export.json`);
-  }
 
   try {
     const runPipeline = await getRunPipeline();
@@ -141,9 +161,9 @@ router.get('/start', async (req, res) => {
       importSrc,
       emitter: emit,
     });
-    emit('Pipeline finished successfully.');
+    emit('✅ Pipeline finished successfully.');
   } catch (err) {
-    emit(`Pipeline error: ${err.message}`);
+    emit(`❌ Pipeline error: ${err.message}`);
   } finally {
     pipelineRunning = false;
     setPipelineRunningFlag(false);
@@ -165,13 +185,12 @@ router.post('/start', auth, async (req, res) => {
   res.json({ message: `${label} started` });
 
   pipelineRunning = true;
+  pipelineProgress = { offset: 0, total: 0, label };
   setPipelineRunningFlag(true);
-  broadcast(`Starting ${label}...`);
+  broadcast(`🚀 Starting ${label}...`);
 
   let importSrc = undefined;
-  if (skipScraper) {
-    broadcast(`🔄 Skip Scraper: Will re-extract fresh from telegram_export.json`);
-  }
+  if (skipScraper) broadcast(`🔄 Skip Scraper: re-extracting from telegram_export.json`);
 
   try {
     const runPipeline = await getRunPipeline();
@@ -180,16 +199,15 @@ router.post('/start', auth, async (req, res) => {
       noWipe: !!skipScraper,
       resume: !!resume,
       importSrc,
-      emitter: emit,
+      emitter: broadcast,
     });
-    emit('Pipeline finished successfully.');
+    broadcast('✅ Pipeline finished successfully.');
   } catch (err) {
-    emit(`Pipeline error: ${err.message}`);
+    broadcast(`❌ Pipeline error: ${err.message}`);
   } finally {
     pipelineRunning = false;
     pipelinePromise = null;
     setPipelineRunningFlag(false);
-    res.end();
   }
 });
 
@@ -214,10 +232,14 @@ router.post('/import-batch', auth, async (req, res) => {
       return res.json({ done: true, added: 0, updated: 0, skipped: 0, total: 0, nextOffset: 0, message: 'No links cached. Run Full Pipeline first.' });
     }
 
-    // Group by clean title + year
+    // Group by clean title + year — fix: also allow direct-URL-tagged-as-Shortlink
+    const DIRECT_URL_RE = /gdflix|hubcloud|gdlink|drivehub|filepress|dtflix|dotflix|tmbcloud|pixeldrain|gofile|streamtape|buzzheavier|1fichier/i;
     const groups = {};
     for (const item of links) {
-      if (item.host === 'Shortlink' && !item.bypassedUrl) continue;
+      // Skip genuine unresolved shortlinks but keep:
+      // 1. Items that have a bypassed URL
+      // 2. Items whose raw URL is actually a direct link (mis-tagged as Shortlink)
+      if (item.host === 'Shortlink' && !item.bypassedUrl && !DIRECT_URL_RE.test(item.url)) continue;
       const cTitle = cleanTitleForApi(item.title || '', item.year);
       if (!cTitle) continue;
       const key = cTitle.toLowerCase() + '__' + (item.year || '');
@@ -238,7 +260,11 @@ router.post('/import-batch', auth, async (req, res) => {
       broadcast(c);
     };
 
+    emit('[PROGRESS] ' + nextOffset + ' / ' + total + ' (' + Math.round(nextOffset / total * 100) + '%)');
     emit('Batch ' + (Math.floor(offset / batchSize) + 1) + ': groups ' + (offset + 1) + '-' + nextOffset + ' of ' + total);
+    // Persist progress so /status and UI can show resume point
+    pipelineProgress = { offset: nextOffset, total, label: 'Skip Scraper (import-only)' };
+    setPipelineRunningFlag(pipelineRunning, { offset: nextOffset, total, label: 'Skip Scraper (import-only)' });
 
     for (const [, group] of thisBatch) {
       try {

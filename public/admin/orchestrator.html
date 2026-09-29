@@ -97,6 +97,32 @@
  #doneBanner h4{color:#4ade80;margin:0 0 6px;font-size:1.05rem;}
  #doneBanner p{margin:4px 0;font-size:0.82rem;color:rgba(255,255,255,0.55);}
  #doneBanner a{color:#E50914;text-decoration:none;font-weight:600;}
+ /* Progress bar */
+ #progressWrap {
+  display:none; margin-bottom:16px;
+  background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.07);
+  border-radius:10px; padding:12px 16px;
+ }
+ #progressWrap.visible { display:block; }
+ #progressBar {
+  height:6px; border-radius:3px; background:rgba(255,255,255,0.08);
+  margin-bottom:8px; overflow:hidden;
+ }
+ #progressFill {
+  height:100%; border-radius:3px;
+  background:linear-gradient(90deg,#7c3aed,#06b6d4);
+  transition:width 0.5s ease; width:0%;
+ }
+ #progressText { font-size:0.78rem; color:rgba(255,255,255,0.5); display:flex; justify-content:space-between; }
+ #progressText span { font-variant-numeric:tabular-nums; }
+ #continueBtn {
+  display:none; margin-top:10px; width:100%; padding:10px;
+  background:rgba(99,102,241,0.15); color:#818cf8;
+  border:1px solid rgba(99,102,241,0.3); border-radius:8px;
+  font-size:0.85rem; font-weight:700; cursor:pointer; transition:all 0.2s;
+ }
+ #continueBtn:hover { background:rgba(99,102,241,0.28); }
+ #continueBtn.visible { display:block; }
  .modal-overlay {
   display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8);
   backdrop-filter:blur(6px); z-index:9999; align-items:center; justify-content:center;
@@ -167,17 +193,27 @@
 
   <div class="orch-modes" id="modeCards">
   <div class="orch-mode-card selected" onclick="selectMode(false)" id="modeCard-full">
-   <div class="mode-icon"></div>
+   <div class="mode-icon">🚀</div>
    <div class="mode-title">Full Pipeline</div>
    <div class="mode-desc">Scrape Telegram → Extract Links → Import → Heal DB. Best for a fresh run.</div>
    <span class="mode-badge">FULL</span>
   </div>
   <div class="orch-mode-card" onclick="selectMode(true)" id="modeCard-skip">
-   <div class="mode-icon"></div>
+   <div class="mode-icon">⚡</div>
    <div class="mode-title">Skip Scraper</div>
    <div class="mode-desc">Use existing <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:3px;">telegram_export.json</code> — skips Telegram API scraping.</div>
    <span class="mode-badge">FAST</span>
   </div>
+  </div>
+
+  <!-- Progress bar -->
+  <div id="progressWrap">
+   <div id="progressBar"><div id="progressFill"></div></div>
+   <div id="progressText">
+    <span id="progressLabel">Processing...</span>
+    <span id="progressCounter">0 / 0</span>
+   </div>
+   <button id="continueBtn" onclick="continueFromOffset()">⏩ Continue from last offset</button>
   </div>
 
   <div class="orch-actions">
@@ -235,6 +271,17 @@
  // - State -
  let skipScraper = false, isRunning = false, eventSource = null;
  let cAdded = 0, cUpdated = 0, pipelineStarted = false;
+ let lastOffset = 0, lastTotal = 0;
+
+ function updateProgress(offset, total) {
+  if (!total) return;
+  lastOffset = offset; lastTotal = total;
+  const pct = Math.min(100, Math.round(offset / total * 100));
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressCounter').textContent = offset.toLocaleString() + ' / ' + total.toLocaleString();
+  document.getElementById('progressLabel').textContent = pct + '% complete';
+  document.getElementById('progressWrap').classList.add('visible');
+ }
 
  // - Mobile sidebar -
  function openMobileSidebar() {
@@ -267,24 +314,27 @@
  }
 
  function classifyLine(t) {
-  if (/|completed successfully/i.test(t))          return 'log-ok';
-  if (/|ERROR:|failed with code [^0]/i.test(t))    return 'log-err';
-  if (/️|warning|missing|unknown/i.test(t))         return 'log-warn';
-  if (/|\[ORCHESTRATOR\]/i.test(t))                return 'log-head';
-  if (/^ Added:/i.test(t))                         return 'log-add';
-  if (/^ Merged/i.test(t))                         return 'log-merge';
-  if (/^|skipping/i.test(t))                       return 'log-skip';
+  if (/✅|completed successfully|Pipeline finished/i.test(t))  return 'log-ok';
+  if (/❌|ERROR:|failed with code [^0]/i.test(t))             return 'log-err';
+  if (/⚠️|warning|missing|unknown/i.test(t))                  return 'log-warn';
+  if (/\[ORCHESTRATOR\]|🚀|🔄/i.test(t))                     return 'log-head';
+  if (/\[NEW\]/i.test(t))                                     return 'log-add';
+  if (/\[MERGED\]|\[UPDATED\]/i.test(t))                     return 'log-merge';
+  if (/\[SKIP/i.test(t))                                      return 'log-skip';
+  if (/\[PROGRESS\]/i.test(t))                               return 'log-head';
   return '';
  }
 
  function parseStat(t) {
   let m;
   if ((m = t.match(/Extracted\s+([\d,]+)\s+direct/i)))       setStat('statExtracted', m[1]);
-  if ((m = t.match(/ Movies\s*:\s*([\d,]+)/i)))            setStat('statMovies', m[1]);
-  if ((m = t.match(/ Season Packs\s*:\s*([\d,]+)/i)))      setStat('statPacks', m[1]);
+  if ((m = t.match(/Movies\s*:\s*([\d,]+)/i)))               setStat('statMovies', m[1]);
+  if ((m = t.match(/Season Packs\s*:\s*([\d,]+)/i)))         setStat('statPacks', m[1]);
   if ((m = t.match(/Unique title groups:\s*([\d,]+)/i)))      setStat('statGroups', m[1]);
-  if (/^ Added:/i.test(t)) { cAdded++; document.getElementById('statAdded').textContent = cAdded.toLocaleString(); }
-  if (/^ Updated:/i.test(t)) { cUpdated++; document.getElementById('statUpdated').textContent = cUpdated.toLocaleString(); }
+  if (/\[NEW\]/i.test(t))    { cAdded++;   document.getElementById('statAdded').textContent   = cAdded.toLocaleString(); }
+  if (/\[MERGED\]|\[UPDATED\]/i.test(t)) { cUpdated++; document.getElementById('statUpdated').textContent = cUpdated.toLocaleString(); }
+  // Parse [PROGRESS] lines to update bar
+  if ((m = t.match(/\[PROGRESS\]\s+(\d+)\s*\/\s*(\d+)/))) updateProgress(parseInt(m[1]), parseInt(m[2]));
  }
 
  function setStat(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
@@ -394,13 +444,27 @@
   document.getElementById('wipeBtn').disabled = false;
   document.getElementById('modeCards').style.opacity = '1';
   document.getElementById('modeCards').style.pointerEvents = '';
+  // Show Continue button if there's remaining work
+  if (lastTotal > 0 && lastOffset < lastTotal) {
+   const btn = document.getElementById('continueBtn');
+   btn.textContent = `⏩ Continue from group ${lastOffset.toLocaleString()} / ${lastTotal.toLocaleString()} (${Math.round(lastOffset/lastTotal*100)}% done)`;
+   btn.classList.add('visible');
+  }
   if (failed || /exit code [^0]/.test(lastLine)) {
-   setStatus('fail', 'FAILED — Click Resume to continue');
+   setStatus('fail', 'STOPPED — Click Resume or Continue');
   } else {
    setStatus('done', 'DONE');
    document.getElementById('doneBanner').classList.add('visible');
    document.getElementById('doneSummary').textContent = `Added ${cAdded.toLocaleString()} new · Updated ${cUpdated.toLocaleString()} records`;
   }
+ }
+
+ function continueFromOffset() {
+  if (isRunning) return;
+  // Re-run skip scraper from last offset via import-batch chain
+  selectMode(true);
+  document.getElementById('continueBtn').classList.remove('visible');
+  startPipeline(true); // resume=true passes to backend
  }
 
  // - Wipe DB -
@@ -442,20 +506,29 @@
   try {
    const res = await fetch('/api/orchestrator/status');
    if (!res.ok) return;
-   const { running } = await res.json();
+   const data = await res.json();
+   const { running, offset, total, label } = data;
+   // Always restore progress bar if there's saved progress
+   if (total > 0) updateProgress(offset || 0, total);
    if (running) {
     isRunning = true;
-    setStatus('running', 'RUNNING');
+    setStatus('running', label ? `RUNNING — ${label}` : 'RUNNING');
     document.getElementById('startBtn').disabled = true;
     document.getElementById('stopBtn').disabled = false;
     document.getElementById('wipeBtn').disabled = true;
-    appendLog(' Pipeline already running — reconnecting to stream...');
+    appendLog('🔄 Pipeline already running — reconnecting to stream...');
     connectStream((text) => {
      appendLog(text);
-     if (/ Pipeline finished successfully|Pipeline finished/i.test(text)) onFinished(text);
-     if (/ Pipeline stopped due to an error/i.test(text)) onFinished(text, true);
-     if (/Wipe finished/i.test(text)) { onFinished(text); showToast(' Database wiped!'); }
+     if (/✅ Pipeline finished successfully|Pipeline finished/i.test(text)) onFinished(text);
+     if (/❌ Pipeline|Pipeline stopped due to an error/i.test(text)) onFinished(text, true);
+     if (/Wipe finished/i.test(text)) { onFinished(text); showToast('🗑️ Database wiped!'); }
     });
+   } else if (total > 0 && offset < total) {
+    // Not running but has leftover progress — show Continue button
+    const btn = document.getElementById('continueBtn');
+    btn.textContent = `⏩ Continue from group ${offset.toLocaleString()} / ${total.toLocaleString()} — resume where it left off`;
+    btn.classList.add('visible');
+    setStatus('fail', 'STOPPED — click Continue to resume');
    }
   } catch(_) {}
  }
