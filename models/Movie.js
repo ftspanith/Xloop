@@ -15,8 +15,10 @@ const DownloadSchema = new mongoose.Schema({
   language: { type: String },
   codec:    { type: String },  // AV1, HEVC, H.264, Other
   hdr:      { type: String },  // Dolby Vision, HDR10+, HDR10, HDR, SDR
+  audio:    { type: String },  // Atmos, TrueHD, DTS:X, DTS-HD MA, DTS, EAC3, DD, AAC, FLAC
   links:    [LinkSchema]
 }, { _id: false });
+
 
 const MovieSchema = new mongoose.Schema({
   title:       { type: String, required: true, trim: true },

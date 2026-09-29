@@ -1,7 +1,7 @@
-const express   = require('express');
-const router    = express.Router();
-const path      = require('path');
-const auth      = require('../middleware/auth');
+const express = require('express');
+const router = express.Router();
+const path = require('path');
+const auth = require('../middleware/auth');
 
 // pipeline_full is lazy-loaded inside the route handlers so it doesn't
 // get bundled/required on every Vercel cold start (it pulls in ESM-only deps)
@@ -13,10 +13,10 @@ async function getRunPipeline() {
   return _runPipeline;
 }
 
-let pipelineRunning  = false;  // is a pipeline running?
-let pipelinePromise  = null;   // the in-flight Promise
-let clients          = [];     // active SSE connections
-let logBuffer        = [];     // last 500 lines for replay
+let pipelineRunning = false;  // is a pipeline running?
+let pipelinePromise = null;   // the in-flight Promise
+let clients = [];     // active SSE connections
+let logBuffer = [];     // last 500 lines for replay
 const MAX_LOG_HISTORY = 500;
 
 // ── Broadcast a log line to all SSE clients ───────────────────────────────────
@@ -35,13 +35,13 @@ function broadcast(message) {
 
 // ── SSE stream endpoint ───────────────────────────────────────────────────────
 router.get('/stream', (req, res) => {
-  res.setHeader('Content-Type',      'text/event-stream');
-  res.setHeader('Cache-Control',     'no-cache');
-  res.setHeader('Connection',        'keep-alive');
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
-  const clientId  = Date.now() + Math.random();
+  const clientId = Date.now() + Math.random();
   clients.push({ id: clientId, res });
 
   // Send connection confirmation only — do NOT replay log buffer
@@ -116,11 +116,11 @@ router.get('/start', async (req, res) => {
 
   pipelineRunning = true;
   setPipelineRunningFlag(true);
-  
+
   const emit = (msg) => {
     // Strip ANSI color codes
     const clean = msg.replace(/\x1b\[[0-9;]*m/g, '');
-    try { res.write(`data: ${JSON.stringify({ text: clean })}\n\n`); } catch(e) {}
+    try { res.write(`data: ${JSON.stringify({ text: clean })}\n\n`); } catch (e) { }
   };
 
   emit(`Starting ${label}...`);
@@ -135,11 +135,11 @@ router.get('/start', async (req, res) => {
   try {
     const runPipeline = await getRunPipeline();
     await runPipeline({
-      noBypass:  skipBypass !== undefined ? skipBypass : !!skipScraper,
-      noWipe:    !!skipScraper,
-      resume:    !!resume,
+      noBypass: skipBypass !== undefined ? skipBypass : !!skipScraper,
+      noWipe: !!skipScraper,
+      resume: !!resume,
       importSrc,
-      emitter:   emit,
+      emitter: emit,
     });
     emit('Pipeline finished successfully.');
   } catch (err) {
@@ -176,11 +176,11 @@ router.post('/start', auth, async (req, res) => {
   try {
     const runPipeline = await getRunPipeline();
     await runPipeline({
-      noBypass:  skipBypass,
-      noWipe:    !!skipScraper,
-      resume:    !!resume,
+      noBypass: skipBypass,
+      noWipe: !!skipScraper,
+      resume: !!resume,
       importSrc,
-      emitter:   emit,
+      emitter: emit,
     });
     emit('Pipeline finished successfully.');
   } catch (err) {
@@ -305,8 +305,8 @@ router.post('/import-batch', auth, async (req, res) => {
 
           let dbRec = existing;
           if (!dbRec && meta.tmdbId) {
-             dbRec = await Movie.findOne({ tmdbId: meta.tmdbId });
-             existing = dbRec;
+            dbRec = await Movie.findOne({ tmdbId: meta.tmdbId });
+            existing = dbRec;
           }
 
           const newDl = {
@@ -323,18 +323,18 @@ router.post('/import-batch', auth, async (req, res) => {
               const ex = dbRec.downloads[j];
               const qualOk = ex.quality === quality;
               const seasOk = (finalType === 'series' || finalType === 'anime') ? (ex.season == correctSeason && ex.episode == (item.episode ?? null)) : true;
-              
+
               const exactSizeMatch = (newMB > 0 && toMB(ex.size) > 0 && Math.abs(newMB - toMB(ex.size)) < 2);
               const langOk = (ex.language || '') === (language || '');
               const sizeOk = ex.size === size || exactSizeMatch || (!ex.size && !size);
-              
-              if (qualOk && seasOk && (exactSizeMatch || (sizeOk && langOk))) { 
-                 matchedIdx = j; 
-                 // If we merged based on exact size but language was missing in existing, let's capture the language
-                 if (language && language !== 'Multi' && (!ex.language || ex.language === 'Multi')) {
-                    ex.language = language; // update in memory
-                 }
-                 break; 
+
+              if (qualOk && seasOk && (exactSizeMatch || (sizeOk && langOk))) {
+                matchedIdx = j;
+                // If we merged based on exact size but language was missing in existing, let's capture the language
+                if (language && language !== 'Multi' && (!ex.language || ex.language === 'Multi')) {
+                  ex.language = language; // update in memory
+                }
+                break;
               }
             }
 
@@ -349,7 +349,7 @@ router.post('/import-batch', auth, async (req, res) => {
 
             if (matchedIdx >= 0) {
               if (dbRec.downloads[matchedIdx].language) {
-                  metaSet[`downloads.${matchedIdx}.language`] = dbRec.downloads[matchedIdx].language;
+                metaSet[`downloads.${matchedIdx}.language`] = dbRec.downloads[matchedIdx].language;
               }
               const existLinks = dbRec.downloads[matchedIdx]?.links || [];
               if (existLinks.length >= 3 || existLinks.map(l => l.host).includes(host)) { skipped++; continue; }
@@ -358,7 +358,7 @@ router.post('/import-batch', auth, async (req, res) => {
               const res = await Movie.findOneAndUpdate({ _id: dbRec._id, [`downloads.${matchedIdx}.links.url`]: { $ne: finalUrl } }, op, { new: true });
               if (res) {
                 recomputeAggregates(res);
-                const upd = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, {new: true});
+                const upd = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, { new: true });
                 existing = upd;
                 updated++;
                 emit(`[MERGED] ${res.title} | ${quality} ➔ ${host}`);
@@ -369,7 +369,7 @@ router.post('/import-batch', auth, async (req, res) => {
               const res = await Movie.findByIdAndUpdate(dbRec._id, op, { new: true });
               if (res) {
                 recomputeAggregates(res);
-                const upd2 = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, {new: true});
+                const upd2 = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, { new: true });
                 existing = upd2;
                 updated++;
                 emit(`[UPDATED] ${res.title} | ${quality} ➔ ${host}`);
@@ -423,15 +423,15 @@ router.post('/heal', auth, async (req, res) => {
   const runPipeline = await getRunPipeline();
   pipelinePromise = runPipeline({
     noBypass: true,
-    noWipe:   true,
-    noHeal:   false,
+    noWipe: true,
+    noHeal: false,
     // Only run steps 3-5 by providing existing source file
     importSrc: require('path').join(__dirname, '..', 'bypassed_links.json'),
-    emitter:  broadcast,
+    emitter: broadcast,
   })
-  .then(() => broadcast('Healer finished.'))
-  .catch(err => broadcast(`Healer error: ${err.message}`))
-  .finally(() => { pipelineRunning = false; pipelinePromise = null; setPipelineRunningFlag(false); });
+    .then(() => broadcast('Healer finished.'))
+    .catch(err => broadcast(`Healer error: ${err.message}`))
+    .finally(() => { pipelineRunning = false; pipelinePromise = null; setPipelineRunningFlag(false); });
 });
 
 // ── Stop ─────────────────────────────────────────────────────────────────────
@@ -456,8 +456,8 @@ router.post('/wipe', auth, async (req, res) => {
   }
 
   const mongoose = require('mongoose');
-  const Movie    = require('../models/Movie');
-  
+  const Movie = require('../models/Movie');
+
   if (mongoose.connection.readyState !== 1) {
     await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
   }
@@ -466,7 +466,7 @@ router.post('/wipe', auth, async (req, res) => {
     const result = await Movie.deleteMany({});
     broadcast(`✅ Wiped ${result.deletedCount} entries from database.`);
     return res.json({ message: 'Wipe finished', deletedCount: result.deletedCount });
-  } catch(e) {
+  } catch (e) {
     broadcast(`❌ Wipe error: ${e.message}`);
     return res.status(500).json({ error: e.message });
   }
@@ -496,7 +496,7 @@ router.get('/start-local', async (req, res) => {
 
   const emit = (msg) => {
     const clean = msg.replace(/\x1b\[[0-9;]*m/g, '');
-    try { res.write(`data: ${JSON.stringify({ text: clean })}\n\n`); } catch(e) {}
+    try { res.write(`data: ${JSON.stringify({ text: clean })}\n\n`); } catch (e) { }
   };
 
   emit(`🚀 Starting ${label}...`);
@@ -526,7 +526,7 @@ router.get('/start-local', async (req, res) => {
 
   req.on('close', () => {
     if (pipelineRunning && activeProcess) {
-       // if user closes browser, we let the process keep running locally
+      // if user closes browser, we let the process keep running locally
     }
   });
 });

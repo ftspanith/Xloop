@@ -286,8 +286,9 @@ function stringSimilarity(a, b) {
 function toMB(s) { if (!s) return 0; const n = parseFloat(s); return /GB/i.test(s) ? n * 1024 : (n || 0); }
 function detectCodecLocal(fn) {
   const s = (fn||'').toUpperCase();
-  if (/\bAV1\b/.test(s)) return 'AV1';
-  if (/HEVC|H\.265|X265/.test(s)) return 'HEVC';
+  if (/\bAV1\b/.test(s))                        return 'AV1';
+  if (/HEVC|H[.\s]?265|X265\b/.test(s))        return 'HEVC';
+  if (/\bAVC\b|H[.\s]?264|X264\b/.test(s))    return 'H.264';
   return 'Other';
 }
 function seasonFromFilename(fn) {
@@ -358,59 +359,106 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
 
   const hintYear = year || (msgDate ? new Date(msgDate).getFullYear() : null);
   const isShort  = cleanTitle.trim().split(/\s+/).length <= 2;
-  const typeEp   = isSeries ? 'tv' : 'movie', otherEp = isSeries ? 'movie' : 'tv';
-  const strategies = [];
-  if (hintYear) {
-    strategies.push({ ep: typeEp, params: { query: cleanTitle, year: hintYear } });
-  }
-  strategies.push({ ep: typeEp,  params: { query: cleanTitle } });
-  strategies.push({ ep: 'multi', params: { query: cleanTitle } });
+  const typeEp   = isSeries ? 'tv' : 'movie';
+  const otherEp  = isSeries ? 'movie' : 'tv';
 
-  for (const { ep, params } of strategies) {
-    const result = await fetchWithRetry(async () => {
+  // Strip subtitle for a fallback attempt (e.g. "Dune: Part Two" → "Dune")
+  const subtitleStripped = cleanTitle.replace(/[:\u2013\u2014].*$/, '').trim();
+  const hasSubtitle = subtitleStripped.length >= 2 && subtitleStripped !== cleanTitle;
+
+  // Build ordered strategy list:
+  // 1. Primary type + year
+  // 2. Primary type, no year
+  // 3. multi (catches cross-type hits)
+  // 4. Subtitle-stripped + year (if subtitle exists)
+  // 5. Subtitle-stripped, no year
+  // 6. Other type + year (movie↔series swap)
+  // 7. Other type, no year
+  const strategies = [];
+  if (hintYear) strategies.push({ ep: typeEp,  params: { query: cleanTitle, year: hintYear } });
+  strategies.push(           { ep: typeEp,  params: { query: cleanTitle } });
+  strategies.push(           { ep: 'multi', params: { query: cleanTitle } });
+  if (hasSubtitle && hintYear) strategies.push({ ep: typeEp, params: { query: subtitleStripped, year: hintYear } });
+  if (hasSubtitle)             strategies.push({ ep: typeEp, params: { query: subtitleStripped } });
+  if (hintYear) strategies.push({ ep: otherEp, params: { query: cleanTitle, year: hintYear } });
+  strategies.push(           { ep: otherEp, params: { query: cleanTitle } });
+
+  async function runStrategy(ep, params) {
+    return fetchWithRetry(async () => {
       const url2 = ep === 'multi' ? `${BASE}/search/multi` : `${BASE}/search/${ep}`;
       const res  = await axios.get(url2, { params: { api_key: TMDB_KEY, ...params }, timeout: 10000 });
       let results = res.data.results || [];
       if (ep === 'multi') results = results.filter(r => r.media_type === 'movie' || r.media_type === 'tv');
       if (!results.length) return null;
 
+      const queryTitle = params.query;
       const scored = results.slice(0, 10).map(r => {
-        const rTitle = r.title || r.name || '', rOrig = r.original_title || r.original_name || '';
+        const rTitle = r.title || r.name || '';
+        const rOrig  = r.original_title || r.original_name || '';
         const rYear  = r.release_date ? parseInt(r.release_date, 10) : r.first_air_date ? parseInt(r.first_air_date, 10) : null;
         const rType  = ep === 'multi' ? (r.media_type === 'tv' ? 'series' : 'movie') : (ep === 'tv' ? 'series' : 'movie');
-        let score = Math.max(stringSimilarity(cleanTitleForApi(rTitle), cleanTitle), stringSimilarity(cleanTitleForApi(rOrig), cleanTitle)) * 60;
+        const origLang = r.original_language || '';
+
+        // Title similarity against BOTH the cleaned API title and the stripped title
+        const simMain = Math.max(
+          stringSimilarity(cleanTitleForApi(rTitle), queryTitle),
+          stringSimilarity(cleanTitleForApi(rOrig),  queryTitle)
+        );
+        let score = simMain * 60;
+
+        // Year proximity bonus/penalty
         if (hintYear && rYear) {
           const d = Math.abs(hintYear - rYear);
           score += d === 0 ? 30 : d === 1 ? 15 : d <= 2 ? 5 : -20;
         } else if (!hintYear && !rYear) score += 5;
+
+        // Type match bonus
         if ((isSeries ? 'series' : 'movie') === rType) score += 15; else score -= 10;
-        if (r.popularity > 50) score += 5; if (r.popularity > 200) score += 5;
-        return { r, score, rTitle, rOrig };
+
+        // Popularity bonus
+        if (r.popularity > 50)  score += 5;
+        if (r.popularity > 200) score += 5;
+
+        // Language hint: if detected language is English but result is foreign-original, small penalty
+        if (origLang && origLang !== 'en' && /^(en|English)$/i.test(origLang)) score -= 5;
+
+        return { r, score, rTitle, rOrig, rYear, simMain };
       });
+
       scored.sort((a, b) => b.score - a.score);
       const best = scored[0];
-      const titleSim = Math.max(stringSimilarity(cleanTitleForApi(best.rTitle), cleanTitle), stringSimilarity(cleanTitleForApi(best.rOrig), cleanTitle));
-      if (best.score < (isShort ? 62 : 52) || titleSim < (isShort ? 0.65 : 0.40)) return null;
+      const simThresh  = isShort ? 0.65 : 0.40;
+      const scoreThresh = isShort ? 62  : 52;
+      if (best.score < scoreThresh || best.simMain < simThresh) return null;
 
       const isTv = ep === 'tv' || best.r.media_type === 'tv';
-      const dr = await fetchWithRetry(() => axios.get(`${BASE}/${isTv ? 'tv' : 'movie'}/${best.r.id}`, { params: { api_key: TMDB_KEY }, timeout: 10000 }));
+      const dr = await fetchWithRetry(() =>
+        axios.get(`${BASE}/${isTv ? 'tv' : 'movie'}/${best.r.id}`, { params: { api_key: TMDB_KEY }, timeout: 10000 })
+      );
       if (!dr) return null;
       const sd = await fetchSeasonData(best.r.id, season, isTv);
       const d  = dr.data;
       return {
         tmdbId: String(d.id), type: isTv ? 'series' : 'movie', totalSeasons: d.number_of_seasons || 0,
-        title: d.title || d.name || title, description: sd.seasonOverview || d.overview || '',
+        title: d.title || d.name || title,
+        description: sd.seasonOverview || d.overview || '',
         poster: sd.seasonPoster || (d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : ''),
         backdrop: d.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : '',
         rating: Math.round((d.vote_average || 0) * 10) / 10,
         year: d.release_date ? parseInt(d.release_date, 10) : d.first_air_date ? parseInt(d.first_air_date, 10) : hintYear,
         releaseDate: d.release_date || d.first_air_date || '',
         genre: (d.genres || []).map(g => g.name),
-        duration: d.runtime ? `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}m` : (d.episode_run_time?.[0] ? `${Math.floor(d.episode_run_time[0] / 60)}h ${d.episode_run_time[0] % 60}m` : ''),
+        duration: d.runtime
+          ? `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}m`
+          : (d.episode_run_time?.[0] ? `${Math.floor(d.episode_run_time[0] / 60)}h ${d.episode_run_time[0] % 60}m` : ''),
         originalLanguage: langMap[d.original_language] || d.original_language || '',
         confidence: Math.round(best.score),
       };
     });
+  }
+
+  for (const { ep, params } of strategies) {
+    const result = await runStrategy(ep, params);
     if (result) return result;
   }
   return null;
@@ -418,15 +466,50 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
 
 async function searchOMDB(title, year, isSeries) {
   if (!OMDB_KEY) return null;
-  return fetchWithRetry(async () => {
-    const params = { t: cleanTitleForApi(title), apikey: OMDB_KEY, type: isSeries ? 'series' : 'movie', plot: 'short' };
-    if (year) params.y = year;
-    const res = await axios.get('https://www.omdbapi.com/', { params, timeout: 8000 });
-    const d = res.data;
-    if (!d || d.Response === 'False') return null;
-    const m = d.Runtime ? parseInt(d.Runtime) : null;
-    return { title: d.Title || title, description: d.Plot !== 'N/A' ? d.Plot : '', poster: d.Poster !== 'N/A' ? d.Poster : '', rating: d.imdbRating !== 'N/A' ? parseFloat(d.imdbRating) : 0, year: d.Year ? parseInt(d.Year, 10) : year, genre: d.Genre !== 'N/A' ? d.Genre.split(', ') : [], duration: m ? `${Math.floor(m/60)}h ${m%60}m` : '', imdbId: d.imdbID || '' };
-  });
+  const cleanTitle = cleanTitleForApi(title);
+  if (!cleanTitle || cleanTitle.length < 2) return null;
+
+  async function omdbFetch(t, y) {
+    return fetchWithRetry(async () => {
+      const params = { t, apikey: OMDB_KEY, type: isSeries ? 'series' : 'movie', plot: 'short' };
+      if (y) params.y = y;
+      const res = await axios.get('https://www.omdbapi.com/', { params, timeout: 8000 });
+      const d = res.data;
+      if (!d || d.Response === 'False') return null;
+      const m = d.Runtime ? parseInt(d.Runtime) : null;
+      return {
+        title: d.Title || title,
+        description: d.Plot !== 'N/A' ? d.Plot : '',
+        poster: d.Poster !== 'N/A' ? d.Poster : '',
+        rating: d.imdbRating !== 'N/A' ? parseFloat(d.imdbRating) : 0,
+        year: d.Year ? parseInt(d.Year, 10) : year,
+        genre: d.Genre !== 'N/A' ? d.Genre.split(', ') : [],
+        duration: m ? `${Math.floor(m / 60)}h ${m % 60}m` : '',
+        imdbId: d.imdbID || '',
+      };
+    });
+  }
+
+  // Attempt 1: title + year
+  let result = await omdbFetch(cleanTitle, year);
+  if (result) return result;
+
+  // Attempt 2: title without year (year might be off by 1)
+  if (year) {
+    result = await omdbFetch(cleanTitle, null);
+    if (result) return result;
+  }
+
+  // Attempt 3: subtitle-stripped title + year
+  const stripped = cleanTitle.replace(/[:\u2013\u2014].*$/, '').trim();
+  if (stripped.length >= 2 && stripped !== cleanTitle) {
+    result = await omdbFetch(stripped, year);
+    if (result) return result;
+    result = await omdbFetch(stripped, null);
+    if (result) return result;
+  }
+
+  return null;
 }
 
 function recomputeAggregates(doc) {

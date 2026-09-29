@@ -229,6 +229,41 @@ function detectHDR(fn) {
   return null;
 }
 
+// ─── AUDIO ───────────────────────────────────────────────────────────────────
+// Detects audio codec/format from a filename or message text.
+// Returns a short label string or null.
+function extractAudio(fn) {
+  const s = (fn || '').toUpperCase();
+  // Dolby Atmos (must check before TrueHD/DDP since Atmos is often combined)
+  if (/DOLBY\s*ATMOS|\bATMOS\b/.test(s))           return 'Atmos';
+  // Dolby TrueHD
+  if (/TRUEHD/.test(s))                             return 'TrueHD';
+  // DTS variants — order matters: check X and HD-MA before plain DTS
+  if (/DTS[:\s._-]?X\b/.test(s))                   return 'DTS:X';
+  if (/DTS[:\s._-]?HD[:\s._-]?MA/.test(s))         return 'DTS-HD MA';
+  if (/DTS[:\s._-]?HD/.test(s))                     return 'DTS-HD';
+  if (/\bDTS\b/.test(s))                            return 'DTS';
+  // Dolby Digital Plus / EAC3
+  if (/EAC[\s._-]?3|DD[P+]/.test(s))               return 'EAC3';
+  // Dolby Digital / AC3
+  if (/\bAC[\s._-]?3\b|\bDD\b/.test(s))            return 'DD';
+  // AAC
+  if (/\bAAC\b/.test(s))                            return 'AAC';
+  // FLAC
+  if (/\bFLAC\b/.test(s))                           return 'FLAC';
+  // MP3
+  if (/\bMP3\b/.test(s))                            return 'MP3';
+  return null;
+}
+
+// ─── SIZE → MB ───────────────────────────────────────────────────────────────
+// Converts a size string like "1.5 GB" or "800MB" to a float in MB.
+function toMB(s) {
+  if (!s) return 0;
+  const n = parseFloat(s);
+  return /GB/i.test(s) ? n * 1024 : (n || 0);
+}
+
 // ─── CONTENT TYPE ────────────────────────────────────────────────────────────
 function detectContentType(text) {
   const t=(text||'').toLowerCase();
@@ -870,7 +905,8 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     if (!size&&pair.size) size=pair.size;
     const key=`${quality}__${size||'nosize'}__S${fs??''}E${fe??''}`;
 
-    if (!fileMap[key]) fileMap[key]={quality,size,hdr,codec,filename:stripEmojis(rawFn).trim()||cleanedTitle,language:fileLang,season:fs,episode:fe,links:[]};
+    const audio = extractAudio(rawFn) || extractAudio(fullText) || null;
+    if (!fileMap[key]) fileMap[key]={quality,size,hdr,codec,audio,filename:stripEmojis(rawFn).trim()||cleanedTitle,language:fileLang,season:fs,episode:fe,links:[]};
     if (!fileMap[key].links.find(l=>l.url===pair.url)) {
       fileMap[key].links.push({host:detectHost(pair.url),url:pair.url,isFast:/gdflix|hubcloud|gdlink/i.test(pair.url)});
     }
@@ -905,6 +941,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 
 module.exports = {
   parseMessageBlock,classifyUrl,stripEmojis,cleanTitleForApi,normalizeQuality,
-  extractSize,detectHost,detectLanguage,detectAllLanguages,detectContentType,
-  extractSeasonEpisode,detectCodec,detectHDR,isJunkTitle,isMetadataLine,extractTitleFromStreamingUrl,
+  extractSize,toMB,detectHost,detectLanguage,detectAllLanguages,detectContentType,
+  extractSeasonEpisode,detectCodec,detectHDR,extractAudio,isJunkTitle,isMetadataLine,
+  extractTitleFromStreamingUrl,
 };

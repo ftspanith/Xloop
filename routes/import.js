@@ -6,8 +6,12 @@ const {
   stripEmojis,
   cleanTitleForApi,
   extractSeasonEpisode,
-  parseMessageBlock
+  parseMessageBlock,
+  detectCodec,
+  detectHDR,
+  extractAudio,
 } = require('../utils/parser');
+
 
 // ── Server-side API keys (fallback when client doesn't pass them) ──
 const ENV_TMDB_KEY = process.env.TMDB_API_KEY || '';
@@ -825,13 +829,19 @@ router.post('/manual-add', auth, async (req, res) => {
   const meta     = await fetchMeta(parsed, tmdbKey, omdbKey);
   const finalTitle = meta.title || title;
 
-  const downloads = links.map(link => ({
-    quality:  'HD', // Simplified as per instruction
-    size:     link.size || '',
-    filename: link.filename || '',
-    language: link.language || 'Telugu',
-    links: [{ host: detectHost(link.url), url: link.url, isFast: /gdflix|hubcloud|gdlink/i.test(link.url) }],
-  }));
+  const downloads = links.map(link => {
+    const fn = link.filename || '';
+    return {
+      quality:  link.quality  || 'HD',
+      size:     link.size     || '',
+      filename: fn,
+      language: link.language || '',
+      codec:    link.codec    || detectCodec(fn)    || 'Other',
+      hdr:      link.hdr      || detectHDR(fn)      || null,
+      audio:    link.audio    || extractAudio(fn)   || null,
+      links: [{ host: detectHost(link.url), url: link.url, isFast: /gdflix|hubcloud|gdlink/i.test(link.url) }],
+    };
+  });
 
   const tmdbId = meta.tmdbId || '';
   let existing = tmdbId ? await Movie.findOne({ tmdbId }) : null;
