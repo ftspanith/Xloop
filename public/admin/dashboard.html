@@ -413,7 +413,7 @@
     .op-label-dot { width:8px; height:8px; border-radius:50%; background:#7c3aed; animation:pulseDot2 1s infinite; }
     @keyframes pulseDot2 { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(1.5);opacity:0.6;} }
     .op-pct { font-size:2.6rem; font-weight:900; letter-spacing:-2px; line-height:1;
-      background:linear-gradient(135deg,#a78bfa,#22d3ee); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+      background:linear-gradient(135deg,#a78bfa,#22d3ee); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent; }
     .op-bar-wrap { height:14px; background:rgba(255,255,255,0.06); border-radius:99px; overflow:hidden; margin-bottom:14px; position:relative; }
     .op-bar-fill {
       height:100%; border-radius:99px;
@@ -1285,16 +1285,6 @@
   });
 
   // ── Mobile sidebar ─────────────────────────────────────────────────────────
-  function openMobileSidebar() {
-    document.getElementById('adminSidebar').classList.add('open');
-    document.getElementById('sidebarBackdrop').classList.add('visible');
-    document.body.style.overflow = 'hidden';
-  }
-  function closeMobileSidebar() {
-    document.getElementById('adminSidebar').classList.remove('open');
-    document.getElementById('sidebarBackdrop').classList.remove('visible');
-    document.body.style.overflow = '';
-  }
 
   // ── Orchestrator (Dashboard) ──────────────────────────────────────────────
   let _skipScraper2 = false, _isRunning2 = false, _evSrc2 = null;

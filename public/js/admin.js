@@ -60,3 +60,19 @@ async function apiFetch(url, options = {}) {
   }
   return data;
 }
+
+// ── Mobile sidebar (shared across all admin pages) ───────────────────────────
+function openMobileSidebar() {
+  const sb = document.getElementById('adminSidebar');
+  const bd = document.getElementById('sidebarBackdrop');
+  if (sb) sb.classList.add('open');
+  if (bd) bd.classList.add('visible');
+  document.body.style.overflow = 'hidden';
+}
+function closeMobileSidebar() {
+  const sb = document.getElementById('adminSidebar');
+  const bd = document.getElementById('sidebarBackdrop');
+  if (sb) sb.classList.remove('open');
+  if (bd) bd.classList.remove('visible');
+  document.body.style.overflow = '';
+}

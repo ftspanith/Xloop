@@ -218,8 +218,6 @@
 let groups = [];  // Array of { title, year, type, quality, size, codec, hdr, audio, language, season, episode, links:[] }
 
 // ─── Mobile sidebar ───────────────────────────────────────────────────────────
-function openMobileSidebar()  { document.getElementById('adminSidebar').classList.add('open'); document.getElementById('sidebarBackdrop').classList.add('visible'); document.body.style.overflow='hidden'; }
-function closeMobileSidebar() { document.getElementById('adminSidebar').classList.remove('open'); document.getElementById('sidebarBackdrop').classList.remove('visible'); document.body.style.overflow=''; }
 
 // ─── Parser (mirrors server-side parseManualInput) ───────────────────────────
 const QUALITY_RE = /\b(4K|UHD|2160p|1080p|720p|480p|360p)\b/i;
