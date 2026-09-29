@@ -836,7 +836,8 @@ async function phaseImport(allEntries, RESUME = false) {
               metaSet[`downloads.${matchedIdx}.language`] = dbRec.downloads[matchedIdx].language;
           }
           const existLinks = dbRec.downloads[matchedIdx]?.links || [];
-          if (existLinks.length >= 3 || existLinks.map(l => l.host).includes(host)) { skipped++; continue; }
+          // Only skip if this exact URL is already there — don't cap by host or count
+          if (existLinks.some(l => l.url === finalUrl)) { skipped++; continue; }
           const op = { $addToSet: { [`downloads.${matchedIdx}.links`]: newDl.links[0] } };
           if (Object.keys(metaSet).length) op.$set = metaSet;
           const res = await Movie.findOneAndUpdate({ _id: dbRec._id, [`downloads.${matchedIdx}.links.url`]: { $ne: finalUrl } }, op, { new: true });

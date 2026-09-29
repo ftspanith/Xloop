@@ -129,7 +129,10 @@ router.get('/start', async (req, res) => {
   res.flushHeaders();
 
   pipelineRunning = true;
-  pipelineProgress = { offset: 0, total: 0, label };
+  // On resume, preserve existing offset so UI shows correct resume point.
+  // On fresh start, reset to 0.
+  if (!resume) pipelineProgress = { offset: 0, total: 0, label };
+  else pipelineProgress.label = label;
   setPipelineRunningFlag(true);
 
   const emit = (msg) => {
@@ -491,16 +494,46 @@ router.post('/wipe', auth, async (req, res) => {
   }
 
   const mongoose = require('mongoose');
-  const Movie = require('../models/Movie');
+  const Movie    = require('../models/Movie');
+  const fs       = require('fs');
+  const os       = require('os');
+  const pathLib  = require('path');
 
   if (mongoose.connection.readyState !== 1) {
     await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
   }
 
   try {
+    // 1. Wipe Movie collection
     const result = await Movie.deleteMany({});
-    broadcast(`[DONE] Wiped ${result.deletedCount} entries from database.`);
-    return res.json({ message: 'Wipe finished', deletedCount: result.deletedCount });
+
+    // 2. Wipe ExtractedLink collection if it exists (stale raw links)
+    let elWiped = 0;
+    try {
+      const ExtractedLink = require('../models/ExtractedLink');
+      const elResult = await ExtractedLink.deleteMany({});
+      elWiped = elResult.deletedCount || 0;
+    } catch (_) { /* collection may not exist */ }
+
+    // 3. Clear checkpoint + tmp files so next run starts clean
+    const TMP = os.tmpdir();
+    const tmpFiles = [
+      'import_checkpoint.json',
+      'links_for_bypasser.json',
+      'shortlinks_report.json',
+      'pipeline_running.json',
+    ];
+    for (const fname of tmpFiles) {
+      const fp = pathLib.join(TMP, fname);
+      try { if (fs.existsSync(fp)) fs.unlinkSync(fp); } catch(_) {}
+    }
+
+    // 4. Reset in-memory progress
+    pipelineProgress = { offset: 0, total: 0, label: '' };
+
+    const msg = `[DONE] Wiped ${result.deletedCount} movies${elWiped ? ` + ${elWiped} extracted links` : ''} — DB fully clean.`;
+    broadcast(msg);
+    return res.json({ message: 'Wipe finished', deletedCount: result.deletedCount, elWiped });
   } catch (e) {
     broadcast(`[ERROR] Wipe error: ${e.message}`);
     return res.status(500).json({ error: e.message });
