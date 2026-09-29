@@ -337,7 +337,8 @@ function cleanTitleForApi(title, year = null) {
   if (year) {
     const yStr = String(year);
     const yi   = rawClean.indexOf(yStr);
-    if (yi > 3 && /[\s.\-_(]/.test(rawClean[yi - 1] || '')) rawClean = rawClean.substring(0, yi).trim();
+    // yi >= 1 so even 1-char titles like 'Hi 2026' get year stripped
+    if (yi >= 1 && /[\s.\-_(]/.test(rawClean[yi - 1] || '')) rawClean = rawClean.substring(0, yi).trim();
   }
 
   let cleaned = rawClean
@@ -384,6 +385,10 @@ function cleanTitleForApi(title, year = null) {
     .replace(/\.(mkv|mp4|avi|mov|ts|m2ts|zip|rar)\b/gi,'')
     .replace(/v\d+|reloaded|uncut|extended/gi,'')
     .replace(/#[a-zA-Z0-9_]+/g,'')
+    // ── Strip trailing standalone year (1900–2099) at end of title ───────────
+    // Handles: 'Hi 2026', 'The Batman 2022', 'Movie (2024)', '2024-2025'
+    .replace(/\s*\(\s*(19|20)\d{2}\s*\)\s*$/, '')          // trailing (2024)
+    .replace(/\s+(19|20)\d{2}(?:[\s\-–]+(19|20)\d{2})?\s*$/, '')  // trailing 2024 or 2024-2025
     // ── Final stray digit pairs and cleanup ───────────────────────────────
     .replace(/\b\d\s+\d\b/g, '')
     .replace(/[^a-zA-Z0-9 \-']/g,' ')
