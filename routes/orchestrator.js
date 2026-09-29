@@ -530,29 +530,23 @@ router.post('/wipe', auth, async (req, res) => {
   }
 
   try {
-    // 1. Wipe Movie collection
-    const result = await Movie.deleteMany({});
+    // Wipe all collections in PARALLEL — much faster than sequential
+    const Series      = (() => { try { return require('../models/Series'); }  catch(_) { return null; } })();
+    const Episode     = (() => { try { return require('../models/Episode'); } catch(_) { return null; } })();
+    const PipelineCache = require('../models/PipelineCache');
 
-    // 2. Wipe Series, Episode collections (NOT ExtractedLink — Skip Scraper still needs those!)
-    try {
-      const Series = require('../models/Series');
-      await Series.deleteMany({});
-    } catch (_) {}
-    try {
-      const Episode = require('../models/Episode');
-      await Episode.deleteMany({});
-    } catch (_) {}
-
-    // 3. Wipe pipeline state from PipelineCache (preserve extracted_links & telegram_export — Skip Scraper needs them!)
-    try {
-      const PipelineCache = require('../models/PipelineCache');
-      await PipelineCache.deleteMany({ key: { $in: ['_pipeline_running', '_pipeline_progress', 'bypassed_links'] } });
-      // Reset progress fields but keep extracted_links and telegram_export
-      await PipelineCache.updateOne(
+    const [result] = await Promise.all([
+      Movie.deleteMany({}),
+      Series  ? Series.deleteMany({})  : Promise.resolve(),
+      Episode ? Episode.deleteMany({}) : Promise.resolve(),
+      // Reset pipeline state keys (preserve extracted_links & telegram_export)
+      PipelineCache.deleteMany({ key: { $in: ['_pipeline_running', '_pipeline_progress', 'bypassed_links'] } }),
+      PipelineCache.updateOne(
         { key: 'pipeline_progress' },
         { $set: { data: { offset: 0, total: 0, label: '' } } }
-      );
-    } catch (_) {}
+      ),
+    ]);
+
 
     // 4. Clear checkpoint + tmp files so next run starts clean
     const TMP = os.tmpdir();
