@@ -225,13 +225,13 @@
             statusEl.style.color = '#10b981';
             document.getElementById('quick-paste-text').value = '';
           } else if (low > 0) {
-            statusEl.textContent = '️ Could not identify movie with enough confidence. Try adding the movie name explicitly on the first line.';
+            statusEl.textContent = 'Could not identify movie with enough confidence. Try adding the movie name explicitly on the first line.';
             statusEl.style.color = '#f59e0b';
           } else if (skipped > 0) {
-            statusEl.textContent = '️ Could not detect movie name. Make sure you paste the filename + link together (no blank line between them).';
+            statusEl.textContent = 'Could not detect movie name. Make sure you paste the filename + link together (no blank line between them).';
             statusEl.style.color = '#f59e0b';
           } else {
-            statusEl.textContent = '️ Nothing was imported. ' + (data.message || '');
+            statusEl.textContent = 'Nothing was imported. ' + (data.message || '');
             statusEl.style.color = '#f59e0b';
           }
         } catch (err) {

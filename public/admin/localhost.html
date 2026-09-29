@@ -1065,7 +1065,7 @@
       for (const m of allMessages) { const k=`${m.channel_id||0}:${m.id}`; if(!msgMap.has(k)) msgMap.set(k,m); }
       const messages = [...msgMap.values()];
 
-      msg.textContent = `️ Extracting links from ${messages.length.toLocaleString()} messages…`;
+      msg.textContent = `Extracting links from ${messages.length.toLocaleString()} messages…`;
       await new Promise(r=>setTimeout(r,30));
 
       const { links, skipped } = _parseMessages(messages);
@@ -1120,7 +1120,7 @@
         el.textContent = ` Ready — ${(d.count||0).toLocaleString()} messages${date ? ' · saved '+date : ''}`;
       } else {
         el.style.color = 'rgba(255,200,0,.8)';
-        el.textContent = '️ Not uploaded yet — choose a file to upload before running Full Pipeline';
+        el.textContent = 'Not uploaded yet — choose a file to upload before running Full Pipeline';
       }
     } catch(_) {}
   }
@@ -1160,7 +1160,7 @@
     switch (_dashScrapeMode) {
       case 1:
         cmd  += ' --mode=1';
-        desc  = '️ Full scrape — all channels, all history. Takes 1–3 hours.';
+        desc  = 'Full scrape — all channels, all history. Takes 1–3 hours.';
         break;
       case 4:
         cmd  += ' --mode=4';

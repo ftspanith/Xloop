@@ -193,13 +193,13 @@
 
   <div class="orch-modes" id="modeCards">
   <div class="orch-mode-card selected" onclick="selectMode(false)" id="modeCard-full">
-   <div class="mode-icon">🚀</div>
+   <div class="mode-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
    <div class="mode-title">Full Pipeline</div>
    <div class="mode-desc">Scrape Telegram → Extract Links → Import → Heal DB. Best for a fresh run.</div>
    <span class="mode-badge">FULL</span>
   </div>
   <div class="orch-mode-card" onclick="selectMode(true)" id="modeCard-skip">
-   <div class="mode-icon">⚡</div>
+   <div class="mode-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
    <div class="mode-title">Skip Scraper</div>
    <div class="mode-desc">Use existing <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:3px;">telegram_export.json</code> — skips Telegram API scraping.</div>
    <span class="mode-badge">FAST</span>
@@ -213,7 +213,7 @@
     <span id="progressLabel">Processing...</span>
     <span id="progressCounter">0 / 0</span>
    </div>
-   <button id="continueBtn" onclick="continueFromOffset()">⏩ Continue from last offset</button>
+   <button id="continueBtn" onclick="continueFromOffset()"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2-8.14L11.03 12 8 14.14V9.86zM18 6h2v12h-2z"/></svg> Continue from last offset</button>
   </div>
 
   <div class="orch-actions">
@@ -255,7 +255,7 @@
 <!-- Wipe Confirm Modal -->
 <div class="modal-overlay" id="wipeModal">
  <div class="modal-box">
-  <div class="modal-icon">️</div>
+  <div class="modal-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></div>
   <h3>Wipe Entire Database?</h3>
   <p>This will <strong>permanently delete</strong> all movies and series from MongoDB. This <strong>cannot be undone</strong>. Make sure you have a backup.</p>
   <div class="modal-btns">
@@ -314,10 +314,10 @@
  }
 
  function classifyLine(t) {
-  if (/✅|completed successfully|Pipeline finished/i.test(t))  return 'log-ok';
-  if (/❌|ERROR:|failed with code [^0]/i.test(t))             return 'log-err';
-  if (/⚠️|warning|missing|unknown/i.test(t))                  return 'log-warn';
-  if (/\[ORCHESTRATOR\]|🚀|🔄/i.test(t))                     return 'log-head';
+  if (/\[DONE\]|completed successfully|Pipeline finished/i.test(t))  return 'log-ok';
+  if (/\[ERROR\]|ERROR:|failed with code [^0]/i.test(t))             return 'log-err';
+  if (/\[WARN\]|warning|missing|unknown/i.test(t))                  return 'log-warn';
+  if (/\[ORCHESTRATOR\]|\[START\]|\[INFO\]/i.test(t))                     return 'log-head';
   if (/\[NEW\]/i.test(t))                                     return 'log-add';
   if (/\[MERGED\]|\[UPDATED\]/i.test(t))                     return 'log-merge';
   if (/\[SKIP/i.test(t))                                      return 'log-skip';
@@ -372,7 +372,7 @@
    } catch(_) {}
   };
   eventSource.onerror = () => {
-   if (isRunning) appendLog('️ Connection lost — attempting to reconnect...');
+   if (isRunning) appendLog('[WARN] Connection lost — attempting to reconnect...');
   };
  }
 
@@ -416,7 +416,7 @@
   
   eventSource.onerror = () => {
    if (isRunning) {
-     appendLog('⚠️ Connection closed or Vercel timeout reached (max 10s-60s). Check DB manually.');
+     appendLog('[WARN] Connection closed or Vercel timeout reached (max 10s-60s). Check DB manually.');
      onFinished('', true);
    }
   };
@@ -447,7 +447,7 @@
   // Show Continue button if there's remaining work
   if (lastTotal > 0 && lastOffset < lastTotal) {
    const btn = document.getElementById('continueBtn');
-   btn.textContent = `⏩ Continue from group ${lastOffset.toLocaleString()} / ${lastTotal.toLocaleString()} (${Math.round(lastOffset/lastTotal*100)}% done)`;
+   btn.textContent = `Continue from group ${lastOffset.toLocaleString()} / ${lastTotal.toLocaleString()} (${Math.round(lastOffset/lastTotal*100)}% done)`;
    btn.classList.add('visible');
   }
   if (failed || /exit code [^0]/.test(lastLine)) {
@@ -493,7 +493,7 @@
     onFinished('', true);
    } else {
     const d = await res.json();
-    appendLog(`✅ Wiped ${d.deletedCount} entries from database.`);
+    appendLog(` Wiped ${d.deletedCount} entries from database.`);
     onFinished('Wipe finished'); 
     showToast(' Database wiped!');
    }
@@ -516,17 +516,17 @@
     document.getElementById('startBtn').disabled = true;
     document.getElementById('stopBtn').disabled = false;
     document.getElementById('wipeBtn').disabled = true;
-    appendLog('🔄 Pipeline already running — reconnecting to stream...');
+    appendLog('[INFO] Pipeline already running — reconnecting to stream...');
     connectStream((text) => {
      appendLog(text);
-     if (/✅ Pipeline finished successfully|Pipeline finished/i.test(text)) onFinished(text);
-     if (/❌ Pipeline|Pipeline stopped due to an error/i.test(text)) onFinished(text, true);
-     if (/Wipe finished/i.test(text)) { onFinished(text); showToast('🗑️ Database wiped!'); }
+     if (/\[DONE\] Pipeline finished|Pipeline finished/i.test(text)) onFinished(text);
+     if (/\[ERROR\].*Pipeline|Pipeline stopped due to an error/i.test(text)) onFinished(text, true);
+     if (/Wipe finished/i.test(text)) { onFinished(text); showToast('Database wiped!'); }
     });
    } else if (total > 0 && offset < total) {
     // Not running but has leftover progress — show Continue button
     const btn = document.getElementById('continueBtn');
-    btn.textContent = `⏩ Continue from group ${offset.toLocaleString()} / ${total.toLocaleString()} — resume where it left off`;
+    btn.textContent = `Continue from group ${offset.toLocaleString()} / ${total.toLocaleString()} — resume where it left off`;
     btn.classList.add('visible');
     setStatus('fail', 'STOPPED — click Continue to resume');
    }

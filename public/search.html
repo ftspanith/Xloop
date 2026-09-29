@@ -362,7 +362,7 @@
           buildPagination(data.total || items.length, page, 24);
         }
       } catch (err) {
-        resultsGrid.innerHTML = `<div class="search-empty"><div class="search-empty-icon">️</div><h3>Search failed</h3><p>${err.message}</p></div>`;
+        resultsGrid.innerHTML = `<div class="search-empty"><div class="search-empty-icon"></div><h3>Search failed</h3><p>${err.message}</p></div>`;
         setStatus('Search failed. Please try again.');
       }
     }

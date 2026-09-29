@@ -252,7 +252,7 @@ router.post('/upload-export', auth, upload.array('files', 10), async (req, res) 
 
     const dedupNote = dedupCount > 0 ? ` (${dedupCount} duplicate messages removed across files)` : '';
     res.json({
-      message: `✅ Extracted ${allLinks.length} links from ${messages.length} messages (${skipped} skipped)${dedupNote}. Saved to MongoDB. Run Full Pipeline now.`,
+      message: `[DONE] Extracted ${allLinks.length} links from ${messages.length} messages (${skipped} skipped)${dedupNote}. Saved to MongoDB. Run Full Pipeline now.`,
       count: allLinks.length, messages: messages.length, rawMessages: rawCount, duplicatesRemoved: dedupCount, skipped,
     });
   } catch (err) {
@@ -313,7 +313,7 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
       );
       try { fs.writeFileSync(path.join(os.tmpdir(), 'links_for_bypasser.json'), '[]'); } catch(_) {}
       return res.json({
-        message: `✅ Extracted ${totalCount} links from ${messageCount || '?'} messages (${skipped || 0} skipped). Saved to MongoDB. Run Full Pipeline now.`,
+        message: `[DONE] Extracted ${totalCount} links from ${messageCount || '?'} messages (${skipped || 0} skipped). Saved to MongoDB. Run Full Pipeline now.`,
         count: totalCount, batchId,
       });
     }

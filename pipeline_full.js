@@ -57,9 +57,9 @@ const C = {
 // When running as CLI, emitter simply prints to stdout
 let _emitter = line => process.stdout.write(line + '\n');
 const log  = msg => _emitter(`▶  ${msg}`);
-const ok   = msg => _emitter(`✅ ${msg}`);
-const warn = msg => _emitter(`⚠️  ${msg}`);
-const fail = msg => _emitter(`❌ ${msg}`);
+const ok   = msg => _emitter(`[OK] ${msg}`);
+const warn = msg => _emitter(`[WARN]  ${msg}`);
+const fail = msg => _emitter(`[ERR] ${msg}`);
 const sep  = ()  => _emitter('─'.repeat(64));
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -214,17 +214,17 @@ async function phaseBypass(allEntries, existingBypassed, CONCURRENCY = 3) {
         item.bypassedUrl = bypassed;
         item.host        = detectHost(bypassed);
         succeeded++;
-        process.stdout.write(`\r  ${C.green}✅${C.reset} [${item.title || '?'}] → ${bypassed.slice(0, 50)}\n`);
+        process.stdout.write(`\r  ${C.green}[OK]${C.reset} [${item.title || '?'}] → ${bypassed.slice(0, 50)}\n`);
       } else {
         item.bypassedUrl = null; failed++;
-        process.stdout.write(`\r  ${C.yellow}⚠️${C.reset} No direct URL: ${item.url.slice(0, 55)}\n`);
+        process.stdout.write(`\r  ${C.yellow}[WARN]${C.reset} No direct URL: ${item.url.slice(0, 55)}\n`);
       }
     } catch (err) {
       item.bypassedUrl = null; failed++;
-      process.stdout.write(`\r  ${C.red}❌${C.reset} ${item.url.slice(0, 50)}: ${err.message.slice(0, 35)}\n`);
+      process.stdout.write(`\r  ${C.red}[ERR]${C.reset} ${item.url.slice(0, 50)}: ${err.message.slice(0, 35)}\n`);
     }
     done++;
-    process.stdout.write(`\r  Progress: ${done}/${pending.length} | ✅ ${succeeded} | ❌ ${failed}  `);
+    process.stdout.write(`\r  Progress: ${done}/${pending.length} | [OK] ${succeeded} | [ERR] ${failed}  `);
   }
 
   while (queue.length > 0 || active.size > 0) {
@@ -240,8 +240,8 @@ async function phaseBypass(allEntries, existingBypassed, CONCURRENCY = 3) {
   // Checkpoint save
   const toSave = allEntries.filter(e => e.host !== 'Shortlink' || e.bypassedUrl);
   fs.writeFileSync(BYPASSED_FILE, JSON.stringify(toSave, null, 2));
-  console.log(`\n  💾 Checkpoint saved → ${path.basename(BYPASSED_FILE)}`);
-  console.log(`  ✅ ${succeeded} bypassed | ❌ ${failed} failed`);
+  console.log(`\n  [SAVE] Checkpoint saved → ${path.basename(BYPASSED_FILE)}`);
+  console.log(`  [OK] ${succeeded} bypassed | [ERR] ${failed} failed`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -260,7 +260,7 @@ async function fetchWithRetry(fn, retries = 3) {
       const status = err?.response?.status;
       if (status === 429) {
         const ra = parseInt(err.response?.headers?.['retry-after'] || '10', 10);
-        console.log(`\n⏳ TMDB rate limit. Waiting ${ra}s...`);
+        console.log(`\n... TMDB rate limit. Waiting ${ra}s...`);
         await sleep(ra * 1000); continue;
       }
       if (attempt < retries && (!status || status >= 500)) { await sleep(1000 * (attempt + 1)); continue; }
@@ -567,7 +567,7 @@ async function phaseImport(allEntries, RESUME = false) {
   if (RESUME && fs.existsSync(CHECKPOINT_FILE)) {
     try {
       processedKeys = new Set(JSON.parse(fs.readFileSync(CHECKPOINT_FILE, 'utf8')));
-      _emitter(`  ⏭️  Resuming: ${processedKeys.size} groups already done — skipping them`);
+      _emitter(`  [SKIP]  Resuming: ${processedKeys.size} groups already done — skipping them`);
     } catch(_) { warn('Could not read checkpoint file — starting fresh'); }
   } else if (!RESUME && fs.existsSync(CHECKPOINT_FILE)) {
     // Clean checkpoint on fresh run
@@ -629,7 +629,7 @@ async function phaseImport(allEntries, RESUME = false) {
     if (!meta.title) {
       if (!cleanTitle) { noMeta += group.items.length; return; }
       meta = { title: cleanTitle, year: rep.year || null, type: isSer ? 'series' : 'movie', tmdbId: '', imdbId: '', poster: '', backdrop: '', rating: 0, description: '', genre: [], duration: '' };
-      _emitter(`⚠️  No TMDB — raw title: "${meta.title}"`);
+      _emitter(`[WARN]  No TMDB — raw title: "${meta.title}"`);
     }
 
     const tmdbGenres  = (meta.genre || []).map(g => (g||'').toLowerCase());
@@ -713,7 +713,7 @@ async function phaseImport(allEntries, RESUME = false) {
           if (res) {
             recomputeAggregates(res);
             existing = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, {new: true});
-            _emitter(`[MERGED] ${dbRec.title} | ${quality} ➔ ${host}`);
+            _emitter(`[MERGED] ${dbRec.title} | ${quality} -> ${host}`);
             updated++;
           } else skipped++;
         } else {
@@ -723,7 +723,7 @@ async function phaseImport(allEntries, RESUME = false) {
           if (res) {
             recomputeAggregates(res);
             existing = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, {new: true});
-            _emitter(`[UPDATED] ${dbRec.title} | ${quality} ➔ ${host}`);
+            _emitter(`[UPDATED] ${dbRec.title} | ${quality} -> ${host}`);
             updated++;
           }
         }
@@ -746,9 +746,9 @@ async function phaseImport(allEntries, RESUME = false) {
           downloads: [newDl],
         });
         added++; existing = newDoc;
-        _emitter(`[NEW] ${meta.title} (${meta.year || '?'}) | ${quality}${audio ? ' · '+audio : ''}${hdr ? ' · '+hdr : ''} ➔ ${host}`);
+        _emitter(`[NEW] ${meta.title} (${meta.year || '?'}) | ${quality}${audio ? ' · '+audio : ''}${hdr ? ' · '+hdr : ''} -> ${host}`);
       } catch (e) {
-        _emitter(`❌ DB error "${meta.title}": ${e.message}`);
+        _emitter(`[ERR] DB error "${meta.title}": ${e.message}`);
         skipped++;
       }
     }
@@ -974,7 +974,7 @@ async function main(opts = {}) {
       { key: 'bypassed_links', data: { count: allEntries.length }, count: allEntries.length, savedAt: new Date() },
       { upsert: true, new: true }
     );
-    log(`💾 Saved ${allEntries.length} entries metadata to MongoDB cache (for Skip Scraper)`);
+    log(`[SAVE] Saved ${allEntries.length} entries metadata to MongoDB cache (for Skip Scraper)`);
   } catch (cacheErr) {
     warn(`Cache save failed (non-fatal): ${cacheErr.message}`);
   }
@@ -995,7 +995,7 @@ async function main(opts = {}) {
 
   sep();
   const s = Math.round((Date.now() - t0) / 1000);
-  ok(`🎉 Pipeline complete in ${Math.floor(s/60)}m ${s%60}s`);
+  ok(`[DONE] Pipeline complete in ${Math.floor(s/60)}m ${s%60}s`);
 }
 
 // ── When run directly from CLI ────────────────────────────────────────────────

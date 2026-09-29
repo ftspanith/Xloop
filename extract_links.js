@@ -26,14 +26,14 @@ const SHORTLINKS_FILE   = getPath('shortlinks_report.json');
 const UNKNOWN_FILE      = getPath('unknown_links_report.json');
 
 if (!fs.existsSync(EXPORT_FILE)) {
-  console.error('❌  No telegram_export.json found!');
+  console.error('[ERR]  No telegram_export.json found!');
   process.exit(1);
 }
 
 const data     = JSON.parse(fs.readFileSync(EXPORT_FILE, 'utf8'));
 const messages = data.messages || [];
 
-console.log(`\n📂 Total messages in export: ${messages.length}`);
+console.log(`\n[DIR] Total messages in export: ${messages.length}`);
 
 const extracted    = [];  // direct/known download links
 const shortlinks   = [];  // URL shorteners — quarantined
@@ -187,7 +187,7 @@ for (const msg of messages) {
         url:         normalizedUrl,
         bypassedUrl: null,
         isFast:      /gdflix|hubcloud|gdlink|tmbcloud|fpgo|filebee|extralink|neolinks/i.test(normalizedUrl),
-        // ✅ ID hints for direct TMDB/IMDB lookup — avoids fuzzy search misses
+        // [OK] ID hints for direct TMDB/IMDB lookup — avoids fuzzy search misses
         imdbId:      parsed.imdbId      || null,
         tmdbIdHint:  parsed.tmdbIdHint  || null,
         date:        msg.date || null,
@@ -262,16 +262,16 @@ const movies = extracted.filter(e => !e.isSeries);
 const packs  = extracted.filter(e =>  e.isSeries && !e.episode);
 const eps    = extracted.filter(e =>  e.isSeries &&  e.episode);
 
-console.log(`\n✅  Extracted ${extracted.length} direct download links`);
-console.log(`    🎬 Movies       : ${movies.length}`);
-console.log(`    📦 Season Packs : ${packs.length}`);
-console.log(`    🎞️  Episodes     : ${eps.length}`);
-console.log(`\n📡 By host:`);
+console.log(`\n[OK]  Extracted ${extracted.length} direct download links`);
+console.log(`    [MOVIE] Movies       : ${movies.length}`);
+console.log(`    [PACK] Season Packs : ${packs.length}`);
+console.log(`    [FILM]  Episodes     : ${eps.length}`);
+console.log(`\n[SCRAPE] By host:`);
 Object.entries(byHost).sort((a,b)=>b[1]-a[1]).forEach(([h,c]) => console.log(`    ${h.padEnd(12)}: ${c}`));
-console.log(`\n⏭️  Skipped: ${skippedEmpty} empty | ${skippedJunk} junk | ${skippedNoUrl} no-url`);
-console.log(`🚫 CDN/junk URLs  : ${skippedCdn}`);
-console.log(`🔀 Slot deduped   : ${skippedDupSlot} (same file, kept best host)`);
-console.log(`⚠️  Missing language  : ${missingLangs.length}`);
-console.log(`🔗 Shortlinks (bypass): ${shortlinks.length}`);
-console.log(`❓ Unknown hosts      : ${unknownLinks.length} → unknown_links_report.json`);
-console.log(`\n📄 Output → links_for_bypasser.json\n`);
+console.log(`\n[SKIP]  Skipped: ${skippedEmpty} empty | ${skippedJunk} junk | ${skippedNoUrl} no-url`);
+console.log(`[SKIP] CDN/junk URLs  : ${skippedCdn}`);
+console.log(`[SORT] Slot deduped   : ${skippedDupSlot} (same file, kept best host)`);
+console.log(`[WARN]  Missing language  : ${missingLangs.length}`);
+console.log(`[LINK] Shortlinks (bypass): ${shortlinks.length}`);
+console.log(`[?] Unknown hosts      : ${unknownLinks.length} → unknown_links_report.json`);
+console.log(`\n[FILE] Output → links_for_bypasser.json\n`);

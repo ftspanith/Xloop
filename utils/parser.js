@@ -147,7 +147,7 @@ function isMetadataLine(line) {
   // Size / File Size lines: 'Size : 8.36 GB', 'File Size: 6.74 GB'
   if (/^(?:File\s*)?Size\s*[:]\/?.*/i.test(s) && /\d/.test(s)) return true;
   // 'Click Here', 'Join', 'Credits', etc. (not inline with real content)
-  if (/^(?:[🔗📁💾\s]*)?(CLICK\s+HERE|JOIN\s+NOW|CREDITS?\s*:?|SUBSCRIBE|BACKUP\s+CHANNEL)\s*$/i.test(s)) return true;
+  if (/^(?:[[LINK][SAVE]\s]*)?(CLICK\s+HERE|JOIN\s+NOW|CREDITS?\s*:?|SUBSCRIBE|BACKUP\s+CHANNEL)\s*$/i.test(s)) return true;
   // Quality/format lists without filename: 'DOLBY VISION 4K , SDR 4K , 1080P'
   if (/^(DOLBY\s+VISION|SDR|HLG|HDR|AVC|HEVC)\b/i.test(s) && !/\.(mkv|mp4|avi|zip)\b/i.test(s) && s.length < 60) return true;
   return false;
@@ -498,7 +498,7 @@ function isJunkTitle(title) {
     return false; // "300", "9", etc. = valid numeric titles
   }
   if (/^@/.test(c)) return true;                             // Telegram @handle
-  if (/^[,\s\-_.:|•►▶◆★✓✔×#]+$/.test(c)) return true;    // punctuation only
+  if (/^[,\s\-_.:|•►▶◆×#]+$/.test(c)) return true;    // punctuation only
   if (/^\d{4}\s*(&|and|ISO|\+|FHD|HFR|BRD|CBR)\b/i.test(c)) return true; // year + tech spec
 
   // Pure non-Latin (Indic/CJK) text = language list line, not a title
@@ -528,7 +528,7 @@ function isJunkTitle(title) {
 function extractAudioTracks(text) {
   if (!text) return null;
   const found=new Set();
-  // Match 'Audio Tracks:', 'Audios:', '🔊 Audio:', '🔊 Audios:' lines
+  // Match 'Audio Tracks:', 'Audios:', ' Audio:', ' Audios:' lines
   const p1=text.match(/(?:(?:AUDIO\s*TRACKS?)|(?:Audios?))\s*[:\-]\s*([^\n]+)/i);
   if (p1&&p1[1]&&!/kbps|kb\/s/.test(p1[1])) {
     // Split on , | & + and 'and'

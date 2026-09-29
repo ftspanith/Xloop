@@ -87,7 +87,7 @@ async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = 
         });
         if (r.data && (r.data.title || r.data.name)) {
           const d = r.data;
-          console.log(`[HEAL] ✅ Known TMDB ID ${knownTmdbId} → "${d.title || d.name}"`);
+          console.log(`[HEAL] [OK] Known TMDB ID ${knownTmdbId} → "${d.title || d.name}"`);
           const result = buildResult(d, mtype === 'tv');
 
           // If TMDB has no poster, try images endpoint as fallback
@@ -99,7 +99,7 @@ async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = 
               const posters = imgRes.data?.posters || [];
               if (posters.length > 0) {
                 result.poster = `https://image.tmdb.org/t/p/w500${posters[0].file_path}`;
-                console.log(`[HEAL] 🖼️ Found poster via images endpoint for "${d.title || d.name}"`);
+                console.log(`[HEAL] [IMG] Found poster via images endpoint for "${d.title || d.name}"`);
               }
             } catch (_) {}
           }
@@ -121,7 +121,7 @@ async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = 
                       if (od && od.Response !== 'False') {
                         if (!result.poster && od.Poster && od.Poster !== 'N/A') {
                           result.poster = od.Poster;
-                          console.log(`[HEAL] 🖼️ OMDB poster for "${canonicalTitle}"`);
+                          console.log(`[HEAL] [IMG] OMDB poster for "${canonicalTitle}"`);
                         }
                         if (!result.description && od.Plot && od.Plot !== 'N/A') {
                           result.description = od.Plot;
@@ -145,13 +145,13 @@ async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = 
           if (result.poster && result.description && result.rating) {
             return result; // Perfect, use it immediately
           } else {
-            console.log(`[HEAL] ⚠️ Known ID ${knownTmdbId} has missing data, trying fuzzy year search fallback...`);
+            console.log(`[HEAL] [WARN] Known ID ${knownTmdbId} has missing data, trying fuzzy year search fallback...`);
             fastPathFallback = result;
           }
         }
       } catch (e) {
         if (e.code === 'ECONNRESET' || e.code === 'ECONNREFUSED' || e.code === 'ETIMEDOUT') {
-          console.log(`[HEAL] ⚠️ TMDB network error for ID ${knownTmdbId}: ${e.code}`);
+          console.log(`[HEAL] [WARN] TMDB network error for ID ${knownTmdbId}: ${e.code}`);
         }
       }
     }
@@ -172,7 +172,7 @@ async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = 
           params: { api_key: TMDB_KEY }, timeout: 8000
         });
         if (r.data && (r.data.title || r.data.name)) {
-          console.log(`[HEAL] ✅ IMDB ID ${imdbId} → "${r.data.title || r.data.name}"`);
+          console.log(`[HEAL] [OK] IMDB ID ${imdbId} → "${r.data.title || r.data.name}"`);
           return buildResult(r.data, mtype === 'tv');
         }
       }
@@ -225,7 +225,7 @@ async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = 
   // catastrophic fuzzy matches (e.g. "G.D.N" → "Marvel's Hulk"). Skip them.
   const visibleLen = clean1.replace(/\s/g, '').length;
   if (visibleLen < 4) {
-    console.log(`[HEAL] ⚠️  Query "${clean1}" is too short for reliable fuzzy match — skipping fuzzy search`);
+    console.log(`[HEAL] [WARN]  Query "${clean1}" is too short for reliable fuzzy match — skipping fuzzy search`);
     return fastPathFallback || null;
   }
 
@@ -255,7 +255,7 @@ async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = 
         params.year = attempt.y;                     // for movies
         params.first_air_date_year = attempt.y;     // for TV
       }
-      console.log(`[HEAL] 🔍 TMDB search: "${attempt.q}"${attempt.y ? ' ('+attempt.y+')' : ''}`);
+      console.log(`[HEAL] [SEARCH] TMDB search: "${attempt.q}"${attempt.y ? ' ('+attempt.y+')' : ''}`);
       const res = await axios.get(`${base}/search/multi`, { params, timeout: 10000 });
       let results = (res.data?.results || []).filter(r => r.media_type === 'movie' || r.media_type === 'tv');
       if (!results.length) { await sleep(DELAY_MS); continue; }
@@ -287,25 +287,25 @@ async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = 
       if (best) {
         // Hard year-gap guards (tiered) — prevent totally wrong-era matches
         if (best.yearDiff > 10) {
-          console.log(`[HEAL] ❌ Year gap HUGE (${best.yearDiff}yr) — hard reject "${best.d.title||best.d.name}" ← "${attempt.q}"`);
+          console.log(`[HEAL] [ERR] Year gap HUGE (${best.yearDiff}yr) — hard reject "${best.d.title||best.d.name}" ← "${attempt.q}"`);
         } else if (searchYear && best.yearDiff > 5 && best.rawSim < 0.85) {
-          console.log(`[HEAL] ❌ Year gap too large (${best.yearDiff}yr) + sim too low (${best.rawSim.toFixed(2)}) for "${best.d.title||best.d.name}" ← "${attempt.q}"`);
+          console.log(`[HEAL] [ERR] Year gap too large (${best.yearDiff}yr) + sim too low (${best.rawSim.toFixed(2)}) for "${best.d.title||best.d.name}" ← "${attempt.q}"`);
         } else if (best.rawSim >= 0.45) {
-          console.log(`[HEAL] ✅ Best match: "${best.d.title||best.d.name}" sim=${best.rawSim.toFixed(2)} yearDiff=${best.yearDiff}`);
+          console.log(`[HEAL] [OK] Best match: "${best.d.title||best.d.name}" sim=${best.rawSim.toFixed(2)} yearDiff=${best.yearDiff}`);
           const r2 = await axios.get(`${base}/${best.d.media_type}/${best.d.id}`, {
             params: { api_key: TMDB_KEY },
             timeout: 8000
           });
           return buildResult(r2.data, best.d.media_type === 'tv');
         } else {
-          console.log(`[HEAL] ❌ Low sim=${best.rawSim.toFixed(2)} (need ≥0.45) for "${best.d.title||best.d.name}" ← searched "${attempt.q}"`);
+          console.log(`[HEAL] [ERR] Low sim=${best.rawSim.toFixed(2)} (need ≥0.45) for "${best.d.title||best.d.name}" ← searched "${attempt.q}"`);
         }
       } else {
-        console.log(`[HEAL] ⬜ No results scored for "${attempt.q}"`);
+        console.log(`[HEAL] [EMPTY] No results scored for "${attempt.q}"`);
       }
     } catch (e) {
       if (e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT') {
-        console.log(`[HEAL] ⚠️ Network error during search: ${e.code}`);
+        console.log(`[HEAL] [WARN] Network error during search: ${e.code}`);
       } else if (e.response?.status === 429) {
         await sleep(3000);
       }
@@ -376,14 +376,14 @@ async function ensureConnected() {
     heartbeatFrequencyMS:     10000,
     retryWrites:              true,
   });
-  console.log('[DB] Reconnected ✅');
+  console.log('[DB] Reconnected [OK]');
 }
 
 // ── Main healer ──────────────────────────────────────────────────────────────
 async function healDatabase() {
   await ensureConnected();
-  console.log('🩺 Healer connected\n');
-  console.log('🔍 Scanning for items needing repair...\n');
+  console.log('[HEALTH] Healer connected\n');
+  console.log('[SEARCH] Scanning for items needing repair...\n');
 
   // Skip movies that have been attempted and genuinely can't be healed
   const broken = await Movie.find({
@@ -398,11 +398,11 @@ async function healDatabase() {
   }).lean();
 
   if (!broken.length) {
-    console.log('✅ Database perfectly healthy!');
+    console.log('[OK] Database perfectly healthy!');
     return process.exit(0);
   }
 
-  console.log(`🚑 ${broken.length} items need healing\n`);
+  console.log(`[FIX] ${broken.length} items need healing\n`);
 
   let fixed = 0, failed = 0;
   const report = [];
@@ -416,7 +416,7 @@ async function healDatabase() {
     // ── Step 0: Purge junk records ──────────────────────────────────────────
     const JUNK_TITLE_RE = /^(E\d+|H265|H264|HDR10|DoVi|High Bitrate|BLUMRAY|CBR|VBR|Version Rip|Audio|Video|DUB CATALOG|TELUGU PACK|5TB DUMP|LOWER BITRATES|# #)$/i;
     if (JUNK_TITLE_RE.test(movie.title) || /Upload cheyyandi bro/i.test(movie.title)) {
-      console.log(`🗑️ Deleting junk record: "${movie.title}"`);
+      console.log(`[DEL] Deleting junk record: "${movie.title}"`);
       await Movie.findByIdAndDelete(movie._id);
       continue;
     }
@@ -424,7 +424,7 @@ async function healDatabase() {
     // ── Step 1: Clean the stored title itself (skip if tmdbId already known — fast path gives canonical) ──
     const cleanedStoredTitle = deepCleanStoredTitle(movie.title || '');
     if (!movie.tmdbId && cleanedStoredTitle && cleanedStoredTitle !== movie.title && cleanedStoredTitle.length >= 2) {
-      console.log(`🔤 Cleaning title: "${movie.title}" → "${cleanedStoredTitle}"`);
+      console.log(`[TITLE] Cleaning title: "${movie.title}" → "${cleanedStoredTitle}"`);
       movie.title = cleanedStoredTitle;
       changes.push('title_cleaned');
     }
@@ -477,7 +477,7 @@ async function healDatabase() {
                           : meta.actualType === 'tv'    ? 'series'
                           : 'movie';
         if (movie.type !== correctType) {
-          console.log(`🏷️  Type corrected: "${movie.title}" ${movie.type} → ${correctType}`);
+          console.log(`[TAG]  Type corrected: "${movie.title}" ${movie.type} → ${correctType}`);
           movie.type = correctType;
           changes.push('type');
         }
@@ -517,13 +517,13 @@ async function healDatabase() {
         const titleMatchSim = similarity(storedClean, tmdbClean);
         if (titleMatchSim >= 0.55) {
           // Similar enough — safe canonical rename (e.g. case fix, punctuation)
-          console.log(`🔤 Updating title to TMDB canonical: "${movie.title}" → "${meta.tmdbTitle}" (sim=${titleMatchSim.toFixed(2)})`);
+          console.log(`[TITLE] Updating title to TMDB canonical: "${movie.title}" → "${meta.tmdbTitle}" (sim=${titleMatchSim.toFixed(2)})`);
           movie.title = meta.tmdbTitle;
           changes.push('title_canonical');
         } else {
           // Very different title returned — stored tmdbId is probably corrupt/wrong
           // Clear it so the next heal run does a fresh search instead of trusting bad ID
-          console.log(`⚠️  TMDB returned different movie "${meta.tmdbTitle}" (sim=${titleMatchSim.toFixed(2)}) for stored "${movie.title}" — clearing bad tmdbId`);
+          console.log(`[WARN]  TMDB returned different movie "${meta.tmdbTitle}" (sim=${titleMatchSim.toFixed(2)}) for stored "${movie.title}" — clearing bad tmdbId`);
           await Movie.findByIdAndUpdate(raw._id, { $unset: { tmdbId: '' } });
           // Don't apply any of the fetched meta — it's for the wrong movie
           continue;
@@ -553,7 +553,7 @@ async function healDatabase() {
 
       // ── Always sync tmdbId — replace corrupt stored ID with the one fuzzy actually found ─
       if (meta?.tmdbId && meta.tmdbId !== String(movie.tmdbId || '')) {
-        console.log(`🔗 Correcting tmdbId: ${movie.tmdbId || '(none)'} → ${meta.tmdbId} for "${movie.title}"`);
+        console.log(`[LINK] Correcting tmdbId: ${movie.tmdbId || '(none)'} → ${meta.tmdbId} for "${movie.title}"`);
         updateFields.tmdbId = meta.tmdbId;
       } else if (changes.includes('tmdbId')) {
         updateFields.tmdbId = movie.tmdbId;
@@ -564,16 +564,16 @@ async function healDatabase() {
 
       await Movie.findByIdAndUpdate(raw._id, { $set: updateFields });
       fixed++;
-      console.log(`🩹 Healed [${movie.title}]: ${changes.join(', ')}`);
+      console.log(`[PATCH] Healed [${movie.title}]: ${changes.join(', ')}`);
       report.push({ title: movie.title, fixed: changes, tmdbMatch: meta?.tmdbTitle || null, sim: meta?.sim || null });
     } else if (meta) {
       // We found the TMDB record, but it has no NEW data to give us (e.g., rating is still 0 on TMDB)
-      console.log(`✅ [${movie.title}] is already fully healed (TMDB itself is missing the rating/poster). Skipping.`);
+      console.log(`[OK] [${movie.title}] is already fully healed (TMDB itself is missing the rating/poster). Skipping.`);
       report.push({ title: movie.title, fixed: ['None'], reason: 'No new data on TMDB' });
       await Movie.findByIdAndUpdate(raw._id, { $set: { _healAttempted: true } });
     } else {
       failed++;
-      console.log(`❌ Could not heal [${movie.title}] - No match found anywhere.`);
+      console.log(`[ERR] Could not heal [${movie.title}] - No match found anywhere.`);
       report.push({ title: movie.title, fixed: ['None'], reason: 'No TMDB/OMDB match' });
       await Movie.findByIdAndUpdate(raw._id, { $set: { _healAttempted: true } });
     }
@@ -589,8 +589,8 @@ async function healDatabase() {
   }
 
   fs.writeFileSync(REPORT, JSON.stringify(report, null, 2));
-  console.log(`\n🎉 Healing complete: ${fixed} fixed, ${failed} failed`);
-  console.log(`📄 Report saved to healing_report.json`);
+  console.log(`\n[DONE] Healing complete: ${fixed} fixed, ${failed} failed`);
+  console.log(`[FILE] Report saved to healing_report.json`);
   process.exit(0);
 }
 

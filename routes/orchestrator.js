@@ -143,11 +143,11 @@ router.get('/start', async (req, res) => {
     try { res.write(`data: ${JSON.stringify({ text: clean })}\n\n`); } catch (e) { }
   };
 
-  emit(`🚀 Starting ${label}...`);
+  emit(`[START] ${label}...`);
   if (skipScraper) {
-    emit(`🔄 Skip Scraper: re-extracting from telegram_export.json (skipping Telegram API scrape)`);
+    emit(`[INFO] Skip Scraper: re-extracting from telegram_export.json (skipping Telegram API scrape)`);
   } else {
-    emit(`🔄 Full Pipeline: scraping Telegram → extracting → importing`);
+    emit(`[INFO] Full Pipeline: scraping Telegram → extracting → importing`);
   }
 
   let importSrc = undefined;
@@ -161,9 +161,9 @@ router.get('/start', async (req, res) => {
       importSrc,
       emitter: emit,
     });
-    emit('✅ Pipeline finished successfully.');
+    emit('[DONE] Pipeline finished successfully.');
   } catch (err) {
-    emit(`❌ Pipeline error: ${err.message}`);
+    emit(`[ERROR] Pipeline error: ${err.message}`);
   } finally {
     pipelineRunning = false;
     setPipelineRunningFlag(false);
@@ -187,10 +187,10 @@ router.post('/start', auth, async (req, res) => {
   pipelineRunning = true;
   pipelineProgress = { offset: 0, total: 0, label };
   setPipelineRunningFlag(true);
-  broadcast(`🚀 Starting ${label}...`);
+  broadcast(`[START] ${label}...`);
 
   let importSrc = undefined;
-  if (skipScraper) broadcast(`🔄 Skip Scraper: re-extracting from telegram_export.json`);
+  if (skipScraper) broadcast(`[INFO] Skip Scraper: re-extracting from telegram_export.json`);
 
   try {
     const runPipeline = await getRunPipeline();
@@ -201,9 +201,9 @@ router.post('/start', auth, async (req, res) => {
       importSrc,
       emitter: broadcast,
     });
-    broadcast('✅ Pipeline finished successfully.');
+    broadcast('[DONE] Pipeline finished successfully.');
   } catch (err) {
-    broadcast(`❌ Pipeline error: ${err.message}`);
+    broadcast(`[ERROR] Pipeline error: ${err.message}`);
   } finally {
     pipelineRunning = false;
     pipelinePromise = null;
@@ -389,7 +389,7 @@ router.post('/import-batch', auth, async (req, res) => {
                 const upd = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, { new: true });
                 existing = upd;
                 updated++;
-                emit(`[MERGED] ${res.title} | ${quality} ➔ ${host}`);
+                emit(`[MERGED] ${res.title} | ${quality} -> ${host}`);
               } else skipped++;
             } else {
               const op = { $push: { downloads: newDl } };
@@ -400,7 +400,7 @@ router.post('/import-batch', auth, async (req, res) => {
                 const upd2 = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, { new: true });
                 existing = upd2;
                 updated++;
-                emit(`[UPDATED] ${res.title} | ${quality} ➔ ${host}`);
+                emit(`[UPDATED] ${res.title} | ${quality} -> ${host}`);
               }
             }
           } else {
@@ -418,7 +418,7 @@ router.post('/import-batch', auth, async (req, res) => {
             });
             added++;
             existing = newDoc;
-            emit(`[NEW] ${finalTitle} (${meta.year || rep.year || '?'}) | ${quality}${audio ? ' · '+audio : ''}${hdr ? ' · '+hdr : ''} ➔ ${host} | POSTER: ${meta.poster ? '✓' : '✗'}`);
+            emit(`[NEW] ${finalTitle} (${meta.year || rep.year || '?'}) | ${quality}${audio ? ' · '+audio : ''}${hdr ? ' · '+hdr : ''} -> ${host} | POSTER: ${meta.poster ? '' : ''}`);
           }
         }
       } catch (e) {
@@ -494,10 +494,10 @@ router.post('/wipe', auth, async (req, res) => {
 
   try {
     const result = await Movie.deleteMany({});
-    broadcast(`✅ Wiped ${result.deletedCount} entries from database.`);
+    broadcast(`[DONE] Wiped ${result.deletedCount} entries from database.`);
     return res.json({ message: 'Wipe finished', deletedCount: result.deletedCount });
   } catch (e) {
-    broadcast(`❌ Wipe error: ${e.message}`);
+    broadcast(`[ERROR] Wipe error: ${e.message}`);
     return res.status(500).json({ error: e.message });
   }
 });
@@ -505,7 +505,7 @@ router.post('/wipe', auth, async (req, res) => {
 // ── Clear Logs ────────────────────────────────────────────────────────────────
 router.post('/clear-logs', auth, (req, res) => {
   logBuffer = [];
-  broadcast('🧹 Log buffer cleared.');
+  broadcast('[INFO] Log buffer cleared.');
   res.json({ message: 'Logs cleared' });
 });
 
@@ -529,7 +529,7 @@ router.get('/start-local', async (req, res) => {
     try { res.write(`data: ${JSON.stringify({ text: clean })}\n\n`); } catch (e) { }
   };
 
-  emit(`🚀 Starting ${label}...`);
+  emit(`[START] ${label}...`);
 
   const { spawn } = require('child_process');
   const readline = require('readline');
@@ -548,7 +548,7 @@ router.get('/start-local', async (req, res) => {
   });
 
   activeProcess.on('close', code => {
-    emit(`🏁 Pipeline finished with exit code ${code}`);
+    emit(`[DONE] Pipeline finished with exit code ${code}`);
     pipelineRunning = false;
     setPipelineRunningFlag(false);
     res.end();

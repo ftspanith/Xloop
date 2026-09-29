@@ -114,7 +114,7 @@
   </div>
   <nav class="admin-nav">
    <a href="/admin/dashboard.html">Dashboard</a>
-   <a href="/admin/add-manual.html" class="active">✦ Smart Add</a>
+   <a href="/admin/add-manual.html" class="active">Smart Add</a>
    <a href="/admin/add-movie.html">+ Add Movie</a>
    <a href="/admin/add-series.html">+ Add Series</a>
    <a href="/admin/bulk-import.html">Bulk Import</a>
@@ -133,7 +133,7 @@
    <div style="display:flex;align-items:center;gap:12px;">
     <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="openMobileSidebar()" aria-label="Open menu"></button>
     <div>
-     <h1 class="admin-page-title" style="margin:0;">✦ Smart Add</h1>
+     <h1 class="admin-page-title" style="margin:0;">Smart Add</h1>
      <p style="margin:4px 0 0;font-size:.8rem;color:rgba(255,255,255,.35);">Paste filenames + links — auto-parsed, grouped, and imported with full TMDB metadata</p>
     </div>
    </div>
@@ -143,7 +143,7 @@
    <!-- Left: Input -->
    <div>
     <div class="paste-card">
-     <h3>📋 Paste Filenames</h3>
+     <h3><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg> Paste Filenames</h3>
      <textarea id="pasteInput" placeholder="Paste one filename per line, e.g.&#10;Dune.Part.Two.2024.1080p.BluRay.DTS.x264.mkv&#10;The.Boys.S04E01.720p.WEB-DL.AAC.x265.mkv&#10;&#10;Then add download links below each group."></textarea>
 
      <div class="input-row" style="margin-top:12px;">
@@ -156,15 +156,15 @@
       </select>
      </div>
      <p class="parse-hint">
-      💡 <strong>Tip:</strong> Each line is parsed independently. Same title detected across lines → merged into one record with multiple download qualities.<br>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> <strong>Tip:</strong> Each line is parsed independently. Same title detected across lines → merged into one record with multiple download qualities.<br>
       Add links per-group in the preview panel, or paste a global URL above and it'll be attached to all groups.
      </p>
     </div>
 
     <div class="action-bar">
-     <button class="btn-parse" onclick="parseInput()">⚡ Parse</button>
-     <button class="btn-submit" id="submitBtn" onclick="submitAll()" disabled>✓ Import All</button>
-     <button class="btn-clear" onclick="clearAll()">✕ Clear</button>
+     <button class="btn-parse" onclick="parseInput()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Parse</button>
+     <button class="btn-submit" id="submitBtn" onclick="submitAll()" disabled><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Import All</button>
+     <button class="btn-clear" onclick="clearAll()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Clear</button>
     </div>
 
     <div id="resultBanner"></div>
@@ -173,12 +173,12 @@
    <!-- Right: Preview -->
    <div class="preview-card">
     <div class="preview-header">
-     <h3>👁 Live Preview</h3>
+     <h3><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Live Preview</h3>
      <span id="entryCount">0 groups</span>
     </div>
     <div id="previewArea">
      <div id="emptyState">
-      <div class="big">📄</div>
+      <div class="big"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
       Paste filenames on the left and click <strong>Parse</strong>
      </div>
     </div>
@@ -343,7 +343,7 @@ function renderPreview() {
   document.getElementById('entryCount').textContent = `${groups.length} group${groups.length !== 1 ? 's' : ''}`;
 
   if (!groups.length) {
-    area.innerHTML = `<div id="emptyState"><div class="big">📄</div>No groups parsed yet</div>`;
+    area.innerHTML = `<div id="emptyState"><div class="big"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>No groups parsed yet</div>`;
     return;
   }
 
@@ -364,7 +364,7 @@ function renderPreview() {
        <span class="badge-a">${l.audio||'—'}</span>
        <span class="badge-h">${l.hdr||'—'}</span>
        <span style="color:rgba(255,255,255,.3);font-size:.7rem;">${l.size||'—'}</span>
-       <button class="rm-btn" onclick="removeLink(${gi},${li})" title="Remove">✕</button>
+       <button class="rm-btn" onclick="removeLink(${gi},${li})" title="Remove">&times;</button>
       </div>`).join('')}
      <div class="add-link-row">
       <input class="add-link-inp" type="url" placeholder="+ Add another download URL for this title…"
@@ -394,7 +394,7 @@ function addLink(gi, url) {
 async function submitAll() {
   if (!groups.length) return;
   document.getElementById('submitBtn').disabled = true;
-  document.getElementById('submitBtn').textContent = '⏳ Importing…';
+  document.getElementById('submitBtn').textContent = 'Importing...';
   showResult(null);
 
   // Build entries: each group becomes one entry with multiple link objects,
@@ -419,7 +419,7 @@ async function submitAll() {
   if (!entries.length) {
     showToast('Add at least one download URL', true);
     document.getElementById('submitBtn').disabled = false;
-    document.getElementById('submitBtn').textContent = '✓ Import All';
+    document.getElementById('submitBtn').textContent = 'Import All';
     return;
   }
 
@@ -434,15 +434,15 @@ async function submitAll() {
     const summary = data.results.map(r =>
       `<li>${escHtml(r.title)} — <strong style="color:${r.action==='created'?'#4ade80':r.action==='updated'?'#fbbf24':'rgba(255,255,255,.35)'}">${r.action}</strong>${r.added > 0 ? ` (+${r.added} links)` : ''}</li>`
     ).join('');
-    showResult(`<h4>✅ ${data.message}</h4><ul>${summary}</ul>`, false);
+    showResult(`<h4>${data.message}</h4><ul>${summary}</ul>`, false);
     showToast('Import complete!');
   } catch(e) {
-    showResult(`<h4>❌ Import failed</h4><ul><li>${escHtml(e.message)}</li></ul>`, true);
+    showResult(`<h4>Import failed</h4><ul><li>${escHtml(e.message)}</li></ul>`, true);
     showToast(e.message, true);
   }
 
   document.getElementById('submitBtn').disabled = false;
-  document.getElementById('submitBtn').textContent = '✓ Import All';
+  document.getElementById('submitBtn').textContent = 'Import All';
 }
 
 function showResult(html, isErr = false) {
@@ -458,7 +458,7 @@ function clearAll() {
   document.getElementById('pasteInput').value = '';
   document.getElementById('globalUrl').value = '';
   document.getElementById('submitBtn').disabled = true;
-  document.getElementById('previewArea').innerHTML = `<div id="emptyState"><div class="big">📄</div>Paste filenames on the left and click <strong>Parse</strong></div>`;
+  document.getElementById('previewArea').innerHTML = `<div id="emptyState"><div class="big"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>Paste filenames on the left and click <strong>Parse</strong></div>`;
   document.getElementById('entryCount').textContent = '0 groups';
   showResult(null);
 }
