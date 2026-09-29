@@ -459,17 +459,18 @@
     #continueBtn2 { display:none; margin-top:12px; width:100%; padding:9px; background:rgba(229,9,20,0.08); color:rgba(229,9,20,0.8); border:1px solid rgba(229,9,20,0.2); border-radius:7px; font-size:0.78rem; font-weight:600; cursor:pointer; transition:all 0.15s; }
     #continueBtn2:hover{ background:rgba(229,9,20,0.13); color:#E50914; }
     #continueBtn2.visible{display:block;}
-    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(6px); z-index:9999; align-items:center; justify-content:center; }
+    .modal-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(6px); z-index:9999; align-items:center; justify-content:center; }
     .modal-overlay.visible{display:flex;}
-    .modal-box { background:#151515; border:1px solid rgba(245,158,11,0.3); border-radius:16px; padding:32px; max-width:380px; width:90%; text-align:center; }
-    .modal-box h3{font-size:1.1rem;color:#f59e0b;margin-bottom:8px;}
+    @keyframes modalPop { 0% { transform: scale(0.95) translateY(10px); opacity: 0; } 100% { transform: scale(1) translateY(0); opacity: 1; } }
+    .modal-box { background:#111; border:1px solid rgba(229,9,20,0.3); border-radius:16px; padding:32px; max-width:380px; width:90%; text-align:center; box-shadow: 0 10px 40px rgba(0,0,0,0.5); animation: modalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .modal-box h3{font-size:1.1rem;color:#e50914;margin-bottom:8px;}
     .modal-box p{font-size:0.85rem;color:rgba(255,255,255,0.55);margin-bottom:24px;line-height:1.6;}
     .modal-btns{display:flex;gap:10px;justify-content:center;}
     .modal-btns button{padding:10px 24px;border-radius:8px;border:none;font-weight:700;font-size:0.9rem;cursor:pointer;transition:all 0.2s;}
     .modal-cancel{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.7);}
     .modal-cancel:hover{background:rgba(255,255,255,0.14);}
-    .modal-confirm-wipe{background:#f59e0b;color:#000;}
-    .modal-confirm-wipe:hover{background:#fbbf24;transform:translateY(-1px);}
+    .modal-confirm-wipe{background:#e50914;color:#fff;}
+    .modal-confirm-wipe:hover{background:#b20710;transform:translateY(-1px);}
     @media(max-width:680px){ .orch-modes{grid-template-columns:1fr;} .orch-actions{flex-direction:column;} .orch-btn{flex:none;width:100%;min-width:unset;} #logBox2{height:240px;} .orch-stats{flex-wrap:wrap;} .orch-stat{min-width:calc(33% - 1px);} }
   </style>
 </head>
@@ -1604,7 +1605,7 @@
 <div class="modal-overlay" id="wipeModal2">
   <div class="modal-box">
     <div style="font-size:2.5rem;margin-bottom:12px;">
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e50914" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>
     </div>
     <h3>Wipe Entire Database?</h3>
     <p>This will <strong>permanently delete</strong> all movies and series from MongoDB. This <strong>cannot be undone</strong>.</p>
