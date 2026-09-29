@@ -1524,7 +1524,11 @@
       const res = await fetch('/api/orchestrator/wipe', { method:'POST', headers:{'Authorization':'Bearer '+getToken()} });
       const d = await res.json();
       if (!res.ok) { appendLog2(' ERROR: ' + (d.error || d.message || 'Wipe failed')); onFinished2('', true); }
-      else { appendLog2(' Wiped ' + d.deletedCount + ' entries from database.'); onFinished2('Wipe finished'); }
+      else { 
+        appendLog2(' Wiped ' + d.deletedCount + ' entries from database.'); 
+        onFinished2('Wipe finished'); 
+        loadDashboard(); // Refresh stats on UI
+      }
     } catch(e) { appendLog2(' ERROR: ' + e.message); onFinished2('', true); }
   }
 
