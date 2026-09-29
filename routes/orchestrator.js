@@ -514,15 +514,29 @@ router.post('/wipe', auth, async (req, res) => {
     // 1. Wipe Movie collection
     const result = await Movie.deleteMany({});
 
-    // 2. Wipe ExtractedLink collection if it exists (stale raw links)
+    // 2. Wipe ExtractedLink, Series, Episode collections
     let elWiped = 0;
     try {
       const ExtractedLink = require('../models/ExtractedLink');
       const elResult = await ExtractedLink.deleteMany({});
       elWiped = elResult.deletedCount || 0;
-    } catch (_) { /* collection may not exist */ }
+    } catch (_) {}
+    try {
+      const Series = require('../models/Series');
+      await Series.deleteMany({});
+    } catch (_) {}
+    try {
+      const Episode = require('../models/Episode');
+      await Episode.deleteMany({});
+    } catch (_) {}
 
-    // 3. Clear checkpoint + tmp files so next run starts clean
+    // 3. Wipe PipelineCache completely (clears status, progress, everything)
+    try {
+      const PipelineCache = require('../models/PipelineCache');
+      await PipelineCache.deleteMany({});
+    } catch (_) {}
+
+    // 4. Clear checkpoint + tmp files so next run starts clean
     const TMP = os.tmpdir();
     const tmpFiles = [
       'import_checkpoint.json',
@@ -535,8 +549,9 @@ router.post('/wipe', auth, async (req, res) => {
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp); } catch(_) {}
     }
 
-    // 4. Reset in-memory progress
+    // 5. Reset progress explicitly
     pipelineProgress = { offset: 0, total: 0, label: '' };
+    await setPipelineRunningFlag(false, { offset: 0, total: 0, label: '' });
 
     const msg = `[DONE] Wiped ${result.deletedCount} movies${elWiped ? ` + ${elWiped} extracted links` : ''} — DB fully clean.`;
     broadcast(msg);
