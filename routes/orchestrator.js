@@ -128,6 +128,7 @@ router.get('/start', async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
+  _stopRequested = false;
   pipelineRunning = true;
   // On resume, preserve existing offset so UI shows correct resume point.
   // On fresh start, reset to 0.
@@ -170,6 +171,7 @@ router.get('/start', async (req, res) => {
       resume: !!resume,
       importSrc,
       emitter: emit,
+      isStopRequested: () => _stopRequested,
     });
     emit('[DONE] Pipeline finished successfully.');
   } catch (err) {
@@ -194,6 +196,7 @@ router.post('/start', auth, async (req, res) => {
 
   res.json({ message: `${label} started` });
 
+  _stopRequested = false;
   pipelineRunning = true;
   pipelineProgress = { offset: 0, total: 0, label };
   setPipelineRunningFlag(true);
@@ -210,6 +213,7 @@ router.post('/start', auth, async (req, res) => {
       resume: !!resume,
       importSrc,
       emitter: broadcast,
+      isStopRequested: () => _stopRequested,
     });
     broadcast('[DONE] Pipeline finished successfully.');
   } catch (err) {
@@ -473,6 +477,7 @@ router.post('/heal', auth, async (req, res) => {
     // Only run steps 3-5 by providing existing source file
     importSrc: require('path').join(__dirname, '..', 'bypassed_links.json'),
     emitter: broadcast,
+    isStopRequested: () => _stopRequested,
   })
     .then(() => broadcast('Healer finished.'))
     .catch(err => broadcast(`Healer error: ${err.message}`))

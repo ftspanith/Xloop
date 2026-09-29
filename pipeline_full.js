@@ -190,7 +190,7 @@ async function bypassUrl(url) {
 // ═══════════════════════════════════════════════════════════════════════════
 // PHASE 1: BYPASS ALL SHORTLINKS
 // ═══════════════════════════════════════════════════════════════════════════
-async function phaseBypass(allEntries, existingBypassed, CONCURRENCY = 3) {
+async function phaseBypass(allEntries, existingBypassed, CONCURRENCY = 3, isStopRequested = () => false) {
   const alreadyBypassed = new Map(existingBypassed.map(e => [e.url, e.bypassedUrl]));
   const pending = allEntries.filter(e => e.host === 'Shortlink' && !alreadyBypassed.has(e.url));
 
@@ -230,6 +230,7 @@ async function phaseBypass(allEntries, existingBypassed, CONCURRENCY = 3) {
   }
 
   while (queue.length > 0 || active.size > 0) {
+    if (isStopRequested()) { _emitter('\n  [WARN] Bypass aborted by user stop request.'); break; }
     while (active.size < CONCURRENCY && queue.length > 0) {
       const item = queue.shift();
       const p = processOne(item).finally(() => active.delete(p));
@@ -665,7 +666,7 @@ function recomputeAggregates(doc) {
 // ═══════════════════════════════════════════════════════════════════════════
 // PHASE 2: IMPORT TO MONGODB
 // ═══════════════════════════════════════════════════════════════════════════
-async function phaseImport(allEntries, RESUME = false) {
+async function phaseImport(allEntries, RESUME = false, isStopRequested = () => false) {
   // Accept: direct links OR shortlinks that were successfully bypassed
   const valid = allEntries.filter(e => {
     if (e.host !== 'Shortlink') return true;
@@ -889,6 +890,7 @@ async function phaseImport(allEntries, RESUME = false) {
   const active2 = [];
   const batchDoneKeys = [];
   for (const entry of groupEntries) {
+    if (isStopRequested()) { _emitter('\n[WARN] Import aborted by user stop request.'); break; }
     if (active2.length >= 2) await Promise.race(active2);
     const p = processGroup(entry).finally(() => {
       active2.splice(active2.indexOf(p), 1);
@@ -946,6 +948,7 @@ async function main(opts = {}) {
   const RESUME      = opts.resume     !== undefined ? opts.resume     : _argv.includes('--resume');
   const CONCURRENCY = opts.concurrency || parseInt((_argv.find(a => a.startsWith('--concurrency=')) || '').replace('--concurrency=', '') || '3', 10);
   const IMPORT_SRC  = opts.importSrc  || (_argv.find(a => a.startsWith('--import-source=')) || '').replace('--import-source=', '') || null;
+  const IS_STOP_REQUESTED = opts.isStopRequested || (() => false);
 
   const t0 = Date.now();
   log('XLOOP ─ UNIFIED BYPASS + IMPORT PIPELINE');
@@ -1079,7 +1082,7 @@ async function main(opts = {}) {
   sep();
   if (!NO_BYPASS) {
     log(`STEP 2 — Bypassing shortlinks (concurrency=${CONCURRENCY})...`);
-    await phaseBypass(allEntries, existingBypassed, CONCURRENCY);
+    await phaseBypass(allEntries, existingBypassed, CONCURRENCY, IS_STOP_REQUESTED);
     ok('Bypass phase complete');
   } else {
     warn('STEP 2 — Bypass skipped (--no-bypass)');
@@ -1110,13 +1113,13 @@ async function main(opts = {}) {
     warn(`Cache save failed (non-fatal): ${cacheErr.message}`);
   }
 
-  await phaseImport(allEntries, RESUME);
+  await phaseImport(allEntries, RESUME, IS_STOP_REQUESTED);
   ok('Import complete');
   try { await mongoose.disconnect(); } catch(_) {}
 
   // STEP 5: Heal
   sep();
-  if (!NO_HEAL) {
+  if (!NO_HEAL && !IS_STOP_REQUESTED()) {
     log('STEP 5 — Healing remaining metadata gaps...');
     await runScript(path.join(ROOT, 'heal_db.js'));
     ok('Healing complete');
