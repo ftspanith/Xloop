@@ -66,6 +66,30 @@ const sep  = ()  => _emitter('─'.repeat(64));
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// ── Canonical URL normalizer ──────────────────────────────────────────────────
+// All GDFlix mirrors → gdflix.dev  |  All HubCloud mirrors → hubcloud.one
+// Preserves the full path + query string so the link still works.
+const GDFLIX_RE    = /^https?:\/\/gdflix\.(dev|to|one|link|net|dad|cfd|xyz)/i;
+const GDLINK_RE    = /^https?:\/\/gdlink\.dev/i;
+const HUBCLOUD_RE  = /^https?:\/\/hubcloud\.(foo|one|art|cx|lol|bz|club|in|to|work|zone|dev|me|best)/i;
+const DRIVEHUB_RE  = /^https?:\/\/drivehub\.(dev|to|in|online)/i;
+
+function normalizeUrl(url) {
+  if (!url) return url;
+  try {
+    const parsed = new URL(url);
+    // GDFlix family → gdflix.dev
+    if (GDFLIX_RE.test(url) || GDLINK_RE.test(url)) {
+      return `https://gdflix.dev${parsed.pathname}${parsed.search}`;
+    }
+    // HubCloud / DriveHub family → hubcloud.one
+    if (HUBCLOUD_RE.test(url) || DRIVEHUB_RE.test(url)) {
+      return `https://hubcloud.one${parsed.pathname}${parsed.search}`;
+    }
+  } catch (_) {}
+  return url;
+}
+
 // Only accept these as valid bypassed direct URLs (reliable cloud hosts only)
 const DIRECT_HOST_RE = /gdflix|hubcloud|1fichier|filemoon|streamtape|pixeldrain|krakenfiles|buzzheavier|doodstream|mixdrop/i;
 
@@ -777,6 +801,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       // KEY FIX: use bypassedUrl for shortlinks, direct url otherwise
       let finalUrl = item.bypassedUrl || item.url;
       finalUrl = finalUrl.replace(/^http:\/\//i, 'https://').replace(/\/$/, '');
+      finalUrl = normalizeUrl(finalUrl);  // Canonicalize GDFlix → gdflix.dev, HubCloud → hubcloud.one
       const host     = detectHost(finalUrl);
 
       // If we skipped the bypasser, do NOT insert unresolved shortlinks!
