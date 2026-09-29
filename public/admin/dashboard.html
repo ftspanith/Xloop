@@ -394,12 +394,47 @@
     #doneBanner2 h4{color:#4ade80;margin:0 0 6px;font-size:1.05rem;}
     #doneBanner2 p{margin:4px 0;font-size:0.82rem;color:rgba(255,255,255,0.55);}
     #doneBanner2 a{color:#E50914;text-decoration:none;font-weight:600;}
-    #progressWrap2 { display:none; margin-bottom:16px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.07); border-radius:10px; padding:12px 16px; }
-    #progressWrap2.visible{display:block;}
-    #progressBar2 { height:6px; border-radius:3px; background:rgba(255,255,255,0.08); margin-bottom:8px; overflow:hidden; }
-    #progressFill2 { height:100%; border-radius:3px; background:linear-gradient(90deg,#7c3aed,#06b6d4); transition:width 0.5s ease; width:0%; }
-    #progressText2 { font-size:0.78rem; color:rgba(255,255,255,0.5); display:flex; justify-content:space-between; }
-    #continueBtn2 { display:none; margin-top:10px; width:100%; padding:10px; background:rgba(99,102,241,0.15); color:#818cf8; border:1px solid rgba(99,102,241,0.3); border-radius:8px; font-size:0.85rem; font-weight:700; cursor:pointer; transition:all 0.2s; }
+    /* ── Big Progress Widget ── */
+    #orchProgress {
+      display:none; margin-bottom:20px;
+      background:linear-gradient(135deg,rgba(124,58,237,0.08),rgba(6,182,212,0.06));
+      border:1px solid rgba(124,58,237,0.2); border-radius:16px; padding:22px 24px;
+      position:relative; overflow:hidden;
+    }
+    #orchProgress.visible { display:block; }
+    #orchProgress::before {
+      content:''; position:absolute; inset:0;
+      background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.03) 50%,transparent 100%);
+      animation:shimmerBg 3s ease-in-out infinite;
+    }
+    @keyframes shimmerBg { 0%,100%{opacity:0;} 50%{opacity:1;} }
+    .op-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:12px; }
+    .op-label { font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.1em; color:rgba(255,255,255,0.4); display:flex; align-items:center; gap:8px; }
+    .op-label-dot { width:8px; height:8px; border-radius:50%; background:#7c3aed; animation:pulseDot2 1s infinite; }
+    @keyframes pulseDot2 { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(1.5);opacity:0.6;} }
+    .op-pct { font-size:2.6rem; font-weight:900; letter-spacing:-2px; line-height:1;
+      background:linear-gradient(135deg,#a78bfa,#22d3ee); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .op-bar-wrap { height:14px; background:rgba(255,255,255,0.06); border-radius:99px; overflow:hidden; margin-bottom:14px; position:relative; }
+    .op-bar-fill {
+      height:100%; border-radius:99px;
+      background:linear-gradient(90deg,#7c3aed,#06b6d4);
+      transition:width 0.8s cubic-bezier(0.4,0,0.2,1);
+      width:0%; position:relative; overflow:hidden;
+    }
+    .op-bar-fill::after {
+      content:''; position:absolute; top:0; left:-200%; width:100%; height:100%;
+      background:linear-gradient(90deg,transparent,rgba(255,255,255,0.35),transparent);
+      animation:barShimmer 1.8s ease-in-out infinite;
+    }
+    @keyframes barShimmer { 0%{left:-200%;} 100%{left:200%;} }
+    .op-meta { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+    .op-count { font-size:0.82rem; font-weight:700; color:rgba(255,255,255,0.6); }
+    .op-count b { color:#a78bfa; }
+    .op-eta { font-size:0.75rem; color:rgba(255,255,255,0.35); font-variant-numeric:tabular-nums; }
+    .op-step { font-size:0.72rem; color:rgba(255,255,255,0.4); margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; gap:6px; }
+    .op-step-dot { width:5px; height:5px; border-radius:50%; background:#22d3ee; animation:pulseDot2 1.2s infinite; flex-shrink:0; }
+    .op-devices { font-size:0.68rem; color:rgba(255,255,255,0.25); margin-top:6px; }
+    #continueBtn2 { display:none; margin-top:14px; width:100%; padding:11px; background:rgba(99,102,241,0.15); color:#818cf8; border:1px solid rgba(99,102,241,0.3); border-radius:8px; font-size:0.85rem; font-weight:700; cursor:pointer; transition:all 0.2s; }
     #continueBtn2:hover{background:rgba(99,102,241,0.28);}
     #continueBtn2.visible{display:block;}
     .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(6px); z-index:9999; align-items:center; justify-content:center; }
@@ -499,12 +534,26 @@
       </div>
     </div>
 
-    <!-- Progress bar -->
-    <div id="progressWrap2">
-      <div id="progressBar2"><div id="progressFill2"></div></div>
-      <div id="progressText2"><span id="progressLabel2">Processing...</span><span id="progressCounter2">0 / 0</span></div>
+    <!-- Big animated progress widget -->
+    <div id="orchProgress">
+      <div class="op-top">
+        <div class="op-label">
+          <div class="op-label-dot"></div>
+          <span id="opStepName">Pipeline Running</span>
+        </div>
+        <div class="op-pct" id="opPct">0%</div>
+      </div>
+      <div class="op-bar-wrap">
+        <div class="op-bar-fill" id="opBarFill"></div>
+      </div>
+      <div class="op-meta">
+        <div class="op-count"><b id="opDone">0</b> / <b id="opTotal">0</b> groups processed</div>
+        <div class="op-eta" id="opEta"></div>
+      </div>
+      <div class="op-step"><div class="op-step-dot"></div><span id="opStepDetail">Waiting for first update...</span></div>
+      <div class="op-devices">Live across all devices — updates every 3s via /api/orchestrator/status</div>
       <button id="continueBtn2" onclick="continueFromOffset2()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2-8.14L11.03 12 8 14.14V9.86zM18 6h2v12h-2z"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right:6px"><path d="M6 18l8.5-6L6 6v12zm2-8.14L11.03 12 8 14.14V9.86zM18 6h2v12h-2z"/></svg>
         Continue from last offset
       </button>
     </div>
@@ -1205,6 +1254,31 @@
       syncOrchestratorStatus();
       // Keep badge in sync every 5s regardless of SSE state
       setInterval(syncOrchestratorStatus, 5000);
+      // ── Cross-device progress polling every 3s ──
+      // Any device (phone, tablet) that loads this page gets live % without needing SSE.
+      setInterval(async () => {
+        try {
+          const r = await fetch('/api/orchestrator/status');
+          if (!r.ok) return;
+          const d = await r.json();
+          if (d.total > 0) {
+            updateProgress2(d.offset || 0, d.total, d.label || '');
+          }
+          if (d.running) {
+            document.getElementById('orchProgress')?.classList.add('visible');
+          } else if (!_isRunning2 && d.total > 0 && d.offset >= d.total) {
+            // Done — show complete state
+            const pctEl = document.getElementById('opPct');
+            if (pctEl) pctEl.textContent = '100%';
+            const fill = document.getElementById('opBarFill');
+            if (fill) fill.style.width = '100%';
+            const sd = document.getElementById('opStepDetail');
+            if (sd) sd.textContent = 'Pipeline complete — all groups processed.';
+            const eta = document.getElementById('opEta');
+            if (eta) eta.textContent = '';
+          }
+        } catch (_) {}
+      }, 3000);
       // Check if telegram_export.json is available
       dashCheckExportStatus();
     }
@@ -1227,14 +1301,48 @@
   let _cAdded2 = 0, _cUpdated2 = 0;
   let _lastOffset2 = 0, _lastTotal2 = 0;
 
-  function updateProgress2(offset, total) {
+  let _progressStartTime2 = null;
+
+  function updateProgress2(offset, total, label) {
     if (!total) return;
     _lastOffset2 = offset; _lastTotal2 = total;
     const pct = Math.min(100, Math.round(offset / total * 100));
-    document.getElementById('progressFill2').style.width = pct + '%';
-    document.getElementById('progressCounter2').textContent = offset.toLocaleString() + ' / ' + total.toLocaleString();
-    document.getElementById('progressLabel2').textContent = pct + '% complete';
-    document.getElementById('progressWrap2').classList.add('visible');
+
+    // Show widget
+    const wrap = document.getElementById('orchProgress');
+    if (wrap) wrap.classList.add('visible');
+
+    // Big percentage
+    const pctEl = document.getElementById('opPct');
+    if (pctEl) pctEl.textContent = pct + '%';
+
+    // Animated bar
+    const fill = document.getElementById('opBarFill');
+    if (fill) fill.style.width = pct + '%';
+
+    // Group counts
+    const doneEl = document.getElementById('opDone'), totEl = document.getElementById('opTotal');
+    if (doneEl) doneEl.textContent = offset.toLocaleString();
+    if (totEl)  totEl.textContent  = total.toLocaleString();
+
+    // Step name
+    if (label) { const sn = document.getElementById('opStepName'); if (sn) sn.textContent = label; }
+    const sd = document.getElementById('opStepDetail');
+    if (sd) sd.textContent = offset.toLocaleString() + ' of ' + total.toLocaleString() + ' title groups done (' + pct + '%)';
+
+    // ETA
+    if (!_progressStartTime2 && offset > 0) _progressStartTime2 = Date.now();
+    if (_progressStartTime2 && offset > 0 && offset < total) {
+      const elapsed = (Date.now() - _progressStartTime2) / 1000;
+      const rate = offset / elapsed; // groups/sec
+      const remaining = Math.max(0, total - offset);
+      const etaSec = rate > 0 ? Math.round(remaining / rate) : 0;
+      const etaEl = document.getElementById('opEta');
+      if (etaEl && etaSec > 0) {
+        const m = Math.floor(etaSec / 60), s = etaSec % 60;
+        etaEl.textContent = 'ETA ~' + (m > 0 ? m + 'm ' : '') + s + 's';
+      }
+    }
   }
 
   function selectMode2(skip) {
@@ -1303,6 +1411,17 @@
     document.getElementById('modeCards2').style.opacity = '0.5';
     document.getElementById('modeCards2').style.pointerEvents = 'none';
     setStatus2('running', resume ? 'RESUMING...' : 'RUNNING');
+    // Show progress widget + reset ETA on fresh start
+    if (!resume) {
+      _progressStartTime2 = null;
+      _lastOffset2 = 0; _lastTotal2 = 0;
+      const pctEl = document.getElementById('opPct'); if (pctEl) pctEl.textContent = '0%';
+      const fill  = document.getElementById('opBarFill'); if (fill) fill.style.width = '0%';
+      const sd    = document.getElementById('opStepDetail'); if (sd) sd.textContent = 'Starting pipeline...';
+      const eta   = document.getElementById('opEta'); if (eta) eta.textContent = '';
+      const sn    = document.getElementById('opStepName'); if (sn) sn.textContent = _skipScraper2 ? 'Skip Scraper' : 'Full Pipeline';
+    }
+    document.getElementById('orchProgress')?.classList.add('visible');
     try { await fetch('/api/orchestrator/clear-logs', { method:'POST', headers:{'Authorization':'Bearer '+getToken()} }); } catch(_) {}
     if (_evSrc2) { _evSrc2.close(); _evSrc2 = null; }
     _evSrc2 = new EventSource('/api/orchestrator/start?skipScraper=' + _skipScraper2 + '&resume=' + resume);

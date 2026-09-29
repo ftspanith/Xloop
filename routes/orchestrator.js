@@ -137,11 +137,18 @@ router.get('/start', async (req, res) => {
 
   const emit = (msg) => {
     const clean = msg.replace(/\x1b\[[0-9;]*m/g, '');
-    // Parse [PROGRESS] lines to update in-memory state
+    // Parse [PROGRESS] lines — update in-memory AND persist to MongoDB
+    // so any device polling /status can see real-time % without SSE
     const progMatch = clean.match(/\[PROGRESS\]\s+(\d+)\s*\/\s*(\d+)/);
     if (progMatch) {
       pipelineProgress.offset = parseInt(progMatch[1]);
       pipelineProgress.total  = parseInt(progMatch[2]);
+      // Persist to DB (fire-and-forget — don't block the emit)
+      setPipelineRunningFlag(true, {
+        offset: pipelineProgress.offset,
+        total:  pipelineProgress.total,
+        label,
+      }).catch(() => {});
     }
     try { res.write(`data: ${JSON.stringify({ text: clean })}\n\n`); } catch (e) { }
   };
