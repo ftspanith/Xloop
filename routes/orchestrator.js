@@ -220,7 +220,7 @@ router.post('/import-batch', auth, async (req, res) => {
   const ExtractedLinkM = require('../models/ExtractedLink');
   const Movie = require('../models/Movie');
   const { cleanTitleForApi, detectHost } = require('../utils/parser');
-  const { searchTMDB, searchOMDB, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates } = require('../pipeline_full');
+  const { searchTMDB, searchOMDB, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates, searchGoogleImage } = require('../pipeline_full');
 
   try {
     if (mongoose.connection.readyState !== 1) {
@@ -299,6 +299,11 @@ router.post('/import-batch', auth, async (req, res) => {
         } else {
           const omdb = await searchOMDB(cleanTitle, rep.year, isSer);
           if (omdb) Object.assign(meta, omdb, { tmdbId: '' });
+        }
+        // Google Image fallback when poster still empty
+        if (!meta.poster) {
+          const gImg = await searchGoogleImage(rep.title, rep.year, isSer);
+          if (gImg) { meta.poster = gImg; emit(`[IMG] Google image: ${rep.title}`); }
         }
 
         const genreLower = (meta.genre || []).map(g => (g || '').toLowerCase());

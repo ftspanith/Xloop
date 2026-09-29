@@ -959,7 +959,7 @@ router.post('/refetch-poster/:id', auth, async (req, res) => {
       catch { return null; }
     }
 
-    const { searchTMDB, searchOMDB } = require('../pipeline_full');
+    const { searchTMDB, searchOMDB, searchGoogleImage } = require('../pipeline_full');
     const isSer = movie.type === 'series' || movie.type === 'anime';
     const tmdb = await searchTMDB(movie.title, movie.year, isSer, null, null, movie.imdbId || null, movie.tmdbId || null);
     let poster = '', posterFallback = '', backdrop = '', tmdbId = movie.tmdbId, imdbId = movie.imdbId;
@@ -982,6 +982,12 @@ router.post('/refetch-poster/:id', auth, async (req, res) => {
           posterFallback = omdb.poster;
         }
       }
+    }
+
+    // Last resort: Google image search for shows like Jabardasth with no TMDB/OMDB poster
+    if (!poster) {
+      const gImg = await searchGoogleImage(movie.title, movie.year, isSer);
+      if (gImg) poster = gImg;
     }
 
     const updated = await Movie.findByIdAndUpdate(req.params.id, {

@@ -44,8 +44,10 @@ const LINKS_FILE       = path.join(TMP, 'links_for_bypasser.json');
 const SHORTLINKS_FILE  = path.join(TMP, 'shortlinks_report.json');
 const BYPASSED_FILE    = path.join(TMP, 'bypassed_links.json');
 const CHECKPOINT_FILE  = path.join(TMP, 'import_checkpoint.json');
-const TMDB_KEY         = process.env.TMDB_API_KEY || '';
+const TMDB_KEY         = process.env.TMDB_API_KEY  || '';
 const OMDB_KEY         = process.env.OMDB_API_KEY  || '';
+const GOOGLE_API_KEY   = process.env.GOOGLE_API_KEY || '';
+const GOOGLE_CSE_ID    = process.env.GOOGLE_CSE_ID  || '';
 
 // ─── Terminal colors ──────────────────────────────────────────────────────────
 const C = {
@@ -302,7 +304,13 @@ function seasonFromFilename(fn) {
 // ═══════════════════════════════════════════════════════════════════════════
 async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbIdHint) {
   if (!TMDB_KEY) return null;
-  const cleanTitle = cleanTitleForApi(title);
+
+  // ── Strip common language/dub suffixes that confuse TMDB ─────────────────
+  // e.g. "Kanguva Telugu" → "Kanguva", "Leo Hindi Dubbed" → "Leo"
+  const LANG_SUFFIX_RE = /\s+(telugu|tamil|hindi|malayalam|kannada|bengali|english|korean|japanese|chinese|arabic|turkish|spanish|french|german|dubbed|dub|dual\s*audio|multi\s*audio)\s*$/i;
+  const strippedTitle = title.replace(LANG_SUFFIX_RE, '').trim() || title;
+
+  const cleanTitle = cleanTitleForApi(strippedTitle);
   if (!cleanTitle || cleanTitle.length < 2) return null;
   const BASE = 'https://api.themoviedb.org/3';
   const langMap = { en:'English',te:'Telugu',ta:'Tamil',hi:'Hindi',ml:'Malayalam',kn:'Kannada',ja:'Japanese',ko:'Korean',fr:'French',es:'Spanish',de:'German',it:'Italian',zh:'Chinese',ru:'Russian',pt:'Portuguese',ar:'Arabic',tr:'Turkish',id:'Indonesian',th:'Thai',bn:'Bengali' };
@@ -461,6 +469,87 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     const result = await runStrategy(ep, params);
     if (result) return result;
   }
+
+  // ── Fallback A: TMDB alternative titles search ──────────────────────────
+  // When the dubbed/translated title doesn't match TMDB's stored title,
+  // search by the original stripped title with a more relaxed threshold.
+  if (strippedTitle !== title) {
+    // Already tried strippedTitle above; try original raw title as last resort
+    const rawClean = cleanTitleForApi(title);
+    if (rawClean && rawClean !== cleanTitle) {
+      const strategies2 = [
+        { ep: typeEp,  params: { query: rawClean, ...(hintYear ? { year: hintYear } : {}) } },
+        { ep: typeEp,  params: { query: rawClean } },
+        { ep: 'multi', params: { query: rawClean } },
+      ];
+      for (const { ep, params } of strategies2) {
+        const result = await runStrategy(ep, params);
+        if (result) return result;
+      }
+    }
+  }
+
+  // ── Fallback B: Relaxed score retry (catches regional/variant spellings) ──
+  // Re-run primary strategy with 15 pts lower thresholds
+  const relaxedRun = async (ep, params) => {
+    return fetchWithRetry(async () => {
+      const url2 = ep === 'multi' ? `${BASE}/search/multi` : `${BASE}/search/${ep}`;
+      const res  = await axios.get(url2, { params: { api_key: TMDB_KEY, ...params }, timeout: 10000 });
+      let results = res.data.results || [];
+      if (ep === 'multi') results = results.filter(r => r.media_type === 'movie' || r.media_type === 'tv');
+      if (!results.length) return null;
+      const queryTitle = params.query;
+      const scored = results.slice(0, 5).map(r => {
+        const rTitle = r.title || r.name || '';
+        const rOrig  = r.original_title || r.original_name || '';
+        const rYear  = r.release_date ? parseInt(r.release_date, 10) : r.first_air_date ? parseInt(r.first_air_date, 10) : null;
+        const simMain = Math.max(
+          stringSimilarity(cleanTitleForApi(rTitle), queryTitle),
+          stringSimilarity(cleanTitleForApi(rOrig),  queryTitle)
+        );
+        let score = simMain * 60;
+        if (hintYear && rYear) {
+          const d = Math.abs(hintYear - rYear);
+          score += d === 0 ? 30 : d === 1 ? 15 : d <= 2 ? 5 : -20;
+        }
+        return { r, score, simMain };
+      });
+      scored.sort((a, b) => b.score - a.score);
+      const best = scored[0];
+      // Relaxed: 15 pts below normal thresholds
+      if (best.score < (isShort ? 47 : 37) || best.simMain < (isShort ? 0.45 : 0.30)) return null;
+      const isTv = ep === 'tv' || best.r.media_type === 'tv';
+      const dr = await fetchWithRetry(() =>
+        axios.get(`${BASE}/${isTv ? 'tv' : 'movie'}/${best.r.id}`, { params: { api_key: TMDB_KEY }, timeout: 10000 })
+      );
+      if (!dr) return null;
+      const sd = await fetchSeasonData(best.r.id, season, isTv);
+      const d  = dr.data;
+      return {
+        tmdbId: String(d.id), type: isTv ? 'series' : 'movie', totalSeasons: d.number_of_seasons || 0,
+        title: d.title || d.name || title,
+        description: sd.seasonOverview || d.overview || '',
+        poster: sd.seasonPoster || (d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : ''),
+        backdrop: d.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : '',
+        rating: Math.round((d.vote_average || 0) * 10) / 10,
+        year: d.release_date ? parseInt(d.release_date, 10) : d.first_air_date ? parseInt(d.first_air_date, 10) : hintYear,
+        releaseDate: d.release_date || d.first_air_date || '',
+        genre: (d.genres || []).map(g => g.name),
+        duration: d.runtime
+          ? `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}m`
+          : (d.episode_run_time?.[0] ? `${Math.floor(d.episode_run_time[0] / 60)}h ${d.episode_run_time[0] % 60}m` : ''),
+        originalLanguage: langMap[d.original_language] || d.original_language || '',
+        confidence: Math.round(best.score),
+      };
+    });
+  };
+  {
+    const r = await relaxedRun(typeEp, { query: cleanTitle, ...(hintYear ? { year: hintYear } : {}) });
+    if (r) return r;
+    const r2 = await relaxedRun(typeEp, { query: cleanTitle });
+    if (r2) return r2;
+  }
+
   return null;
 }
 
@@ -510,6 +599,42 @@ async function searchOMDB(title, year, isSeries) {
   }
 
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// GOOGLE IMAGE SEARCH
+// ─────────────────────────────────────────────────────────────────────────
+// Falls back to Google Custom Search API when TMDB + OMDB both return no poster.
+// Requires GOOGLE_API_KEY and GOOGLE_CSE_ID in env.
+// Returns a direct image URL string or null.
+async function searchGoogleImage(title, year, isSeries) {
+  if (!GOOGLE_API_KEY || !GOOGLE_CSE_ID) return null;
+  const cleanT = cleanTitleForApi(title) || title;
+  const type   = isSeries ? 'TV show' : 'movie';
+  const q = year ? `"${cleanT}" ${year} ${type} official poster` : `"${cleanT}" ${type} official poster`;
+  try {
+    const res = await axios.get('https://www.googleapis.com/customsearch/v1', {
+      params: {
+        key: GOOGLE_API_KEY, cx: GOOGLE_CSE_ID,
+        q, searchType: 'image',
+        imgType: 'photo', imgSize: 'large',
+        num: 5, safe: 'off',
+      },
+      timeout: 8000,
+    });
+    const items = res.data?.items || [];
+    // Prefer portrait-ratio images (poster shape) over landscape
+    for (const item of items) {
+      const w = item.image?.width  || 0;
+      const h = item.image?.height || 0;
+      const url = item.link || '';
+      if (!url) continue;
+      // Accept portrait (h > w) or near-square — skip wide banners
+      if (h >= w * 0.9) return url;
+    }
+    // Fallback: just return first image URL
+    return items[0]?.link || null;
+  } catch { return null; }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -623,6 +748,11 @@ async function phaseImport(allEntries, RESUME = false) {
       } else {
         const omdb = await searchOMDB(rep.title, rep.year, isSer);
         if (omdb) Object.assign(meta, omdb, { tmdbId: '' });
+      }
+      // ── Google Image fallback: fires when poster is still empty ─────────────
+      if (!meta.poster) {
+        const gImg = await searchGoogleImage(rep.title, rep.year, isSer);
+        if (gImg) { meta.poster = gImg; _emitter(`[IMG] Google image used for: ${rep.title}`); }
       }
     }
 
@@ -1004,4 +1134,4 @@ if (IS_MAIN) {
 }
 
 // ── When require()'d by orchestrator route ────────────────────────────────────
-module.exports = { runPipeline: main, searchTMDB, searchOMDB, fetchWithRetry, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates };
+module.exports = { runPipeline: main, searchTMDB, searchOMDB, searchGoogleImage, fetchWithRetry, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates };
