@@ -944,4 +944,60 @@ module.exports = {
   extractSize,toMB,detectHost,detectLanguage,detectAllLanguages,detectContentType,
   extractSeasonEpisode,detectCodec,detectHDR,extractAudio,isJunkTitle,isMetadataLine,
   extractTitleFromStreamingUrl,
+  parseManualInput,
 };
+
+// ─── MANUAL INPUT PARSER ────────────────────────────────────────────────────
+// Parses a single raw filename/paste line into a structured entry.
+// Returns { title, year, quality, size, codec, hdr, audio, language, season, episode, type }
+function parseManualInput(line) {
+  if (!line || !line.trim()) return null;
+  const raw = line.trim();
+
+  // Extract size  e.g. 1.2GB, 800MB, 1,200 MB
+  const sizeMatch = raw.match(/(\d[\d,.]*\s*(?:GB|MB))/i);
+  const size = sizeMatch ? sizeMatch[1].replace(/\s/g, '') : '';
+
+  // Extract quality
+  const quality = normalizeQuality(raw) || 'HD';
+
+  // Extract codec, HDR, audio from filename
+  const codec = detectCodec(raw) || 'Other';
+  const hdr   = detectHDR(raw)   || null;
+  const audio = extractAudio(raw) || null;
+
+  // Extract season / episode
+  const { season, episode } = extractSeasonEpisode(raw);
+
+  // Extract language
+  const language = detectAllLanguages(raw).filter(l => l !== 'Multi').join(', ') || '';
+
+  // Extract year  (4-digit between 1900-2099, not part of resolution like 1080)
+  const yearMatch = raw.match(/(?<!\d)(19\d{2}|20\d{2})(?!\d)/);
+  const year = yearMatch ? parseInt(yearMatch[1]) : null;
+
+  // Detect type from filename cues
+  let type = 'movie';
+  if (season != null || /\bS\d{1,2}\b|\bSeason\b|\bEpisode\b|\bE\d{2,}\b/i.test(raw)) type = 'series';
+  if (/\banime\b/i.test(raw)) type = 'anime';
+
+  // Strip all noise to get title
+  let title = raw
+    .replace(/(\d[\d,.]*\s*(?:GB|MB))/gi, '')     // size
+    .replace(/\b(4K|UHD|2160p|1080p|720p|480p|360p|HD|SD)\b/gi, '')  // quality
+    .replace(/\b(HEVC|H\.?265|x265|AVC|H\.?264|x264|AV1|VP9)\b/gi, '') // codec
+    .replace(/\b(TRUEHD|DTS[-.\s]?HD|DTS[-.\s]?X|DTS|ATMOS|EAC3|AC3|AAC|FLAC|MP3|DD[P+]?)\b/gi, '') // audio
+    .replace(/\b(HDR10\+?|DOLBY[\s.]?VISION|HLG|SDR|HDR)\b/gi, '') // hdr
+    .replace(/S\d{1,2}E\d{1,3}|Season\s*\d+|Episode\s*\d+/gi, '') // season/ep
+    .replace(/\[(.*?)\]|\{(.*?)\}|\((.*?)\)/g, '')  // bracketed tags
+    .replace(/(?<!\d)(19\d{2}|20\d{2})(?!\d)/g, '') // year
+    .replace(/[._\-]+/g, ' ')                        // dots/underscores
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  // Remove trailing noise words
+  title = title.replace(/\s*(BluRay|WEB-?DL|WEBRip|DVDRip|HDTV|Blu-?Ray|Remux|Extended|Theatrical|Directors\.?Cut)\s*/gi, ' ').trim();
+  title = cleanTitleForApi(title) || title;
+
+  return { title, year, quality, size, codec, hdr, audio, language, season, episode, type, raw };
+}

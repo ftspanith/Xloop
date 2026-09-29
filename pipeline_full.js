@@ -512,6 +512,19 @@ async function searchOMDB(title, year, isSeries) {
   return null;
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// POSTER VALIDATION
+// ─────────────────────────────────────────────────────────────────────────
+// HEAD request to confirm a poster URL is reachable (returns 200).
+// Returns the url if valid, null otherwise.
+async function validatePoster(url) {
+  if (!url) return null;
+  try {
+    const r = await axios.head(url, { timeout: 6000, maxRedirects: 3 });
+    return r.status >= 200 && r.status < 400 ? url : null;
+  } catch { return null; }
+}
+
 function recomputeAggregates(doc) {
   const dls = doc.downloads || [];
   doc.formats = [...new Set(dls.map(d => d.quality))].filter(Boolean);
@@ -589,17 +602,24 @@ async function phaseImport(allEntries, RESUME = false) {
       const tmdb = await searchTMDB(cleanTitle, rep.year, isSer, rep.season, group.msgDate, rep.imdbId || null, rep.tmdbIdHint || null);
       if (tmdb) {
         Object.assign(meta, tmdb);
-        if (!meta.poster || !meta.rating || !meta.imdbId) {
-          const omdb = await searchOMDB(rep.title, rep.year, isSer);
-          if (omdb) {
-            if (!meta.poster      && omdb.poster)      meta.poster      = omdb.poster;
-            if (!meta.rating      && omdb.rating)      meta.rating      = omdb.rating;
-            if (!meta.description && omdb.description) meta.description = omdb.description;
-            if (!meta.duration    && omdb.duration)    meta.duration    = omdb.duration;
-            if (!meta.genre?.length && omdb.genre?.length) meta.genre   = omdb.genre;
-            if (omdb.imdbId)                           meta.imdbId      = omdb.imdbId;
-          }
+        // Always fetch OMDB for extra data (rating, imdbId, fallback poster)
+        const omdb = await searchOMDB(rep.title, rep.year, isSer);
+        if (omdb) {
+          if (!meta.rating      && omdb.rating)      meta.rating      = omdb.rating;
+          if (!meta.description && omdb.description) meta.description = omdb.description;
+          if (!meta.duration    && omdb.duration)    meta.duration    = omdb.duration;
+          if (!meta.genre?.length && omdb.genre?.length) meta.genre   = omdb.genre;
+          if (omdb.imdbId)                           meta.imdbId      = omdb.imdbId;
+          // Store OMDB poster as fallback (different crop/resolution)
+          if (omdb.poster && omdb.poster !== meta.poster) meta.posterFallback = omdb.poster;
         }
+        // Validate primary poster; fall to OMDB fallback if broken
+        const validPoster = await validatePoster(meta.poster);
+        if (!validPoster && meta.posterFallback) {
+          const validFb = await validatePoster(meta.posterFallback);
+          if (validFb) { meta.poster = validFb; meta.posterFallback = ''; }
+          else meta.poster = '';
+        } else if (!validPoster) meta.poster = '';
       } else {
         const omdb = await searchOMDB(rep.title, rep.year, isSer);
         if (omdb) Object.assign(meta, omdb, { tmdbId: '' });
@@ -638,13 +658,14 @@ async function phaseImport(allEntries, RESUME = false) {
       const language = item.language || '';
       const codec    = item.codec    || detectCodecLocal(item.filename);
       const hdr      = item.hdr      || null;
+      const audio    = item.audio    || null;
       const correctSeason = seasonFromFilename(item.filename) ?? item.season ?? null;
 
       let dbRec = existing;
       if (!dbRec && meta.tmdbId) dbRec = await Movie.findOne({ tmdbId: meta.tmdbId });
 
       const newDl = {
-        quality, size, filename: item.filename || '', language, codec, hdr,
+        quality, size, filename: item.filename || '', language, codec, hdr, audio,
         season: correctSeason, episode: item.episode ?? null,
         links: [{ host, url: finalUrl, isFast: /gdflix|hubcloud|gdlink/i.test(finalUrl) }],
       };
@@ -671,12 +692,13 @@ async function phaseImport(allEntries, RESUME = false) {
           }
         }
         const metaSet = {};
-        if (!dbRec.backdrop    && meta.backdrop)    metaSet.backdrop    = meta.backdrop;
-        if (!dbRec.poster      && meta.poster)      metaSet.poster      = meta.poster;
-        if (!dbRec.tmdbId      && meta.tmdbId)      metaSet.tmdbId      = meta.tmdbId;
-        if (!dbRec.imdbId      && meta.imdbId)      metaSet.imdbId      = meta.imdbId;
-        if (!dbRec.rating      && meta.rating)      metaSet.rating      = meta.rating;
-        if (!dbRec.description && meta.description) metaSet.description = meta.description;
+        if (!dbRec.backdrop       && meta.backdrop)       metaSet.backdrop       = meta.backdrop;
+        if (!dbRec.poster         && meta.poster)         metaSet.poster         = meta.poster;
+        if (!dbRec.posterFallback && meta.posterFallback) metaSet.posterFallback = meta.posterFallback;
+        if (!dbRec.tmdbId         && meta.tmdbId)         metaSet.tmdbId         = meta.tmdbId;
+        if (!dbRec.imdbId         && meta.imdbId)         metaSet.imdbId         = meta.imdbId;
+        if (!dbRec.rating         && meta.rating)         metaSet.rating         = meta.rating;
+        if (!dbRec.description    && meta.description)    metaSet.description    = meta.description;
         if (finalType === 'anime' && dbRec.type === 'series') metaSet.type = 'anime';
 
         if (matchedIdx >= 0) {
@@ -713,7 +735,9 @@ async function phaseImport(allEntries, RESUME = false) {
         const newDoc = await Movie.create({
           title: meta.title, tmdbId: meta.tmdbId || '', imdbId: meta.imdbId || '',
           type: finalType, totalSeasons: meta.totalSeasons || 0,
-          description: meta.description || '', poster: meta.poster || '', backdrop: meta.backdrop || '',
+          description: meta.description || '',
+          poster: meta.poster || '', posterFallback: meta.posterFallback || '',
+          backdrop: meta.backdrop || '',
           rating: meta.rating || 0, year: meta.year || item.year || new Date().getFullYear(),
           genre: meta.genre || [], duration: meta.duration || '', quality, language: origLang2,
           formats: [quality].filter(Boolean), codecs: [codec].filter(c => c !== 'Other'),
@@ -722,7 +746,7 @@ async function phaseImport(allEntries, RESUME = false) {
           downloads: [newDl],
         });
         added++; existing = newDoc;
-        _emitter(`[NEW] ${meta.title} (${meta.year || '?'}) | ${quality} ➔ ${host}`);
+        _emitter(`[NEW] ${meta.title} (${meta.year || '?'}) | ${quality}${audio ? ' · '+audio : ''}${hdr ? ' · '+hdr : ''} ➔ ${host}`);
       } catch (e) {
         _emitter(`❌ DB error "${meta.title}": ${e.message}`);
         skipped++;
@@ -742,7 +766,8 @@ async function phaseImport(allEntries, RESUME = false) {
       if (batchDoneKeys.length % CHECKPOINT_EVERY === 0) saveCheckpoint(batchDoneKeys);
     });
     active2.push(p); gi++;
-    if (gi % 100 === 0) _emitter(`   Importing: ${gi}/${groupEntries.length}...`);
+    // Emit [PROGRESS] every 25 groups so orchestrator UI can track
+    if (gi % 25 === 0) _emitter(`[PROGRESS] ${gi}/${groupEntries.length}`);
     await sleep(50);
   }
   await Promise.all(active2);

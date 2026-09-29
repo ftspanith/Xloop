@@ -27,8 +27,9 @@ const MovieSchema = new mongoose.Schema({
   type:        { type: String, enum: ['movie', 'series', 'anime'], default: 'movie' },
   totalSeasons:{ type: Number, default: 0 },
   seasonPosters:{ type: mongoose.Schema.Types.Mixed, default: {} }, // { s1: url, s2: url, ... }
-  poster:      { type: String, default: '' },
-  backdrop:    { type: String, default: '' },
+  poster:        { type: String, default: '' },
+  posterFallback:{ type: String, default: '' },  // OMDB high-res fallback
+  backdrop:      { type: String, default: '' },
   description: { type: String, default: '' },
   genre:       [{ type: String }],
   year:        { type: Number },
