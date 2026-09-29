@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const auth = require('../middleware/auth');
+// Cross-module: allow orchestrator to abort in-progress uploads
+function abortUpload() {
+  try { require('./scrape').setUploadAborted(true); } catch(_) {}
+}
 
 // pipeline_full is lazy-loaded inside the route handlers so it doesn't
 // get bundled/required on every Vercel cold start (it pulls in ESM-only deps)
@@ -502,6 +506,7 @@ router.post('/stop', auth, (req, res) => {
   _stopRequested = true;
   pipelineRunning = false;
   setPipelineRunningFlag(false);
+  abortUpload(); // Also abort any in-progress chunked JSON upload
   broadcast('Stop requested by admin.');
   res.json({ message: 'Stop requested' });
 });
@@ -511,6 +516,8 @@ router.post('/wipe', auth, async (req, res) => {
   if (pipelineRunning) {
     return res.status(400).json({ error: 'Pipeline is already running' });
   }
+
+  abortUpload(); // Cancel any in-progress chunked JSON upload before wiping
 
   const mongoose = require('mongoose');
   const Movie    = require('../models/Movie');

@@ -16,6 +16,10 @@ const SCRAPE_SCRIPT = path.join(ROOT, 'scrape_api.js');
 const os = require('os');
 const EXPORT_FILE   = process.env.VERCEL ? path.join(os.tmpdir(), 'telegram_export.json') : path.join(ROOT, 'telegram_export.json');
 
+// ── Upload abort flag — set by Stop/Wipe to cancel in-progress chunked uploads ──
+let _uploadAborted = false;
+module.exports.setUploadAborted = (v) => { _uploadAborted = v; };
+
 // ── GET /api/scrape/channels — return channel list (auth required) ────────
 router.get('/channels', auth, (req, res) => {
   res.json({
@@ -292,11 +296,17 @@ router.get('/export-status', auth, async (req, res) => {
 // Supports chunked uploads: client sends 400 links at a time with the same batchId.
 // On isFinal=true, cleans up old batches and updates PipelineCache.
 router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req, res) => {
+  // Check abort flag — set by Stop/Wipe buttons to cancel in-progress uploads
+  if (_uploadAborted) {
+    return res.status(409).json({ aborted: true, message: 'Upload was cancelled. Please re-upload your file.' });
+  }
   try {
     const { links, batchId: incomingBatchId, isFinal, messageCount, skipped } = req.body;
     if (!Array.isArray(links)) {
       return res.status(400).json({ message: 'No links array provided.' });
     }
+    // Reset abort flag at the start of a NEW upload (first chunk, no batchId yet)
+    if (!incomingBatchId) _uploadAborted = false;
 
     const ExtractedLink = require('../models/ExtractedLink');
     const PipelineCache = require('../models/PipelineCache');

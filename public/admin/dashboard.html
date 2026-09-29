@@ -1196,7 +1196,15 @@
       const CHUNK = 400;
       const totalChunks = Math.ceil(links.length / CHUNK);
       let batchId = null;
+      // Store AbortController so Stop/Wipe can cancel the current in-flight fetch
+      window._uploadAbortController = new AbortController();
       for (let ci = 0; ci < totalChunks; ci++) {
+        // Check if abort was triggered client-side (Stop/Wipe button clicked)
+        if (window._uploadAbortController.signal.aborted) {
+          msg.style.color = '#f59e0b';
+          msg.textContent = 'Upload cancelled.';
+          break;
+        }
         const chunk = links.slice(ci * CHUNK, (ci + 1) * CHUNK);
         const isFinal = ci === totalChunks - 1;
         msg.textContent = ` Saving chunk ${ci+1}/${totalChunks} (${chunk.length} links)…`;
@@ -1205,15 +1213,33 @@
           messageCount: isFinal ? messages.length : undefined,
           skipped: isFinal ? skipped : undefined,
         });
-        const res = await fetch('/api/scrape/save-extracted', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body,
-        });
+        let res;
+        try {
+          res = await fetch('/api/scrape/save-extracted', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body,
+            signal: window._uploadAbortController.signal,
+          });
+        } catch (fetchErr) {
+          if (fetchErr.name === 'AbortError') {
+            msg.style.color = '#f59e0b';
+            msg.textContent = 'Upload cancelled — click "Choose File" to re-upload.';
+            break;
+          }
+          throw fetchErr;
+        }
         // Safe parse — server may return plain text error (e.g. 413 from Vercel gateway)
         const raw = await res.text();
         let data;
         try { data = JSON.parse(raw); } catch(_) { throw new Error(raw.slice(0,200)); }
+        // 409 = server-side abort (Stop/Wipe was clicked)
+        if (res.status === 409 && data?.aborted) {
+          msg.style.color = '#f59e0b';
+          msg.textContent = 'Upload cancelled by Stop/Wipe — click "Choose File" to re-upload.';
+          dashCheckExportStatus();
+          break;
+        }
         if (!res.ok) throw new Error(data.message || 'Save failed');
         if (!batchId) batchId = data.batchId;
         if (isFinal) {
@@ -1222,6 +1248,7 @@
           dashCheckExportStatus();
         }
       }
+      window._uploadAbortController = null;
     } catch (err) {
       msg.style.color = '#ef4444';
       msg.textContent = `Failed: ${err.message}`;
@@ -1524,7 +1551,9 @@
   }
 
   async function stopPipeline2() {
-    try { await fetch('/api/orchestrator/stop', { method:'POST', headers:{'Authorization':'Bearer '+getToken()} }); appendLog2(' Stop command sent.'); }
+    // Immediately abort any in-progress client-side upload
+    if (window._uploadAbortController) { window._uploadAbortController.abort(); window._uploadAbortController = null; }
+    try { await fetch('/api/orchestrator/stop', { method:'POST', headers:{'Authorization':'Bearer '+getToken()} }); appendLog2(' Stop command sent. Upload aborted.'); }
     catch(e) { appendLog2(' ERROR: ' + e.message); }
     onFinished2('', true);
   }
@@ -1559,6 +1588,8 @@
   async function confirmWipe2() {
     closeWipeConfirm2();
     if (_isRunning2) return;
+    // Abort any in-progress upload before wiping
+    if (window._uploadAbortController) { window._uploadAbortController.abort(); window._uploadAbortController = null; }
     _isRunning2 = true;
     document.getElementById('logBox2').innerHTML = '';
     document.getElementById('startBtn2').disabled = true;
