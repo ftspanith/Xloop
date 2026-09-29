@@ -118,9 +118,12 @@ router.get('/start', async (req, res) => {
 
   const skipScraper = req.query.skipScraper === 'true';
   const resume = req.query.resume === 'true';
+  const scope       = req.query.scope || 'all';          // 'all' | 'daily' | 'title'
+  const titleFilter = (req.query.titleFilter || '').trim();
   // If skipBypass is explicitly passed, parse it. Otherwise default to skipScraper.
   const skipBypass = req.query.skipBypass ? req.query.skipBypass === 'true' : skipScraper;
-  const label = skipScraper ? 'Skip Scraper (import-only)' : 'Full Pipeline';
+  const scopeLabel  = scope === 'daily' ? ' [Today\'s New]' : scope === 'title' && titleFilter ? ` [Title: ${titleFilter}]` : '';
+  const label = (skipScraper ? 'Skip Scraper (import-only)' : 'Full Pipeline') + scopeLabel;
 
   // Setup SSE
   res.setHeader('Content-Type', 'text/event-stream');
@@ -160,6 +163,8 @@ router.get('/start', async (req, res) => {
   } else {
     emit(`[INFO] Full Pipeline: scraping Telegram → extracting → importing`);
   }
+  if (scope === 'daily') emit(`[INFO] Scope: Today's new content only (filtering by today's date)`);
+  if (scope === 'title' && titleFilter) emit(`[INFO] Scope: Searching for title matching "${titleFilter}"`);
 
   let importSrc = undefined;
 
@@ -170,6 +175,8 @@ router.get('/start', async (req, res) => {
       noWipe: !!skipScraper,
       resume: !!resume,
       importSrc,
+      scope,
+      titleFilter: titleFilter || undefined,
       emitter: emit,
       isStopRequested: () => _stopRequested,
     });
