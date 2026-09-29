@@ -319,21 +319,17 @@ function parseInput() {
   if (!lines.length) { showToast('Nothing to parse', true); return; }
 
   const parsed = lines.map(parseOneLine).filter(Boolean);
+  if (!parsed.length) { showToast('Could not parse any filenames', true); return; }
 
-  // Group by title+type+season
+  // Group by normalized title + type + season
+  // Each parsed line becomes a separate link slot (allowing same title, different quality)
   const groupMap = {};
   for (const p of parsed) {
     const key = `${p.title.toLowerCase()}__${p.type}__${p.season??''}`;
-    if (!groupMap[key]) groupMap[key] = { ...p, links:[] };
-    else {
-      // Merge additional quality/size entries into group
-      if (!groupMap[key].links.find(l => l.quality === p.quality && l.size === p.size)) {
-        // Handled via extra link slots
-      }
-    }
-    if (globalUrl && !groupMap[key].links.find(l => l.url === globalUrl)) {
-      groupMap[key].links.push({ url: globalUrl, quality: p.quality, size: p.size, filename: p.raw });
-    }
+    if (!groupMap[key]) groupMap[key] = { title: p.title, year: p.year, type: p.type, season: p.season, episode: p.episode, links:[] };
+    // Each distinct filename becomes a link slot carrying its own quality/audio/codec/size
+    const linkEntry = { url: globalUrl || '', quality: p.quality, size: p.size, codec: p.codec, hdr: p.hdr, audio: p.audio, filename: p.raw };
+    groupMap[key].links.push(linkEntry);
   }
 
   groups = Object.values(groupMap);
@@ -356,18 +352,18 @@ function renderPreview() {
      <div class="group-header">
       <div>
        <div class="group-title">${escHtml(g.title)}</div>
-       <div class="group-meta">${g.year || '?'} ${g.season != null ? `· S${String(g.season).padStart(2,'0')}` : ''}</div>
+       <div class="group-meta">${g.year || '?'}${g.season != null ? ` · S${String(g.season).padStart(2,'0')}` : ''} · ${g.links.length} link${g.links.length !== 1 ? 's' : ''}</div>
       </div>
       <span class="type-badge type-${g.type}">${g.type.toUpperCase()}</span>
      </div>
      ${g.links.map((l, li) => `
       <div class="link-row">
-       <span class="badge-q">${l.quality||g.quality||'HD'}</span>
-       <span class="fn" title="${escHtml(l.filename||g.raw)}">${escHtml((l.filename||g.raw).slice(0,45))}…</span>
+       <span class="badge-q">${l.quality||'HD'}</span>
+       <span class="fn" title="${escHtml(l.filename||'')}">${escHtml((l.filename||'').slice(0,40))}${(l.filename||'').length > 40 ? '…' : ''}</span>
        <span class="link-url" title="${escHtml(l.url)}">${hostLabel(l.url)}</span>
-       <span class="badge-a">${g.audio||'—'}</span>
-       <span class="badge-h">${g.hdr||'—'}</span>
-       <span style="color:rgba(255,255,255,.3);font-size:.7rem;">${l.size||g.size||'—'}</span>
+       <span class="badge-a">${l.audio||'—'}</span>
+       <span class="badge-h">${l.hdr||'—'}</span>
+       <span style="color:rgba(255,255,255,.3);font-size:.7rem;">${l.size||'—'}</span>
        <button class="rm-btn" onclick="removeLink(${gi},${li})" title="Remove">✕</button>
       </div>`).join('')}
      <div class="add-link-row">
@@ -401,14 +397,24 @@ async function submitAll() {
   document.getElementById('submitBtn').textContent = '⏳ Importing…';
   showResult(null);
 
-  const entries = groups.map(g => ({
-    title: g.title, year: g.year, type: g.type,
-    quality: g.quality, size: g.size, codec: g.codec, hdr: g.hdr,
-    audio: g.audio, language: g.language,
-    season: g.season, episode: g.episode,
-    filename: g.raw,
-    links: g.links.length ? g.links : [{ url: '' }],
-  })).filter(e => e.links.some(l => l.url));
+  // Build entries: each group becomes one entry with multiple link objects,
+  // each link carrying its own quality/codec/hdr/audio from the parsed line
+  const entries = groups.flatMap(g =>
+    g.links
+      .filter(l => l.url)
+      .map(l => ({
+        title: g.title, year: g.year, type: g.type,
+        quality: l.quality || 'HD',
+        size: l.size || '',
+        codec: l.codec || 'Other',
+        hdr: l.hdr || null,
+        audio: l.audio || null,
+        language: l.language || '',
+        season: g.season, episode: g.episode,
+        filename: l.filename || '',
+        links: [{ url: l.url }],
+      }))
+  );
 
   if (!entries.length) {
     showToast('Add at least one download URL', true);
@@ -457,7 +463,9 @@ function clearAll() {
   showResult(null);
 }
 
-checkAuth();
+(async function init() {
+  await checkAuth();
+})();
 </script>
 </body>
 </html>

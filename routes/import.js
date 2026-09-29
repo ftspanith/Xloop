@@ -995,15 +995,12 @@ router.post('/refetch-poster/:id', auth, async (req, res) => {
 // Accepts an array of pre-parsed manual entries and imports with full TMDB enrichment.
 // Entry shape: { title, year, quality, size, codec, hdr, audio, language, season, episode, type, links: [{url}] }
 router.post('/manual-batch', auth, async (req, res) => {
-  const { entries = [], tmdbKey, omdbKey: omdbKeyParam } = req.body || {};
+  const { entries = [] } = req.body || {};
   if (!entries.length) return res.status(400).json({ message: 'No entries provided' });
 
-  const { tmdbKey: tk, omdbKey: ok } = resolveKeys(req);
-  const resolvedTmdb = tmdbKey || tk;
-  const resolvedOmdb = omdbKeyParam || ok;
-
-  const { searchTMDB, searchOMDB, recomputeAggregates, toMB } = require('../pipeline_full');
-  const { detectCodec, detectHDR, extractAudio, detectHost } = require('../utils/parser');
+  const { searchTMDB, searchOMDB, recomputeAggregates } = require('../pipeline_full');
+  const { detectCodec, detectHDR, extractAudio } = require('../utils/parser');
+  // Note: detectHost is defined locally in this file (line 43)
 
   const results = [];
   // Group by title+year to avoid duplicate TMDB calls

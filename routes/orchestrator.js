@@ -285,16 +285,16 @@ router.post('/import-batch', auth, async (req, res) => {
         const tmdb = await searchTMDB(cleanTitle, rep.year, isSer, tmdbSeason, group.msgDate, rep.imdbId || null, rep.tmdbIdHint || null);
         if (tmdb) {
           Object.assign(meta, tmdb);
-          if (!meta.poster || !meta.rating || !meta.imdbId) {
-            const omdb = await searchOMDB(cleanTitle, rep.year, isSer);
-            if (omdb) {
-              if (!meta.poster && omdb.poster) meta.poster = omdb.poster;
-              if (!meta.rating && omdb.rating) meta.rating = omdb.rating;
-              if (!meta.description && omdb.description) meta.description = omdb.description;
-              if (!meta.duration && omdb.duration) meta.duration = omdb.duration;
-              if (!(meta.genre && meta.genre.length) && omdb.genre && omdb.genre.length) meta.genre = omdb.genre;
-              if (omdb.imdbId) meta.imdbId = omdb.imdbId;
-            }
+          // Always fetch OMDB for rating, imdbId, and fallback poster
+          const omdb = await searchOMDB(cleanTitle, rep.year, isSer);
+          if (omdb) {
+            if (!meta.rating && omdb.rating)           meta.rating = omdb.rating;
+            if (!meta.description && omdb.description) meta.description = omdb.description;
+            if (!meta.duration && omdb.duration)       meta.duration = omdb.duration;
+            if (!(meta.genre && meta.genre.length) && omdb.genre && omdb.genre.length) meta.genre = omdb.genre;
+            if (omdb.imdbId)                           meta.imdbId = omdb.imdbId;
+            // Store OMDB poster as posterFallback when TMDB poster differs
+            if (omdb.poster && omdb.poster !== meta.poster) meta.posterFallback = omdb.poster;
           }
         } else {
           const omdb = await searchOMDB(cleanTitle, rep.year, isSer);
@@ -327,6 +327,7 @@ router.post('/import-batch', auth, async (req, res) => {
           const language = item.language || '';
           const codec = item.codec || detectCodecLocal(item.filename);
           const hdr = item.hdr || null;
+          const audio = item.audio || null;
           const correctSeason = seasonFromFilename(item.filename) ?? item.season ?? null;
 
           let dbRec = existing;
@@ -336,7 +337,7 @@ router.post('/import-batch', auth, async (req, res) => {
           }
 
           const newDl = {
-            quality, size, filename: item.filename || '', language, codec, hdr,
+            quality, size, filename: item.filename || '', language, codec, hdr, audio,
             season: correctSeason, episode: item.episode ?? null,
             links: [{ host, url: finalUrl, isFast: /gdflix|hubcloud|gdlink/i.test(finalUrl) }],
           };
@@ -365,12 +366,13 @@ router.post('/import-batch', auth, async (req, res) => {
             }
 
             const metaSet = {};
-            if (!dbRec.backdrop && meta.backdrop) metaSet.backdrop = meta.backdrop;
-            if (!dbRec.poster && meta.poster) metaSet.poster = meta.poster;
-            if (!dbRec.tmdbId && meta.tmdbId) metaSet.tmdbId = meta.tmdbId;
-            if (!dbRec.imdbId && meta.imdbId) metaSet.imdbId = meta.imdbId;
-            if (!dbRec.rating && meta.rating) metaSet.rating = meta.rating;
-            if (!dbRec.description && meta.description) metaSet.description = meta.description;
+            if (!dbRec.backdrop       && meta.backdrop)       metaSet.backdrop       = meta.backdrop;
+            if (!dbRec.poster         && meta.poster)         metaSet.poster         = meta.poster;
+            if (!dbRec.posterFallback && meta.posterFallback) metaSet.posterFallback = meta.posterFallback;
+            if (!dbRec.tmdbId         && meta.tmdbId)         metaSet.tmdbId         = meta.tmdbId;
+            if (!dbRec.imdbId         && meta.imdbId)         metaSet.imdbId         = meta.imdbId;
+            if (!dbRec.rating         && meta.rating)         metaSet.rating         = meta.rating;
+            if (!dbRec.description    && meta.description)    metaSet.description    = meta.description;
             if (finalType === 'anime' && dbRec.type === 'series') metaSet.type = 'anime';
 
             if (matchedIdx >= 0) {
@@ -405,7 +407,9 @@ router.post('/import-batch', auth, async (req, res) => {
             const newDoc = await Movie.create({
               title: finalTitle, tmdbId: meta.tmdbId || '', imdbId: meta.imdbId || '',
               type: finalType, totalSeasons: meta.totalSeasons || 0,
-              description: meta.description || '', poster: meta.poster || '', backdrop: meta.backdrop || '',
+              description: meta.description || '',
+              poster: meta.poster || '', posterFallback: meta.posterFallback || '',
+              backdrop: meta.backdrop || '',
               rating: meta.rating || 0, year: meta.year || rep.year || null,
               genre: meta.genre || [], duration: meta.duration || '', quality, language: origLang2,
               formats: [quality].filter(Boolean), codecs: [codec].filter(c => c && c !== 'Other'),
@@ -414,7 +418,7 @@ router.post('/import-batch', auth, async (req, res) => {
             });
             added++;
             existing = newDoc;
-            emit(`[NEW] ${finalTitle} (${meta.year || rep.year || '?'}) | ${quality} ➔ ${host} | POSTER: ${meta.poster ? 'YES' : 'NO'}`);
+            emit(`[NEW] ${finalTitle} (${meta.year || rep.year || '?'}) | ${quality}${audio ? ' · '+audio : ''}${hdr ? ' · '+hdr : ''} ➔ ${host} | POSTER: ${meta.poster ? '✓' : '✗'}`);
           }
         }
       } catch (e) {
