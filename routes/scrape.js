@@ -263,13 +263,24 @@ router.post('/upload-export', auth, upload.array('files', 10), async (req, res) 
 // ── GET /api/scrape/export-status — check if extracted links are available ────
 router.get('/export-status', auth, async (req, res) => {
   try {
-    const PipelineCache = require('../models/PipelineCache');
-    const cache = await PipelineCache.findOne({ key: 'extracted_links' }, 'count savedAt').lean();
+    const PipelineCache  = require('../models/PipelineCache');
+    const ExtractedLink  = require('../models/ExtractedLink');
+
+    // Always count the real collection — PipelineCache can be stale after a wipe
+    const realCount = await ExtractedLink.countDocuments({});
+    const cache     = await PipelineCache.findOne({ key: 'extracted_links' }, 'count savedAt').lean();
+
+    // Auto-heal stale metadata: if PipelineCache says links exist but collection is empty, reset it
+    if (cache && cache.count > 0 && realCount === 0) {
+      await PipelineCache.updateOne({ key: 'extracted_links' }, { $set: { count: 0, 'data.count': 0 } });
+    }
+
     const tmpExists = fs.existsSync(path.join(os.tmpdir(), 'links_for_bypasser.json'));
+    const available = realCount > 0 || tmpExists;
     res.json({
-      available: !!(cache || tmpExists),
-      source: cache ? 'mongodb' : tmpExists ? 'tmp' : 'none',
-      count: cache ? cache.count : 0,
+      available,
+      source: realCount > 0 ? 'mongodb' : tmpExists ? 'tmp' : 'none',
+      count: realCount > 0 ? realCount : (cache?.count || 0),
       savedAt: cache ? cache.savedAt : null,
     });
   } catch (err) {
