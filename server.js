@@ -178,13 +178,14 @@ process.on('uncaughtException',  (err)    => console.error('[UncaughtException]'
 
 // ── MongoDB ───────────────────────────────────────────────────────────────────
 const MONGO_OPTS = {
-  serverSelectionTimeoutMS: 10_000,
-  connectTimeoutMS:         10_000,
-  socketTimeoutMS:          45_000,
+  serverSelectionTimeoutMS: 15_000,   // find a server (was 10s)
+  connectTimeoutMS:         15_000,   // initial connect (was 10s)
+  socketTimeoutMS:          120_000,  // per-op timeout — was 45s, need 120s for bulk insertMany
   heartbeatFrequencyMS:     10_000,
-  family:                   4,       // IPv4 only — no IPv6 DNS hangs
-  maxPoolSize:              10,
-  minPoolSize:              2,
+  family:                   4,        // IPv4 only — no IPv6 DNS hangs
+  maxPoolSize:              30,        // was 10 — pipeline + uploads run concurrently
+  minPoolSize:              3,         // keep 3 warm connections
+  waitQueueTimeoutMS:       30_000,   // max time to wait for a connection from the pool
 };
 
 const PORT = process.env.PORT || 3000;

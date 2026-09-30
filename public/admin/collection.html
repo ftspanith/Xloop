@@ -287,15 +287,20 @@
 
   // ── Manual title entry (primary workflow) ─────────────────────────────────
   async function cmManualAdd() {
-    const title = document.getElementById('cmManualInput').value.trim();
-    if (!title) return;
+    const raw = document.getElementById('cmManualInput').value.trim();
+    if (!raw) return;
+    // Parse 'Title(Year)' or 'Title (Year)' format — e.g. "Pushpa The Rule(2024)"
+    const yearMatch = raw.match(/^(.+?)\s*\((\d{4})\)\s*$/);
+    const title = yearMatch ? yearMatch[1].trim() : raw;
+    const hintYear = yearMatch ? yearMatch[2] : null;
+
     const btn    = document.getElementById('cmManualBtn');
     const status = document.getElementById('cmManualStatus');
     btn.disabled = true;
     btn.innerHTML = '<span class="cm-spin"></span>';
     status.style.display = 'block';
     status.style.color = 'var(--text2)';
-    status.textContent = 'Searching JSON for "' + title + '"...';
+    status.textContent = 'Searching JSON for "' + title + '"' + (hintYear ? ' (' + hintYear + ')' : '') + '...';
     try {
       // Search for matching titles (may have minor spelling differences)
       const sr = await fetch('/api/scrape/collection-search?q=' + encodeURIComponent(title), { headers: AH });
@@ -308,9 +313,12 @@
         btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add';
         return;
       }
-      // Use the best match (first result, since collection-search returns sorted by title)
-      // If exact match exists, prefer it
-      const exact = matches.find(m => m.title.toLowerCase() === title.toLowerCase()) || matches[0];
+      // Use the best match: prefer exact title+year, then exact title, then first result
+      const exact = (hintYear
+        ? matches.find(m => m.title.toLowerCase() === title.toLowerCase() && String(m.year) === hintYear)
+        : null)
+        || matches.find(m => m.title.toLowerCase() === title.toLowerCase())
+        || matches[0];
       if (cmItems.some(x => x._title === exact.title)) {
         status.style.color = '#f59e0b';
         status.textContent = '"' + exact.title + '" is already in the collection.';

@@ -169,29 +169,43 @@ router.get('/start', async (req, res) => {
   }
   if (scope === 'daily') emit(`[INFO] Scope: Today's new content only (filtering by today's date)`);
   if (scope === 'title' && titleFilter) emit(`[INFO] Scope: Searching for title matching "${titleFilter}"`);
+  emit(`[INFO] Pipeline running in background — safe to close this tab. Check status anytime.`);
 
   let importSrc = undefined;
 
-  try {
-    const runPipeline = await getRunPipeline();
-    await runPipeline({
-      noBypass: skipBypass !== undefined ? skipBypass : !!skipScraper,
-      noWipe: !!skipScraper,
-      resume: !!resume,
-      importSrc,
-      scope,
-      titleFilter: titleFilter || undefined,
-      emitter: emit,
-      isStopRequested: () => _stopRequested,
-    });
-    emit('[DONE] Pipeline finished successfully.');
-  } catch (err) {
-    emit(`[ERROR] Pipeline error: ${err.message}`);
-  } finally {
-    pipelineRunning = false;
-    setPipelineRunningFlag(false);
-    res.end();
-  }
+  // ── Fire pipeline detached from HTTP response ─────────────────────────────
+  // Using setImmediate detaches the async work from the SSE response lifecycle.
+  // The pipeline keeps running even if the browser closes the SSE connection.
+  // Logs are written to SSE while connected; status is polled via /status when reconnected.
+  setImmediate(async () => {
+    try {
+      const runPipeline = await getRunPipeline();
+      await runPipeline({
+        noBypass: skipBypass !== undefined ? skipBypass : !!skipScraper,
+        noWipe: !!skipScraper,
+        resume: !!resume,
+        importSrc,
+        scope,
+        titleFilter: titleFilter || undefined,
+        emitter: emit,
+        isStopRequested: () => _stopRequested,
+      });
+      emit('[DONE] Pipeline finished successfully.');
+    } catch (err) {
+      emit(`[ERROR] Pipeline error: ${err.message}`);
+    } finally {
+      pipelineRunning = false;
+      setPipelineRunningFlag(false);
+      try { res.end(); } catch(_) {}
+    }
+  });
+
+  // Keep SSE connection alive with heartbeats (client reconnects using /stream after refresh)
+  const _hb = setInterval(() => {
+    try { res.write(': ping\n\n'); }
+    catch(_) { clearInterval(_hb); } // browser disconnected — pipeline still runs
+  }, 20000);
+  req.on('close', () => clearInterval(_hb));
 });
 
 // ── Start pipeline (POST — backward compat for dashboard.html) ────────────────
