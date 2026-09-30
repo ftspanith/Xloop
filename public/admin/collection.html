@@ -597,9 +597,12 @@
       + '<div class="cm-num">' + (i+1) + '</div>'
       + (m.poster ? '<img class="cm-item-poster" src="' + m.poster + '" alt="" onerror="this.style.display=\'none\'">'
                   : '<div class="cm-item-ph"></div>')
-      + '<div class="cm-item-info"><div class="cm-item-title">' + escH(m.title) + '</div>'
-      + '<div class="cm-item-meta">' + (m.year||'') + ' · ' + (m.type||'movie')
-      + (m.downloads !== null ? ' · <span style="color:var(--accent)">' + (m.downloads||[]).length + ' variants</span>' : '')
+      + '<div class="cm-item-info"><div class="cm-item-title">' + escH(m.title) + (m.year ? ' (' + m.year + ')' : '') + '</div>'
+      + '<div class="cm-item-meta">' + (m.type||'movie')
+      + (m.downloads !== null ? ' · <span style="color:var(--accent)">'
+          + (m.downloads||[]).length + ' variants · '
+          + (m.downloads||[]).reduce((a,d)=>a+(d._entries||[]).reduce((b,e)=>b+(e.urls||[e.url].filter(Boolean)).length,0),0)
+          + ' links</span>' : ' · <span style="color:var(--text2)">pending</span>')
       + '</div></div>'
       + '<svg class="cm-drag-handle" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="6" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="18"/></svg>'
       + '<button class="cm-item-rm" onclick="cmRemoveItem(' + JSON.stringify(m._title || m._id) + ')" title="Remove">&times;</button>'
@@ -679,7 +682,9 @@
     document.getElementById('cmOutputBox').value = out;
     document.getElementById('cmOutputArea').classList.add('show');
 
-    const totalLinks = cmItems.reduce((a,m) => a + (m.downloads||[]).reduce((b,d) => b+(d.links||[]).length, 0), 0);
+    // Stats: count using new _entries structure (each entry has urls[])
+    const totalLinks = cmItems.reduce((a,m) => a + (m.downloads||[]).reduce((b,d) =>
+      b + (d._entries||[]).reduce((c,e) => c + (e.urls||[e.url].filter(Boolean)).length, 0), 0), 0);
     const totalVars  = cmItems.reduce((a,m) => a + (m.downloads||[]).length, 0);
     document.getElementById('cmOutStats').innerHTML =
       ' — <b>' + cmItems.length + '</b> movies &middot; <b>' + totalVars + '</b> variants &middot; <b>' + totalLinks + '</b> links';
@@ -708,124 +713,152 @@
   }
 
   // ── Extract variant label from a link's filename/quality ─────────────────
+  // Priority: REMUX > IMAX > OPEN MATTE > 144FPS > 60FPS > HDR10+ > HDR10 > DV > HDR > SDR > quality tier
   function cmVariantLabel(lk) {
     const fn = (lk.filename || lk.title || '').toUpperCase();
     const q  = (lk.quality  || '').toUpperCase();
-    // Priority order: most specific first
-    if (/144\s*FPS/.test(fn))              return '144FPS';
-    if (/OPEN\s*MATTE/.test(fn))           return 'OPEN MATTE';
-    if (/\bIMAX\b/.test(fn))              return 'IMAX';
-    if (/\bREMUX\b/.test(fn))             return 'REMUX';
-    if (/\bHDR10\+/.test(fn))             return 'HDR10+';
-    if (/\bHDR10\b/.test(fn))             return 'HDR10';
-    if (/\bDOLBY\s*VISION|\bDV\b/.test(fn)) return 'DOLBY VISION';
-    if (/\bHDR\b/.test(fn) && !/SDR/.test(fn)) return 'HDR';
-    if (/\bSDR\b/.test(fn))               return 'SDR';
-    // Fall back to quality tier
-    if (/\b2160p\b|\b4K\b/i.test(q) || /\b2160p\b|\b4K\b/.test(fn)) return '4K';
-    if (/\b1080p\b/i.test(q) || /\b1080p\b/.test(fn)) return '1080p';
-    if (/\b720p\b/i.test(q)  || /\b720p\b/.test(fn))  return '720p';
-    if (/\b480p\b/i.test(q)  || /\b480p\b/.test(fn))  return '480p';
-    if (/\bWEB.?DL\b/.test(fn))           return 'WEB-DL';
-    if (/\bBLU.?RAY\b/.test(fn))          return 'BLURAY';
+    // Most specific type labels first (these override pure quality tiers)
+    if (/\bREMUX\b/.test(fn))               return 'REMUX';
+    if (/\bIMAX\b/.test(fn))                return 'IMAX';
+    if (/OPEN[\s-]?MATTE/.test(fn))          return 'OPEN MATTE';
+    if (/\b144\s*FPS\b/.test(fn))           return '144FPS';
+    if (/\b60\s*FPS\b/.test(fn))            return '60FPS';
+    if (/\bHDR10[\s+]/.test(fn) || /\bHDR10\b/.test(fn) && /\+/.test(fn)) return 'HDR10+';
+    if (/\bHDR10\b/.test(fn))               return 'HDR10';
+    if (/DOLBY[\s.-]?VISION|\bDOVI\b|\bDV\b/.test(fn)) return 'DOLBY VISION';
+    if (/\bHDR\b/.test(fn) && !/\bSDR\b/.test(fn)) return 'HDR';
+    if (/\bSDR\b/.test(fn))                 return 'SDR';
+    // Fall back to resolution/format tier
+    if (/\b2160p\b|\b4K\b/.test(fn) || /\b2160p\b|\b4K\b/.test(q)) return '4K';
+    if (/\b1080p\b/.test(fn) || /\b1080p\b/.test(q)) return '1080p';
+    if (/\b720p\b/.test(fn)  || /\b720p\b/.test(q))  return '720p';
+    if (/\b480p\b/.test(fn)  || /\b480p\b/.test(q))  return '480p';
+    if (/\b360p\b/.test(fn)  || /\b360p\b/.test(q))  return '360p';
+    if (/WEB[\s.-]?DL|WEBDL/.test(fn))       return 'WEB-DL';
+    if (/BLU[\s.-]?RAY|BLURAY/.test(fn))     return 'BLURAY';
     return q || 'HD';
   }
 
-  // ── Group links by variant label — each individual file is a separate entry ─
+  // ── Group links by variant label ─────────────────────────────────────────────
+  // Each UNIQUE FILE (filename+size) becomes one entry with a LIST of URLs.
+  // Same file posted with multiple hosts → all URLs shown consecutively under the file.
   function cmGroupExtractedLinks(links) {
-    const seenUrls  = new Set();
-    const seenFiles = new Set();
-    const groups    = new Map(); // label → [ { filename, size, url } ]
+    const seenUrls = new Set();
+    // fileKey → { filename, size, urls[], label, fileKey }
+    const fileMap  = new Map();
+    // Track label order per group
+    const groupOrder = [];
 
     for (const lk of links) {
       const url = (lk.bypassedUrl || lk.url || '').trim();
       if (!url) continue;
-      // Skip shortener/redirector links — only keep real cloud storage
+      // Skip shorteners — only real cloud storage
       if (!cmIsCloudLink(url)) continue;
       // Deduplicate by URL
       if (seenUrls.has(url)) continue;
       seenUrls.add(url);
 
-      const fn   = (lk.filename || lk.title || '').trim();
-      const size = (lk.size || '').trim();
-
-      // Also deduplicate by filename+size to avoid same file from different export entries
-      const fileKey = fn.toLowerCase().slice(0, 80) + '|' + size;
-      if (fn && seenFiles.has(fileKey)) {
-        // Same file different URL — still add the URL to existing entry
-        // Find it and add URL as alternate
-        let found = false;
-        for (const entries of groups.values()) {
-          const entry = entries.find(e => e.fileKey === fileKey);
-          if (entry) { if (!entry.altUrls) entry.altUrls = []; entry.altUrls.push(url); found = true; break; }
-        }
-        if (found) continue;
-      }
-      if (fn) seenFiles.add(fileKey);
-
+      const fn    = (lk.filename || lk.title || '').trim();
+      const size  = (lk.size || '').trim();
       const label = cmVariantLabel(lk);
-      if (!groups.has(label)) groups.set(label, []);
-      groups.get(label).push({ filename: fn, size, url, fileKey });
+
+      // File key: normalize filename (trim, lowercase, truncate) + size
+      const fileKey = (fn ? fn.toLowerCase().replace(/\s+/g,' ').slice(0, 100) : url.slice(-40)) + '||' + size;
+
+      if (fileMap.has(fileKey)) {
+        // Same file — just add this URL to its list
+        fileMap.get(fileKey).urls.push(url);
+      } else {
+        fileMap.set(fileKey, { filename: fn, size, urls: [url], label, fileKey });
+        if (!groupOrder.includes(label)) groupOrder.push(label);
+      }
     }
 
-    // Convert to array — sort groups by quality tier order
-    const ORDER = ['4K','REMUX','IMAX','OPEN MATTE','HDR10+','HDR10','DOLBY VISION','HDR','SDR','144FPS','1080p','720p','480p','WEB-DL','BLURAY','HD'];
+    // Group file entries by label
+    const groups = new Map();
+    for (const entry of fileMap.values()) {
+      if (!groups.has(entry.label)) groups.set(entry.label, []);
+      groups.get(entry.label).push(entry);
+    }
+
+    // Sort groups: REMUX > IMAX > OPEN MATTE > 144FPS > 60FPS > 4K > HDR10+ > HDR10 > DV > HDR > SDR > 1080p > 720p > 480p > rest
+    const ORDER = ['REMUX','IMAX','OPEN MATTE','144FPS','60FPS','4K','HDR10+','HDR10','DOLBY VISION','HDR','SDR','1080p','720p','480p','360p','WEB-DL','BLURAY','HD'];
     const sorted = [...groups.entries()].sort((a, b) => {
       const ai = ORDER.indexOf(a[0]), bi = ORDER.indexOf(b[0]);
       return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
     });
 
-    // Return in the slot format cmGenerate expects: { quality=label, links=[] }
-    // but we use a flat structure { _variantGroups } for the new output builder
     return sorted.map(([label, entries]) => ({ quality: label, _entries: entries, links: entries }));
   }
 
-  // ── Build output text — matches the format shown in the screenshot ──────────
+  // ── Build output text — exact format per the user's example ─────────────────
+  //
+  // COLLECTION NAME
+  //
+  // 01. Movie Title (Year)
+  //
+  // REMUX
+  //
+  // Full.Filename.mkv [Size]
+  // https://gdflix.dev/file/xxx
+  // https://hubcloud.one/file/yyy
+  //
+  // Another.File.mkv [Size]
+  // https://gdflix.dev/file/zzz
+  //
+  // IMAX
+  // ...
+  //
   function cmBuildOutput(name, items) {
     const showNum  = document.getElementById('cmOpt-numbering').value === '1';
     const showFile = document.getElementById('cmOpt-filename').value  === '1';
     const showSize = document.getElementById('cmOpt-size').value      === '1';
-    const showHost = document.getElementById('cmOpt-host').value      === '1';
     const showSep  = document.getElementById('cmOpt-sep').value       === '1';
 
     const lines = [name, ''];
 
     items.forEach((movie, idx) => {
-      // Movie number + title
+      // ── Movie header ──
       const num = showNum ? String(idx + 1).padStart(2, '0') + '. ' : '';
-      lines.push(num + movie.title + (movie.year ? ' (' + movie.year + ')' : ''));
+      const yr  = movie.year ? ' (' + String(movie.year) + ')' : '';
+      lines.push(num + movie.title + yr);
       lines.push('');
 
       const dls = movie.downloads || [];
+
       if (!dls.length) {
         lines.push('[No download links found]');
         lines.push('');
       } else {
         dls.forEach(dl => {
-          // Variant group label (REMUX, IMAX, 1080p etc.)
+          // ── Variant group label ──
           lines.push(dl.quality);
           lines.push('');
 
-          const entries = dl._entries || dl.links || [];
+          const entries = dl._entries || [];
           entries.forEach(entry => {
-            // Full filename + size (don't append size if it's already embedded in the filename)
-            const fn   = showFile ? (entry.filename || '') : '';
-            const sizeStr = entry.size ? entry.size.replace(/\s/g,'').toLowerCase() : '';
-            const fnHasSize = sizeStr && fn.toLowerCase().replace(/\s/g,'').includes(sizeStr.replace(/[\[\]]/g,''));
-            const size = (showSize && entry.size && !fnHasSize) ? ' [' + entry.size + ']' : '';
-            if (fn) lines.push(fn + size);
-            // URL on its own line
-            const url = entry.url || (typeof entry === 'string' ? entry : '');
-            if (url) lines.push(url);
-            lines.push('');
-            // Alternate URLs for same file (different hosts)
-            if (entry.altUrls && entry.altUrls.length) {
-              entry.altUrls.forEach(u => { lines.push(u); lines.push(''); });
+            // ── File entry ──
+            if (showFile && entry.filename) {
+              // Check if size is already in the filename to avoid duplication
+              const sz = (entry.size || '').trim();
+              const fnNorm  = entry.filename.replace(/\s/g,'').toLowerCase();
+              const szNorm  = sz.replace(/[\[\]\s]/g,'').toLowerCase();
+              const inFn    = szNorm && fnNorm.includes(szNorm);
+              const suffix  = (showSize && sz && !inFn) ? ' [' + sz + ']' : '';
+              lines.push(entry.filename + suffix);
             }
+
+            // ── All URLs for this file (consecutive, no blank between them) ──
+            const urls = entry.urls || (entry.url ? [entry.url] : []);
+            urls.forEach(u => lines.push(u));
+
+            // ── Blank line after each file block ──
+            lines.push('');
           });
         });
       }
 
+      // ── Optional separator between movies ──
       if (showSep && idx < items.length - 1) {
         lines.push('─'.repeat(50));
         lines.push('');
