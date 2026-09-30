@@ -836,10 +836,14 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           const seasOk   = (finalType === 'series' || finalType === 'anime') ? (ex.season == correctSeason && ex.episode == (item.episode ?? null)) : true;
           
           const exactSizeMatch = (newMB > 0 && toMB(ex.size) > 0 && Math.abs(newMB - toMB(ex.size)) < 2);
-          const langOk   = (ex.language || '') === (language || '');
-          const sizeOk   = ex.size === size || exactSizeMatch || (!ex.size && !size);
+          const langOk        = (ex.language || '') === (language || '');
+          // Only merge into an existing slot if sizes match (or both are unknown)
+          // NEVER merge links with different known file sizes into the same slot!
+          const bothSizeKnown = newMB > 0 && toMB(ex.size) > 0;
+          const bothSizeUnknown = !size && !ex.size;
+          const sizeOk = bothSizeUnknown || exactSizeMatch;
           
-          if (qualOk && seasOk && (exactSizeMatch || (sizeOk && langOk))) { 
+          if (qualOk && seasOk && langOk && sizeOk) {
              matchedIdx = j; 
              if (language && language !== 'Multi' && (!ex.language || ex.language === 'Multi')) {
                 ex.language = language;

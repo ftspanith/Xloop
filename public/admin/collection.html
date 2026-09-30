@@ -155,7 +155,22 @@
           <input type="hidden" id="cmOpt-sep"       value="0">
         </div>
 
-        <!-- Auto-fill from JSON -->
+        <!-- Manual Title Entry — Primary workflow -->
+        <div class="cm-panel" style="border:1.5px solid rgba(229,9,20,.4); box-shadow:0 0 0 1px rgba(229,9,20,.08);">
+          <div class="cm-panel-title">Add Title Manually</div>
+          <p style="font-size:.75rem;color:var(--text2);margin-bottom:12px;line-height:1.6;">Type the exact movie/series title — the system will find all formats, file sizes and links from your uploaded JSON.</p>
+          <div class="cm-search-row">
+            <input type="text" id="cmManualInput" class="cm-input" placeholder="e.g. Pushpa The Rule, RRR, KGF Chapter 2..." autocomplete="off"
+              onkeydown="if(event.key==='Enter')cmManualAdd()">
+            <button class="cm-btn-search" id="cmManualBtn" onclick="cmManualAdd()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add
+            </button>
+          </div>
+          <div id="cmManualStatus" style="font-size:.75rem;margin-top:8px;display:none;padding:8px 12px;border-radius:7px;background:rgba(0,0,0,.2);"></div>
+        </div>
+
+        <!-- Auto-fill from JSON (franchise/hero search) -->
         <div class="cm-panel" style="border-color:rgba(229,9,20,.22);">
           <div class="cm-panel-title">Auto-fill from JSON</div>
           <p style="font-size:.75rem;color:var(--text2);margin-bottom:12px;line-height:1.6;">Type a hero / franchise name — all matching titles from your uploaded JSON will be listed for you to add.</p>
@@ -269,6 +284,54 @@
     el.querySelector('.cm-fmt-dot').style.background = on ? 'var(--accent)' : 'rgba(255,255,255,.18)';
   }
   document.querySelectorAll('.cm-fmt-pill.on .cm-fmt-dot').forEach(d => d.style.background = 'var(--accent)');
+
+  // ── Manual title entry (primary workflow) ─────────────────────────────────
+  async function cmManualAdd() {
+    const title = document.getElementById('cmManualInput').value.trim();
+    if (!title) return;
+    const btn    = document.getElementById('cmManualBtn');
+    const status = document.getElementById('cmManualStatus');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="cm-spin"></span>';
+    status.style.display = 'block';
+    status.style.color = 'var(--text2)';
+    status.textContent = 'Searching JSON for "' + title + '"...';
+    try {
+      // Search for matching titles (may have minor spelling differences)
+      const sr = await fetch('/api/scrape/collection-search?q=' + encodeURIComponent(title), { headers: AH });
+      const sd = await sr.json();
+      const matches = sd.results || [];
+      if (!matches.length) {
+        status.style.color = '#f87171';
+        status.textContent = 'No results for "' + title + '" in JSON. Check spelling.';
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add';
+        return;
+      }
+      // Use the best match (first result, since collection-search returns sorted by title)
+      // If exact match exists, prefer it
+      const exact = matches.find(m => m.title.toLowerCase() === title.toLowerCase()) || matches[0];
+      if (cmItems.some(x => x._title === exact.title)) {
+        status.style.color = '#f59e0b';
+        status.textContent = '"' + exact.title + '" is already in the collection.';
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add';
+        return;
+      }
+      cmItems.push({ _id: null, _title: exact.title, title: exact.title, year: exact.year||'', poster:'', type: exact.isSeries?'series':(exact.contentType||'movie'), downloads: null });
+      cmRenderList();
+      document.getElementById('cmGenerateBtn').disabled = false;
+      document.getElementById('cmManualInput').value = '';
+      status.style.color = '#22c55e';
+      status.textContent = 'Added: "' + exact.title + '" · ' + (exact.year||'?') + ' · ' + exact.linkCount + ' links found';
+      showToast('Added: ' + exact.title);
+    } catch(e) {
+      status.style.color = '#f87171';
+      status.textContent = 'Error: ' + e.message;
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add';
+  }
 
   // ── Auto-fill search (from ExtractedLink / JSON) ───────────────────────────
   let _autoResults = []; // store full result objects
@@ -512,8 +575,17 @@
   // Group raw ExtractedLink entries into Download-like objects for the output builder
   function cmGroupExtractedLinks(links) {
     const map = new Map();
+    const seenUrls = new Set();
     for (const lk of links) {
-      const key = [lk.quality||'HD', lk.language||'', lk.size||'', lk.filename||'', lk.season??'', lk.episode??''].join('|');
+      const finalUrl = lk.bypassedUrl || lk.url || '';
+      if (!finalUrl || seenUrls.has(finalUrl)) continue;
+      seenUrls.add(finalUrl);
+      // Use size+filename as the slot identifier.
+      // If both are unknown, fall back to the URL hostname so each host gets its own row.
+      const sizeKey = lk.size ? lk.size.replace(/\s/g,'').toLowerCase() : '';
+      const fnKey   = lk.filename ? lk.filename.toLowerCase().trim().slice(0, 60) : '';
+      const fallback = (!sizeKey && !fnKey) ? (() => { try { return new URL(finalUrl).hostname; } catch(_) { return finalUrl.slice(0, 40); } })() : '';
+      const key = [lk.quality||'HD', lk.language||'', sizeKey, fnKey, lk.season??'', lk.episode??'', fallback].join('|');
       if (!map.has(key)) {
         map.set(key, {
           quality: lk.quality || 'HD',
@@ -525,8 +597,7 @@
           links: [],
         });
       }
-      const finalUrl = lk.bypassedUrl || lk.url || '';
-      if (finalUrl) map.get(key).links.push({ host: lk.host || 'Direct', url: finalUrl });
+      map.get(key).links.push({ host: lk.host || 'Direct', url: finalUrl });
     }
     return [...map.values()];
   }
