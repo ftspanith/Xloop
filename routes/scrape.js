@@ -403,4 +403,40 @@ router.get('/collection-links', auth, async (req, res) => {
   }
 });
 
+// ── GET /api/scrape/collection-links-fuzzy — ALL links for a keyword (finds all quality variants) ──
+// Unlike collection-links (exact title match), this searches by regex across ALL titles
+// so "RRR" finds "RRR 2160p BLURAY", "RRR 1080p BluRay", "RRR 720p" etc. — all formats.
+router.get('/collection-links-fuzzy', auth, async (req, res) => {
+  try {
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ error: 'DB not connected', links: [] });
+    const ExtractedLink = require('../models/ExtractedLink');
+    const q    = (req.query.q || '').trim();
+    const year = (req.query.year || '').trim();
+    if (!q) return res.json({ links: [] });
+
+    // Build a word-boundary-aware regex — "RRR" should not match "ERRRR"
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp('(?:^|[^a-zA-Z0-9])' + escaped + '(?:[^a-zA-Z0-9]|$)', 'i');
+
+    const filter = { title: regex };
+    // Optionally narrow by year — only apply if year is numeric and present
+    if (year && /^\d{4}$/.test(year)) filter.year = parseInt(year, 10);
+
+    const links = await ExtractedLink.find(filter)
+      .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
+      .sort({ quality: -1 })
+      .maxTimeMS(10000)
+      .lean();
+
+    // Build a clean display title: pick the shortest title (most likely the clean one)
+    const titles = [...new Set(links.map(l => l.title).filter(Boolean))];
+    const displayTitle = titles.sort((a,b) => a.length - b.length)[0] || q;
+
+    res.json({ query: q, year, displayTitle, count: links.length, links });
+  } catch (err) {
+    res.status(500).json({ error: err.message, links: [] });
+  }
+});
+
 module.exports = router;

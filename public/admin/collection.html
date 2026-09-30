@@ -7,8 +7,8 @@
   <link rel="stylesheet" href="/css/style.css">
   <style>
     /* ── Collection Master styles ── */
-    .cm-layout { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
-    @media(max-width:1050px){ .cm-layout { grid-template-columns:1fr; } }
+    .cm-layout { display:grid; grid-template-columns:380px 1fr; gap:22px; align-items:start; }
+    @media(max-width:1100px){ .cm-layout { grid-template-columns:1fr; } }
 
     .cm-panel { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:22px; margin-bottom:18px; }
     .cm-panel:last-child { margin-bottom:0; }
@@ -337,21 +337,25 @@
           || matches.find(m => m.title.toLowerCase() === title.toLowerCase())
           || matches[0];
 
-        // Final duplicate check with resolved title
-        if (cmItems.some(x => x._title === pick.title)) {
+        // Final duplicate check with resolved title — also check raw query for dupes
+        if (cmItems.some(x => x._title === pick.title || x._query === title)) {
           logLine('—', pick.title, 'already in collection', '#f59e0b');
           dupes++;
           continue;
         }
 
         cmItems.push({
-          _id: null, _title: pick.title,
+          _id: null,
+          _title: pick.title,
+          _query: title,          // original search query — used for fuzzy link fetch
+          _hintYear: hintYear,    // year hint from 'Title(Year)' format
           title: pick.title, year: pick.year || '',
           poster: '', type: pick.isSeries ? 'series' : (pick.contentType || 'movie'),
           downloads: null,
         });
         found++;
-        logLine('✓', pick.title + (pick.year ? ' (' + pick.year + ')' : ''), pick.linkCount + ' links', '#22c55e');
+        // Fetch link count via fuzzy so the log shows total across all quality variants
+        logLine('✓', pick.title + (pick.year ? ' (' + pick.year + ')' : ''), pick.linkCount + ' links found', '#22c55e');
       } catch(e) {
         logLine('!', rawLine, 'error: ' + e.message, '#f87171');
         notFound++;
@@ -634,12 +638,26 @@
       bar.style.width = Math.round((i / total) * 80) + '%';
       if (item.downloads === null) {
         try {
-          // JSON-sourced items use collection-links (ExtractedLink DB)
           if (!item._id) {
-            const r = await fetch('/api/scrape/collection-links?title=' + encodeURIComponent(item._title || item.title), { headers: AH });
-            const d = await r.json();
-            // Group by quality+language into download-like objects
-            item.downloads = cmGroupExtractedLinks(d.links || []);
+            let links = [];
+            if (item._query) {
+              // Batch-imported item: use fuzzy search to get ALL quality/size variants
+              const url = '/api/scrape/collection-links-fuzzy?q=' + encodeURIComponent(item._query)
+                        + (item._hintYear ? '&year=' + encodeURIComponent(item._hintYear) : '');
+              const r = await fetch(url, { headers: AH });
+              const d = await r.json();
+              links = d.links || [];
+              // Update display title to cleanest version found in the data
+              if (d.displayTitle && d.displayTitle !== item.title) {
+                item.title = d.displayTitle;
+              }
+            } else {
+              // Exact title item (from Browse JSON panel or auto-fill)
+              const r = await fetch('/api/scrape/collection-links?title=' + encodeURIComponent(item._title || item.title), { headers: AH });
+              const d = await r.json();
+              links = d.links || [];
+            }
+            item.downloads = cmGroupExtractedLinks(links);
           } else {
             // Imported movie — use normal movies API
             const r = await fetch('/api/movies/' + item._id, { headers: AH });
