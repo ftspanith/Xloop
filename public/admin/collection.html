@@ -155,46 +155,44 @@
           <input type="hidden" id="cmOpt-sep"       value="0">
         </div>
 
-        <!-- Manual Title Entry — Primary workflow -->
-        <div class="cm-panel" style="border:1.5px solid rgba(229,9,20,.4); box-shadow:0 0 0 1px rgba(229,9,20,.08);">
-          <div class="cm-panel-title">Add Title Manually</div>
-          <p style="font-size:.75rem;color:var(--text2);margin-bottom:12px;line-height:1.6;">Type the exact movie/series title — the system will find all formats, file sizes and links from your uploaded JSON.</p>
+        <!-- ═══ BATCH IMPORT — Primary workflow ═══ -->
+        <div class="cm-panel" style="border:1.5px solid rgba(229,9,20,.45);box-shadow:0 0 0 1px rgba(229,9,20,.08);">
+          <div class="cm-panel-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;vertical-align:middle"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            Batch Import Titles
+          </div>
+          <p style="font-size:.73rem;color:var(--text2);margin-bottom:10px;line-height:1.65;">Paste a list of movie/series titles — one per line. Optionally include year: <span style="color:var(--accent);font-family:monospace;">RRR(2022)</span>. All titles will be resolved from your uploaded JSON.</p>
+          <textarea id="cmBatchInput" placeholder="Pushpa The Rule(2024)&#10;RRR(2022)&#10;KGF Chapter 2(2022)&#10;Baahubali The Beginning&#10;Sye Raa Narasimha Reddy(2019)&#10;..." style="width:100%;min-height:140px;resize:vertical;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px 12px;color:var(--text1);font-size:.8rem;line-height:1.65;font-family:inherit;outline:none;box-sizing:border-box;" spellcheck="false"></textarea>
+          <div id="cmBatchLog" style="display:none;max-height:160px;overflow-y:auto;margin-top:8px;font-size:.72rem;line-height:1.8;font-family:monospace;background:rgba(0,0,0,.25);border-radius:7px;padding:8px 12px;"></div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button id="cmBatchBtn" onclick="cmBatchImport()" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(229,9,20,.5);background:rgba(229,9,20,.15);color:var(--accent);font-size:.82rem;font-weight:700;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;" onmouseover="this.style.background='rgba(229,9,20,.25)'" onmouseout="this.style.background='rgba(229,9,20,.15)'">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="m12 12 4 4-4 4"/><path d="M12 20v-8"/></svg>
+              Import All from JSON
+            </button>
+            <button onclick="cmClearBatch()" style="padding:10px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:transparent;color:var(--text2);font-size:.75rem;cursor:pointer;" title="Clear textarea">Clear</button>
+          </div>
+          <div id="cmBatchSummary" style="display:none;margin-top:8px;font-size:.75rem;padding:8px 12px;border-radius:7px;background:rgba(0,0,0,.2);"></div>
+        </div>
+
+        <!-- Quick single-add -->
+        <div class="cm-panel">
+          <div class="cm-panel-title" style="font-size:.78rem;">Quick Add Single Title</div>
           <div class="cm-search-row">
-            <input type="text" id="cmManualInput" class="cm-input" placeholder="e.g. Pushpa The Rule, RRR, KGF Chapter 2..." autocomplete="off"
+            <input type="text" id="cmManualInput" class="cm-input" placeholder="e.g. Pushpa The Rule(2024)" autocomplete="off"
               onkeydown="if(event.key==='Enter')cmManualAdd()">
             <button class="cm-btn-search" id="cmManualBtn" onclick="cmManualAdd()">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Add
             </button>
           </div>
-          <div id="cmManualStatus" style="font-size:.75rem;margin-top:8px;display:none;padding:8px 12px;border-radius:7px;background:rgba(0,0,0,.2);"></div>
+          <div id="cmManualStatus" style="font-size:.73rem;margin-top:6px;display:none;padding:6px 10px;border-radius:6px;background:rgba(0,0,0,.2);"></div>
         </div>
 
-        <!-- Auto-fill from JSON (franchise/hero search) -->
-        <div class="cm-panel" style="border-color:rgba(229,9,20,.22);">
-          <div class="cm-panel-title">Auto-fill from JSON</div>
-          <p style="font-size:.75rem;color:var(--text2);margin-bottom:12px;line-height:1.6;">Type a hero / franchise name — all matching titles from your uploaded JSON will be listed for you to add.</p>
-          <div class="cm-search-row">
-            <input type="text" id="cmAutoInput" class="cm-input" placeholder="e.g. Pawan Kalyan, RRR, Marvel..." autocomplete="off"
-              onkeydown="if(event.key==='Enter')cmAutoFill()">
-            <button class="cm-btn-search" id="cmAutoBtn" onclick="cmAutoFill()">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-              Find All
-            </button>
-          </div>
-          <div id="cmAutoResults" class="cm-results" style="max-height:220px;">
-            <div class="cm-empty-msg">Type a name above to find all related movies from JSON.</div>
-          </div>
-          <button id="cmAddAllBtn" onclick="cmAddAllAuto()" style="display:none;margin-top:10px;width:100%;padding:9px;border-radius:8px;border:1px solid rgba(229,9,20,.4);background:rgba(229,9,20,.1);color:var(--accent);font-size:.8rem;font-weight:700;cursor:pointer;transition:all .15s;" onmouseover="this.style.background='rgba(229,9,20,.2)'" onmouseout="this.style.background='rgba(229,9,20,.1)'">
-            Add All to Collection
-          </button>
-        </div>
-
-        <!-- Manual Search & Add -->
+        <!-- Browse/Search JSON -->
         <div class="cm-panel">
-          <div class="cm-panel-title">Manual Search & Add</div>
+          <div class="cm-panel-title" style="font-size:.78rem;">Browse JSON</div>
           <div class="cm-search-row">
-            <input type="text" id="cmSearchInput" class="cm-input" placeholder="Search JSON by title..." autocomplete="off"
+            <input type="text" id="cmSearchInput" class="cm-input" placeholder="Search by title or keyword..." autocomplete="off"
               onkeydown="if(event.key==='Enter')cmDoSearch()">
             <button class="cm-btn-search" id="cmSearchBtn" onclick="cmDoSearch()">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -202,7 +200,7 @@
             </button>
           </div>
           <div class="cm-results" id="cmResults">
-            <div class="cm-empty-msg">Search the JSON for a specific title to add it.</div>
+            <div class="cm-empty-msg">Search the JSON for a title to add it.</div>
           </div>
         </div>
       </div>
@@ -284,6 +282,109 @@
     el.querySelector('.cm-fmt-dot').style.background = on ? 'var(--accent)' : 'rgba(255,255,255,.18)';
   }
   document.querySelectorAll('.cm-fmt-pill.on .cm-fmt-dot').forEach(d => d.style.background = 'var(--accent)');
+
+  // ── Batch Import ────────────────────────────────────────────────────────────
+  function cmClearBatch() {
+    document.getElementById('cmBatchInput').value = '';
+    const log = document.getElementById('cmBatchLog');
+    log.style.display = 'none'; log.innerHTML = '';
+    const sum = document.getElementById('cmBatchSummary');
+    sum.style.display = 'none'; sum.innerHTML = '';
+  }
+
+  async function cmBatchImport() {
+    const raw = document.getElementById('cmBatchInput').value.trim();
+    if (!raw) return;
+
+    // Parse lines — skip blanks and comment lines starting with #
+    const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+    if (!lines.length) return;
+
+    const btn  = document.getElementById('cmBatchBtn');
+    const log  = document.getElementById('cmBatchLog');
+    const sum  = document.getElementById('cmBatchSummary');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="cm-spin"></span> Processing...';
+    log.style.display = 'block'; log.innerHTML = '';
+    sum.style.display = 'none';
+
+    let found = 0, notFound = 0, dupes = 0;
+
+    const logLine = (emoji, title, msg, color) => {
+      const d = document.createElement('div');
+      d.style.color = color || 'var(--text2)';
+      d.textContent = emoji + ' ' + title + (msg ? ' — ' + msg : '');
+      log.appendChild(d);
+      log.scrollTop = log.scrollHeight;
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const rawLine = lines[i];
+      // Parse Title(Year) or Title (Year) format
+      const ym = rawLine.match(/^(.+?)\s*\((\d{4})\)\s*$/);
+      const title    = ym ? ym[1].trim() : rawLine;
+      const hintYear = ym ? ym[2] : null;
+
+      // Check duplicate before hitting API
+      if (cmItems.some(x => x._title && x._title.toLowerCase() === title.toLowerCase())) {
+        logLine('—', rawLine, 'already in collection', '#f59e0b');
+        dupes++;
+        continue;
+      }
+
+      try {
+        const r  = await fetch('/api/scrape/collection-search?q=' + encodeURIComponent(title), { headers: AH });
+        const d  = await r.json();
+        const matches = d.results || [];
+
+        if (!matches.length) {
+          logLine('✗', rawLine, 'not found in JSON', '#f87171');
+          notFound++;
+          continue;
+        }
+
+        // Pick best match: prefer exact title+year, then exact title, then first result
+        const pick = (hintYear
+          ? matches.find(m => m.title.toLowerCase() === title.toLowerCase() && String(m.year) === hintYear)
+          : null)
+          || matches.find(m => m.title.toLowerCase() === title.toLowerCase())
+          || matches[0];
+
+        // Final duplicate check with resolved title
+        if (cmItems.some(x => x._title === pick.title)) {
+          logLine('—', pick.title, 'already in collection', '#f59e0b');
+          dupes++;
+          continue;
+        }
+
+        cmItems.push({
+          _id: null, _title: pick.title,
+          title: pick.title, year: pick.year || '',
+          poster: '', type: pick.isSeries ? 'series' : (pick.contentType || 'movie'),
+          downloads: null,
+        });
+        found++;
+        logLine('✓', pick.title + (pick.year ? ' (' + pick.year + ')' : ''), pick.linkCount + ' links', '#22c55e');
+      } catch(e) {
+        logLine('!', rawLine, 'error: ' + e.message, '#f87171');
+        notFound++;
+      }
+    }
+
+    cmRenderList();
+    if (cmItems.length) document.getElementById('cmGenerateBtn').disabled = false;
+
+    const color = found > 0 ? '#22c55e' : '#f87171';
+    sum.style.display = 'block';
+    sum.style.color = color;
+    sum.innerHTML = '<b>' + found + '</b> added · <b>' + notFound + '</b> not found · <b>' + dupes + '</b> duplicate' + (lines.length > 1 ? 's' : '');
+
+    if (found > 0) showToast('Batch imported ' + found + ' titles from JSON');
+
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="m12 12 4 4-4 4"/><path d="M12 20v-8"/></svg> Import All from JSON';
+  }
 
   // ── Manual title entry (primary workflow) ─────────────────────────────────
   async function cmManualAdd() {
