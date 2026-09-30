@@ -690,66 +690,127 @@
   }
 
   // Group raw ExtractedLink entries into Download-like objects for the output builder
-  function cmGroupExtractedLinks(links) {
-    const map = new Map();
-    const seenUrls = new Set();
-    for (const lk of links) {
-      const finalUrl = lk.bypassedUrl || lk.url || '';
-      if (!finalUrl || seenUrls.has(finalUrl)) continue;
-      seenUrls.add(finalUrl);
-      // Use size+filename as the slot identifier.
-      // If both are unknown, fall back to the URL hostname so each host gets its own row.
-      const sizeKey = lk.size ? lk.size.replace(/\s/g,'').toLowerCase() : '';
-      const fnKey   = lk.filename ? lk.filename.toLowerCase().trim().slice(0, 60) : '';
-      const fallback = (!sizeKey && !fnKey) ? (() => { try { return new URL(finalUrl).hostname; } catch(_) { return finalUrl.slice(0, 40); } })() : '';
-      const key = [lk.quality||'HD', lk.language||'', sizeKey, fnKey, lk.season??'', lk.episode??'', fallback].join('|');
-      if (!map.has(key)) {
-        map.set(key, {
-          quality: lk.quality || 'HD',
-          language: lk.language || '',
-          size: lk.size || '',
-          filename: lk.filename || '',
-          season: lk.season ?? null,
-          episode: lk.episode ?? null,
-          links: [],
-        });
-      }
-      map.get(key).links.push({ host: lk.host || 'Direct', url: finalUrl });
-    }
-    return [...map.values()];
+  // ── Extract variant label from a link's filename/quality ─────────────────
+  function cmVariantLabel(lk) {
+    const fn = (lk.filename || lk.title || '').toUpperCase();
+    const q  = (lk.quality  || '').toUpperCase();
+    // Priority order: most specific first
+    if (/144\s*FPS/.test(fn))              return '144FPS';
+    if (/OPEN\s*MATTE/.test(fn))           return 'OPEN MATTE';
+    if (/\bIMAX\b/.test(fn))              return 'IMAX';
+    if (/\bREMUX\b/.test(fn))             return 'REMUX';
+    if (/\bHDR10\+/.test(fn))             return 'HDR10+';
+    if (/\bHDR10\b/.test(fn))             return 'HDR10';
+    if (/\bDOLBY\s*VISION|\bDV\b/.test(fn)) return 'DOLBY VISION';
+    if (/\bHDR\b/.test(fn) && !/SDR/.test(fn)) return 'HDR';
+    if (/\bSDR\b/.test(fn))               return 'SDR';
+    // Fall back to quality tier
+    if (/\b2160p\b|\b4K\b/i.test(q) || /\b2160p\b|\b4K\b/.test(fn)) return '4K';
+    if (/\b1080p\b/i.test(q) || /\b1080p\b/.test(fn)) return '1080p';
+    if (/\b720p\b/i.test(q)  || /\b720p\b/.test(fn))  return '720p';
+    if (/\b480p\b/i.test(q)  || /\b480p\b/.test(fn))  return '480p';
+    if (/\bWEB.?DL\b/.test(fn))           return 'WEB-DL';
+    if (/\bBLU.?RAY\b/.test(fn))          return 'BLURAY';
+    return q || 'HD';
   }
 
+  // ── Group links by variant label — each individual file is a separate entry ─
+  function cmGroupExtractedLinks(links) {
+    const seenUrls  = new Set();
+    const seenFiles = new Set();
+    const groups    = new Map(); // label → [ { filename, size, url } ]
+
+    for (const lk of links) {
+      const url = (lk.bypassedUrl || lk.url || '').trim();
+      if (!url) continue;
+      // Deduplicate by URL
+      if (seenUrls.has(url)) continue;
+      seenUrls.add(url);
+
+      const fn   = (lk.filename || lk.title || '').trim();
+      const size = (lk.size || '').trim();
+
+      // Also deduplicate by filename+size to avoid same file from different export entries
+      const fileKey = fn.toLowerCase().slice(0, 80) + '|' + size;
+      if (fn && seenFiles.has(fileKey)) {
+        // Same file different URL — still add the URL to existing entry
+        // Find it and add URL as alternate
+        let found = false;
+        for (const entries of groups.values()) {
+          const entry = entries.find(e => e.fileKey === fileKey);
+          if (entry) { if (!entry.altUrls) entry.altUrls = []; entry.altUrls.push(url); found = true; break; }
+        }
+        if (found) continue;
+      }
+      if (fn) seenFiles.add(fileKey);
+
+      const label = cmVariantLabel(lk);
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label).push({ filename: fn, size, url, fileKey });
+    }
+
+    // Convert to array — sort groups by quality tier order
+    const ORDER = ['4K','REMUX','IMAX','OPEN MATTE','HDR10+','HDR10','DOLBY VISION','HDR','SDR','144FPS','1080p','720p','480p','WEB-DL','BLURAY','HD'];
+    const sorted = [...groups.entries()].sort((a, b) => {
+      const ai = ORDER.indexOf(a[0]), bi = ORDER.indexOf(b[0]);
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+    });
+
+    // Return in the slot format cmGenerate expects: { quality=label, links=[] }
+    // but we use a flat structure { _variantGroups } for the new output builder
+    return sorted.map(([label, entries]) => ({ quality: label, _entries: entries, links: entries }));
+  }
+
+  // ── Build output text — matches the format shown in the screenshot ──────────
   function cmBuildOutput(name, items) {
     const showNum  = document.getElementById('cmOpt-numbering').value === '1';
     const showFile = document.getElementById('cmOpt-filename').value  === '1';
     const showSize = document.getElementById('cmOpt-size').value      === '1';
     const showHost = document.getElementById('cmOpt-host').value      === '1';
     const showSep  = document.getElementById('cmOpt-sep').value       === '1';
-    const monoName = cmToMono(name);
-    const lines = [monoName, ''];
+
+    const lines = [name, ''];
+
     items.forEach((movie, idx) => {
-      const prefix = showNum ? (idx + 1) + ') ' : '';
-      lines.push(prefix + movie.title + (movie.year ? ' (' + movie.year + ')' : ''));
+      // Movie number + title
+      const num = showNum ? String(idx + 1).padStart(2, '0') + '. ' : '';
+      lines.push(num + movie.title + (movie.year ? ' (' + movie.year + ')' : ''));
+      lines.push('');
+
       const dls = movie.downloads || [];
-      if (!dls.length) { lines.push('[No download links available]'); }
-      else {
+      if (!dls.length) {
+        lines.push('[No download links found]');
+        lines.push('');
+      } else {
         dls.forEach(dl => {
-          let label = '';
-          if (showFile && dl.filename) {
-            label = dl.filename + (showSize && dl.size ? ' [' + dl.size + ']' : '');
-          } else {
-            const parts = [dl.quality, dl.language, dl.codec].filter(Boolean);
-            label = (parts.join(' · ') || 'Download') + (showSize && dl.size ? ' [' + dl.size + ']' : '');
-          }
-          lines.push(label);
-          const lks = dl.links || [];
-          if (!lks.length) { lines.push('[No links]'); }
-          else { lks.forEach(lk => lines.push((showHost && lk.host && lk.host !== 'Download' ? '[' + lk.host + '] ' : '') + (lk.url || ''))); }
+          // Variant group label (REMUX, IMAX, 1080p etc.)
+          lines.push(dl.quality);
+          lines.push('');
+
+          const entries = dl._entries || dl.links || [];
+          entries.forEach(entry => {
+            // Full filename + size
+            const fn   = showFile ? (entry.filename || '') : '';
+            const size = showSize && entry.size ? ' [' + entry.size + ']' : '';
+            if (fn) lines.push(fn + size);
+            // URL on its own line
+            const url = entry.url || (typeof entry === 'string' ? entry : '');
+            if (url) lines.push(url);
+            lines.push('');
+            // Alternate URLs for same file (different hosts)
+            if (entry.altUrls && entry.altUrls.length) {
+              entry.altUrls.forEach(u => { lines.push(u); lines.push(''); });
+            }
+          });
         });
       }
-      if (showSep && idx < items.length - 1) { lines.push(''); lines.push('─'.repeat(50)); }
-      lines.push('');
+
+      if (showSep && idx < items.length - 1) {
+        lines.push('─'.repeat(50));
+        lines.push('');
+      }
     });
+
     return lines.join('\n').trimEnd();
   }
 
