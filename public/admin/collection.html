@@ -472,7 +472,11 @@
 
   function cmSyncMarkers() {
     document.querySelectorAll('.cm-result-item').forEach(el => {
-      const added = cmItems.some(x => x._id === el.dataset.id);
+      // Check both _title (JSON items) and _id (imported movies) for already-added state
+      const added = cmItems.some(x =>
+        (el.dataset.title && x._title === el.dataset.title) ||
+        (el.dataset.id && x._id === el.dataset.id)
+      );
       el.classList.toggle('cm-added', added);
       const btn = el.querySelector('.cm-result-add');
       if (btn) btn.textContent = added ? '' : '+';

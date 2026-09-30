@@ -28,5 +28,7 @@ const ExtractedLinkSchema = new mongoose.Schema({
 }, { timestamps: false });
 
 ExtractedLinkSchema.index({ uploadBatch: 1, host: 1 });
+ExtractedLinkSchema.index({ title: 1 });           // collection-search regex queries
+ExtractedLinkSchema.index({ title: 1, year: 1 });  // collection-links exact fetch
 
 module.exports = mongoose.models.ExtractedLink || mongoose.model('ExtractedLink', ExtractedLinkSchema);

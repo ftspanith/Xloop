@@ -39,7 +39,7 @@ function broadcast(message) {
 }
 
 // ── SSE stream endpoint ───────────────────────────────────────────────────────
-router.get('/stream', (req, res) => {
+router.get('/stream', auth, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -114,8 +114,8 @@ async function setPipelineRunningFlag(running, progressData = null) {
   } catch (_) { /* non-critical */ }
 }
 
-// ── Start pipeline (auth required) ───────────────────────────────────────────
-router.get('/start', async (req, res) => {
+// ── Start pipeline (auth via ?token= since EventSource cannot send headers) ──
+router.get('/start', auth, async (req, res) => {
   if (pipelineRunning) {
     return res.status(400).json({ error: 'Pipeline is already running' });
   }
@@ -216,9 +216,11 @@ router.post('/start', auth, async (req, res) => {
     return res.status(400).json({ error: 'Pipeline is already running' });
   }
 
-  const { skipScraper, resume, skipBypass } = req.body || {};
-  const label = skipScraper ? 'Skip Scraper (import-only)' : 'Full Pipeline';
+  const { skipScraper, resume, skipBypass, scope = 'all', titleFilter = '' } = req.body || {};
+  const scopeLabel = scope === 'daily' ? ' [Today\'s New]' : (scope === 'title' && titleFilter ? ` [Title: ${titleFilter}]` : '');
+  const label = (skipScraper ? 'Skip Scraper (import-only)' : 'Full Pipeline') + scopeLabel;
 
+  // Respond immediately — pipeline runs fully detached via setImmediate
   res.json({ message: `${label} started` });
 
   _stopRequested = false;
@@ -226,28 +228,32 @@ router.post('/start', auth, async (req, res) => {
   pipelineProgress = { offset: 0, total: 0, label };
   setPipelineRunningFlag(true);
   broadcast(`[START] ${label}...`);
-
-  let importSrc = undefined;
+  broadcast(`[INFO] Pipeline running in background — safe to close this tab.`);
   if (skipScraper) broadcast(`[INFO] Skip Scraper: re-extracting from telegram_export.json`);
+  if (scope === 'daily') broadcast(`[INFO] Scope: Today's new content only`);
+  if (scope === 'title' && titleFilter) broadcast(`[INFO] Scope: Searching for title matching "${titleFilter}"`);
 
-  try {
-    const runPipeline = await getRunPipeline();
-    await runPipeline({
-      noBypass: skipBypass,
-      noWipe: !!skipScraper,
-      resume: !!resume,
-      importSrc,
-      emitter: broadcast,
-      isStopRequested: () => _stopRequested,
-    });
-    broadcast('[DONE] Pipeline finished successfully.');
-  } catch (err) {
-    broadcast(`[ERROR] Pipeline error: ${err.message}`);
-  } finally {
-    pipelineRunning = false;
-    pipelinePromise = null;
-    setPipelineRunningFlag(false);
-  }
+  setImmediate(async () => {
+    try {
+      const runPipeline = await getRunPipeline();
+      await runPipeline({
+        noBypass: skipBypass,
+        noWipe: !!skipScraper,
+        resume: !!resume,
+        scope,
+        titleFilter: titleFilter || undefined,
+        emitter: broadcast,
+        isStopRequested: () => _stopRequested,
+      });
+      broadcast('[DONE] Pipeline finished successfully.');
+    } catch (err) {
+      broadcast(`[ERROR] Pipeline error: ${err.message}`);
+    } finally {
+      pipelineRunning = false;
+      pipelinePromise = null;
+      setPipelineRunningFlag(false);
+    }
+  });
 });
 
 // -- Import Batch: fully enriched TMDB+OMDB per group (Vercel-timeout safe) --

@@ -9,7 +9,8 @@ module.exports = function (req, res, next) {
   }
 
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  // SSE routes (EventSource) cannot send headers — accept token as query param fallback
+  const token = (authHeader && authHeader.split(' ')[1]) || req.query.token;
   if (!token) return res.status(401).json({ message: 'Access denied. No token.' });
 
   try {

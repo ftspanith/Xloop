@@ -926,7 +926,7 @@
     try {
       appendLog(skipScraper ? 'Starting Skip Scraper Fast Loop...' : 'Starting Full Pipeline...');
       if (window._pipelineES) { window._pipelineES.close(); }
-      window._pipelineES = new EventSource('/api/orchestrator/start?skipScraper=' + skipScraper + '&skipBypass=' + skipBypass);
+      window._pipelineES = new EventSource('/api/orchestrator/start?skipScraper=' + skipScraper + '&skipBypass=' + skipBypass + '&token=' + encodeURIComponent(token));
       window._pipelineES.onmessage = (e) => {
         try {
           const ev = JSON.parse(e.data);
@@ -1535,7 +1535,7 @@
     try { await fetch('/api/orchestrator/clear-logs', { method:'POST', headers:{'Authorization':'Bearer '+getToken()} }); } catch(_) {}
     if (_evSrc2) { _evSrc2.close(); _evSrc2 = null; }
     const titleFilter = _scopeMode2 === 'title' ? encodeURIComponent(document.getElementById('scopeTitleInput')?.value?.trim() || '') : '';
-    const startUrl = `/api/orchestrator/start?skipScraper=${_skipScraper2}&resume=${resume}&scope=${_scopeMode2}&titleFilter=${titleFilter}`;
+    const startUrl = `/api/orchestrator/start?skipScraper=${_skipScraper2}&resume=${resume}&scope=${_scopeMode2}&titleFilter=${titleFilter}&token=${encodeURIComponent(getToken())}`;
     _evSrc2 = new EventSource(startUrl);
     _evSrc2.onmessage = (e) => {
       try {

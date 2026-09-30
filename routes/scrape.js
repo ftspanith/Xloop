@@ -351,14 +351,14 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
 // Returns distinct title groups matching the query, ordered by title.
 router.get('/collection-search', auth, async (req, res) => {
   try {
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ error: 'DB not connected', results: [] });
     const ExtractedLink = require('../models/ExtractedLink');
     const q = (req.query.q || '').trim();
     if (!q) return res.json({ results: [] });
 
-    // Case-insensitive title search on the extracted links collection
     const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
-    // Get distinct titles that match — aggregate to get one entry per title with stats
     const groups = await ExtractedLink.aggregate([
       { $match: { title: regex } },
       { $group: {
@@ -368,23 +368,24 @@ router.get('/collection-search', auth, async (req, res) => {
         contentType: { $first: '$contentType' },
         isSeries: { $first: '$isSeries' },
         linkCount: { $sum: 1 },
-        messageId: { $first: '$messageId' },
         qualities: { $addToSet: '$quality' },
         languages: { $addToSet: '$language' },
       }},
       { $sort: { title: 1 } },
-      { $limit: 30 },
-    ]);
+      { $limit: 50 },
+    ]).option({ maxTimeMS: 8000 });
 
     res.json({ results: groups });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, results: [] });
   }
 });
 
 // ── GET /api/scrape/collection-links — fetch all download links for a title from ExtractedLink ──
 router.get('/collection-links', auth, async (req, res) => {
   try {
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ error: 'DB not connected', links: [] });
     const ExtractedLink = require('../models/ExtractedLink');
     const title = (req.query.title || '').trim();
     if (!title) return res.json({ links: [] });
@@ -393,11 +394,12 @@ router.get('/collection-links', auth, async (req, res) => {
     const links = await ExtractedLink.find({ title: regex })
       .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
       .sort({ quality: -1, size: -1 })
+      .maxTimeMS(8000)
       .lean();
 
     res.json({ title, count: links.length, links });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, links: [] });
   }
 });
 

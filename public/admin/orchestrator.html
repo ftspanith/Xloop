@@ -352,7 +352,7 @@
  // - SSE stream helpers -
  function connectStream(onMessage) {
   if (eventSource) { eventSource.close(); eventSource = null; }
-  eventSource = new EventSource('/api/orchestrator/stream');
+  eventSource = new EventSource('/api/orchestrator/stream?token=' + encodeURIComponent(getToken()));
   eventSource.onmessage = (e) => {
    try {
     const ev = JSON.parse(e.data);
@@ -388,7 +388,7 @@
 
   if (eventSource) { eventSource.close(); eventSource = null; }
   
-  const qs = `?skipScraper=${skipScraper}&resume=${resume}`;
+  const qs = `?skipScraper=${skipScraper}&resume=${resume}&token=${encodeURIComponent(getToken())}`;
   eventSource = new EventSource('/api/orchestrator/start' + qs);
   
   eventSource.onmessage = (e) => {
