@@ -7,8 +7,9 @@
   <link rel="stylesheet" href="/css/style.css">
   <style>
     /* ── Collection Master styles ── */
-    .cm-layout { display:grid; grid-template-columns:380px 1fr; gap:22px; align-items:start; }
-    @media(max-width:1100px){ .cm-layout { grid-template-columns:1fr; } }
+    .cm-layout { display:grid; grid-template-columns:360px minmax(0,1fr); gap:22px; align-items:start; }
+    .cm-layout > * { min-width:0; overflow:hidden; }  /* prevent grid blowout */
+    @media(max-width:1100px){ .cm-layout { grid-template-columns:minmax(0,1fr); } }
 
     .cm-panel { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:22px; margin-bottom:18px; }
     .cm-panel:last-child { margin-bottom:0; }
@@ -53,8 +54,8 @@
     .cm-num { width:24px; height:24px; border-radius:50%; background:rgba(229,9,20,.14); border:1px solid rgba(229,9,20,.24); color:var(--accent); font-size:.7rem; font-weight:900; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
     .cm-item-poster { width:28px; height:40px; object-fit:cover; border-radius:4px; flex-shrink:0; }
     .cm-item-ph     { width:28px; height:40px; flex-shrink:0; background:rgba(255,255,255,.05); border-radius:4px; }
-    .cm-item-info   { flex:1; min-width:0; }
-    .cm-item-title  { font-size:.82rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cm-item-info   { flex:1; min-width:0; overflow:hidden; }
+    .cm-item-title  { font-size:.82rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
     .cm-item-meta   { font-size:.68rem; color:var(--text2); margin-top:1px; }
     .cm-drag-handle { color:rgba(255,255,255,.17); flex-shrink:0; }
     .cm-item-rm { flex-shrink:0; width:22px; height:22px; border-radius:50%; border:1px solid rgba(255,255,255,.08); background:transparent; color:rgba(255,255,255,.3); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .15s; font-size:.85rem; line-height:1; }
@@ -344,18 +345,23 @@
           continue;
         }
 
+        // Clean display title = what the user typed (e.g. "RRR")
+        // pick.title is the full raw JSON filename ("RRR (2022) 2160p UHD BLURAY...")
+        const displayYear  = hintYear || String(pick.year || '');
+        const displayTitle = title; // user-typed title — clean and short
+
         cmItems.push({
           _id: null,
-          _title: pick.title,
-          _query: title,          // original search query — used for fuzzy link fetch
-          _hintYear: hintYear,    // year hint from 'Title(Year)' format
-          title: pick.title, year: pick.year || '',
+          _title: pick.title,       // full JSON title — used for exact dedup
+          _query: title,            // clean query — used for fuzzy link fetch
+          _hintYear: hintYear,
+          title: displayTitle,      // what shows in the Collection Items list
+          year: displayYear,
           poster: '', type: pick.isSeries ? 'series' : (pick.contentType || 'movie'),
           downloads: null,
         });
         found++;
-        // Fetch link count via fuzzy so the log shows total across all quality variants
-        logLine('✓', pick.title + (pick.year ? ' (' + pick.year + ')' : ''), pick.linkCount + ' links found', '#22c55e');
+        logLine('✓', displayTitle + (displayYear ? ' (' + displayYear + ')' : ''), pick.linkCount + ' links found', '#22c55e');
       } catch(e) {
         logLine('!', rawLine, 'error: ' + e.message, '#f87171');
         notFound++;
