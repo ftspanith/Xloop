@@ -444,6 +444,14 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
       links = [...links, ...subLinks.filter(l => !seen.has(l.url))];
     }
 
+    // ── Filter out shortener/redirector links — keep only real cloud storage ──
+    // fpgo.xyz and FilePress are link shorteners, not cloud hosts.
+    const SHORTENER_RE = /fpgo\.xyz|filepress\.|bit\.ly|tinyurl\.com|t\.co|youtu\.be|youtube\.com|t\.me|instafily\.|link\.sharechat/i;
+    links = links.filter(l => {
+      const u = (l.bypassedUrl || l.url || '');
+      return u && !SHORTENER_RE.test(u);
+    });
+
     // Deduplicate by URL
     const seenUrls = new Set();
     links = links.filter(l => {

@@ -653,10 +653,8 @@
               const r = await fetch(url, { headers: AH });
               const d = await r.json();
               links = d.links || [];
-              // Update display title to cleanest version found in the data
-              if (d.displayTitle && d.displayTitle !== item.title) {
-                item.title = d.displayTitle;
-              }
+              // NOTE: do NOT overwrite item.title — user's typed title is the canonical display name.
+              // d.displayTitle would be the full JSON filename string which is too long.
             } else {
               // Exact title item (from Browse JSON panel or auto-fill)
               const r = await fetch('/api/scrape/collection-links?title=' + encodeURIComponent(item._title || item.title), { headers: AH });
@@ -696,6 +694,19 @@
   }
 
   // Group raw ExtractedLink entries into Download-like objects for the output builder
+  // ── Cloud host whitelist — only include direct cloud storage links ──────────
+  // fpgo.xyz / FilePress are shorteners/redirectors, not cloud storage. Filter them out.
+  const CM_CLOUD_REGEX = /gdflix\.dev|gdlink\.dev|hubcloud\.|gdtot\.|drivehub\.|katdrive\.|drivebot\.|send\.cm|krakenfiles\.|1drv\.|mega\.nz|mediafire\.com|gofile\.io|pixeldrain\.com/i;
+  const CM_SHORTENER_REGEX = /fpgo\.xyz|filepress\.|bit\.ly|tinyurl\.com|t\.co|youtu\.be|youtube\.com|t\.me|instafily\.|link\.sharechat/i;
+
+  function cmIsCloudLink(url) {
+    if (!url) return false;
+    if (CM_SHORTENER_REGEX.test(url)) return false;   // explicitly block known shorteners
+    if (CM_CLOUD_REGEX.test(url)) return true;         // explicitly allow known cloud hosts
+    // Default: include unknown hosts (may be new cloud services)
+    return true;
+  }
+
   // ── Extract variant label from a link's filename/quality ─────────────────
   function cmVariantLabel(lk) {
     const fn = (lk.filename || lk.title || '').toUpperCase();
@@ -729,6 +740,8 @@
     for (const lk of links) {
       const url = (lk.bypassedUrl || lk.url || '').trim();
       if (!url) continue;
+      // Skip shortener/redirector links — only keep real cloud storage
+      if (!cmIsCloudLink(url)) continue;
       // Deduplicate by URL
       if (seenUrls.has(url)) continue;
       seenUrls.add(url);
@@ -795,9 +808,11 @@
 
           const entries = dl._entries || dl.links || [];
           entries.forEach(entry => {
-            // Full filename + size
+            // Full filename + size (don't append size if it's already embedded in the filename)
             const fn   = showFile ? (entry.filename || '') : '';
-            const size = showSize && entry.size ? ' [' + entry.size + ']' : '';
+            const sizeStr = entry.size ? entry.size.replace(/\s/g,'').toLowerCase() : '';
+            const fnHasSize = sizeStr && fn.toLowerCase().replace(/\s/g,'').includes(sizeStr.replace(/[\[\]]/g,''));
+            const size = (showSize && entry.size && !fnHasSize) ? ' [' + entry.size + ']' : '';
             if (fn) lines.push(fn + size);
             // URL on its own line
             const url = entry.url || (typeof entry === 'string' ? entry : '');
