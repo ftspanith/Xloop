@@ -126,7 +126,7 @@
       <h1 class="admin-page-title">Collection Master</h1>
       <span style="font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;background:rgba(229,9,20,.14);border:1px solid rgba(229,9,20,.28);color:var(--accent);padding:3px 10px;border-radius:999px;">Admin Tool</span>
     </div>
-    <p style="font-size:.85rem;color:var(--text2);margin-bottom:28px;margin-top:-16px;">Build actor/director collections — generates a formatted link list ready to copy for Telegram or JustPaste.</p>
+    <p style="font-size:.85rem;color:var(--text2);margin-bottom:28px;margin-top:-16px;">Build actor/director/franchise collections from your <b style="color:var(--accent)">uploaded JSON</b> — finds all matching titles directly from the raw telegram export, not just what's already imported.</p>
 
     <div class="cm-layout">
 
@@ -155,11 +155,31 @@
           <input type="hidden" id="cmOpt-sep"       value="0">
         </div>
 
-        <!-- Search & Add -->
-        <div class="cm-panel">
-          <div class="cm-panel-title">Search &amp; Add Movies</div>
+        <!-- Auto-fill from JSON -->
+        <div class="cm-panel" style="border-color:rgba(229,9,20,.22);">
+          <div class="cm-panel-title">Auto-fill from JSON</div>
+          <p style="font-size:.75rem;color:var(--text2);margin-bottom:12px;line-height:1.6;">Type a hero / franchise name — all matching titles from your uploaded JSON will be listed for you to add.</p>
           <div class="cm-search-row">
-            <input type="text" id="cmSearchInput" class="cm-input" placeholder="Search by title..." autocomplete="off"
+            <input type="text" id="cmAutoInput" class="cm-input" placeholder="e.g. Pawan Kalyan, RRR, Marvel..." autocomplete="off"
+              onkeydown="if(event.key==='Enter')cmAutoFill()">
+            <button class="cm-btn-search" id="cmAutoBtn" onclick="cmAutoFill()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              Find All
+            </button>
+          </div>
+          <div id="cmAutoResults" class="cm-results" style="max-height:220px;">
+            <div class="cm-empty-msg">Type a name above to find all related movies from JSON.</div>
+          </div>
+          <button id="cmAddAllBtn" onclick="cmAddAllAuto()" style="display:none;margin-top:10px;width:100%;padding:9px;border-radius:8px;border:1px solid rgba(229,9,20,.4);background:rgba(229,9,20,.1);color:var(--accent);font-size:.8rem;font-weight:700;cursor:pointer;transition:all .15s;" onmouseover="this.style.background='rgba(229,9,20,.2)'" onmouseout="this.style.background='rgba(229,9,20,.1)'">
+            Add All to Collection
+          </button>
+        </div>
+
+        <!-- Manual Search & Add -->
+        <div class="cm-panel">
+          <div class="cm-panel-title">Manual Search & Add</div>
+          <div class="cm-search-row">
+            <input type="text" id="cmSearchInput" class="cm-input" placeholder="Search JSON by title..." autocomplete="off"
               onkeydown="if(event.key==='Enter')cmDoSearch()">
             <button class="cm-btn-search" id="cmSearchBtn" onclick="cmDoSearch()">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -167,7 +187,7 @@
             </button>
           </div>
           <div class="cm-results" id="cmResults">
-            <div class="cm-empty-msg">Search for a movie or series to add it to the collection.</div>
+            <div class="cm-empty-msg">Search the JSON for a specific title to add it.</div>
           </div>
         </div>
       </div>
@@ -250,7 +270,80 @@
   }
   document.querySelectorAll('.cm-fmt-pill.on .cm-fmt-dot').forEach(d => d.style.background = 'var(--accent)');
 
-  // ── Search ──────────────────────────────────────────────────────────────────
+  // ── Auto-fill search (from ExtractedLink / JSON) ───────────────────────────
+  let _autoResults = []; // store full result objects
+  async function cmAutoFill() {
+    const q = document.getElementById('cmAutoInput').value.trim();
+    if (!q) return;
+    const btn = document.getElementById('cmAutoBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="cm-spin"></span>';
+    const box = document.getElementById('cmAutoResults');
+    const addAllBtn = document.getElementById('cmAddAllBtn');
+    box.innerHTML = '<div class="cm-empty-msg"><span class="cm-spin" style="width:16px;height:16px;border-width:2.5px"></span></div>';
+    addAllBtn.style.display = 'none';
+    _autoResults = [];
+    try {
+      const r = await fetch('/api/scrape/collection-search?q=' + encodeURIComponent(q), { headers: AH });
+      const d = await r.json();
+      _autoResults = d.results || [];
+      if (!_autoResults.length) {
+        box.innerHTML = '<div class="cm-empty-msg">No titles found for &ldquo;' + escH(q) + '&rdquo; in JSON</div>';
+      } else {
+        box.innerHTML = _autoResults.map((g, i) => cmAutoRow(g, i)).join('');
+        addAllBtn.style.display = 'block';
+        addAllBtn.textContent = 'Add All ' + _autoResults.length + ' Titles to Collection';
+      }
+    } catch(e) {
+      box.innerHTML = '<div class="cm-empty-msg" style="color:#f87171">Error: ' + escH(e.message) + '</div>';
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Find All';
+  }
+
+  function cmAutoRow(g, i) {
+    const added = cmItems.some(x => x._title === g.title);
+    const badge = g.isSeries ? 'Series' : (g.contentType || 'Movie');
+    const quals = (g.qualities || []).filter(Boolean).join(', ');
+    const langs = (g.languages || []).filter(Boolean).join(', ');
+    const onclick = added ? '' : 'cmAddAutoItem(' + i + ')';
+    return '<div class="cm-result-item' + (added?' cm-added':'') + '" onclick="' + onclick + '" data-autoidx="' + i + '">' 
+      + '<div class="cm-result-ph" style="font-size:.6rem;">' + badge[0] + '</div>'
+      + '<div class="cm-result-info">'
+      + '<div class="cm-result-title">' + escH(g.title) + (g.year ? ' <span style="color:var(--text2);font-weight:500">(' + g.year + ')</span>' : '') + '</div>'
+      + '<div class="cm-result-meta">' + g.linkCount + ' links · ' + (quals || '—') + (langs ? ' · ' + escH(langs) : '') + '</div>'
+      + '</div>'
+      + '<div class="cm-result-add">' + (added ? '' : '+') + '</div></div>';
+  }
+
+  function cmAddAutoItem(idx) {
+    const g = _autoResults[idx];
+    if (!g) return;
+    if (cmItems.some(x => x._title === g.title)) return;
+    cmItems.push({ _id: null, _title: g.title, title: g.title, year: g.year||'', poster: '', type: g.isSeries ? 'series' : (g.contentType||'movie'), downloads: null });
+    cmRenderList();
+    document.getElementById('cmGenerateBtn').disabled = false;
+    // Mark row as added
+    const row = document.querySelector('[data-autoidx="' + idx + '"]');
+    if (row) { row.classList.add('cm-added'); const b = row.querySelector('.cm-result-add'); if(b) b.textContent=''; row.setAttribute('onclick',''); }
+    showToast('Added: ' + g.title);
+  }
+
+  function cmAddAllAuto() {
+    let added = 0;
+    _autoResults.forEach((g, i) => {
+      if (cmItems.some(x => x._title === g.title)) return;
+      cmItems.push({ _id: null, _title: g.title, title: g.title, year: g.year||'', poster: '', type: g.isSeries ? 'series' : (g.contentType||'movie'), downloads: null });
+      const row = document.querySelector('[data-autoidx="' + i + '"]');
+      if (row) { row.classList.add('cm-added'); const b = row.querySelector('.cm-result-add'); if(b) b.textContent=''; row.setAttribute('onclick',''); }
+      added++;
+    });
+    cmRenderList();
+    if (cmItems.length) document.getElementById('cmGenerateBtn').disabled = false;
+    showToast('Added ' + added + ' titles to collection');
+  }
+
+  // ── Manual search (also from ExtractedLink / JSON) ───────────────────────────
   let cmDebounce;
   document.getElementById('cmSearchInput').addEventListener('input', () => {
     clearTimeout(cmDebounce);
@@ -266,43 +359,41 @@
     const box = document.getElementById('cmResults');
     box.innerHTML = '<div class="cm-empty-msg"><span class="cm-spin" style="width:16px;height:16px;border-width:2.5px"></span></div>';
     try {
-      const r = await fetch('/api/movies?search=' + encodeURIComponent(q) + '&type=all&limit=15', { headers: AH });
+      const r = await fetch('/api/scrape/collection-search?q=' + encodeURIComponent(q), { headers: AH });
       const d = await r.json();
-      const list = d.movies || [];
-      box.innerHTML = list.length
-        ? list.map(m => cmResultRow(m)).join('')
-        : '<div class="cm-empty-msg">No results for &ldquo;' + escH(q) + '&rdquo;</div>';
+      const list = d.results || [];
+      if (!list.length) {
+        box.innerHTML = '<div class="cm-empty-msg">No results for &ldquo;' + escH(q) + '&rdquo; in JSON</div>';
+      } else {
+        box.innerHTML = list.map(g => {
+          const added = cmItems.some(x => x._title === g.title);
+          const onclick = added ? '' : 'cmAddJsonItem(' + JSON.stringify(g.title) + ',' + JSON.stringify(g.year||'') + ',' + JSON.stringify(g.isSeries?'series':(g.contentType||'movie')) + ')';
+          const badge = g.isSeries ? 'Series' : (g.contentType||'Movie');
+          return '<div class="cm-result-item' + (added?' cm-added':'') + '" onclick="' + onclick + '" data-title="' + escH(g.title) + '">'
+            + '<div class="cm-result-ph" style="font-size:.6rem">' + badge[0] + '</div>'
+            + '<div class="cm-result-info"><div class="cm-result-title">' + escH(g.title) + (g.year?' <span style="color:var(--text2);font-weight:500">('+g.year+')</span>':'') + '</div>'
+            + '<div class="cm-result-meta">' + g.linkCount + ' links · ' + (g.qualities||[]).filter(Boolean).join(', ') + '</div></div>'
+            + '<div class="cm-result-add">' + (added?'':'+') + '</div></div>';
+        }).join('');
+      }
     } catch(e) {
-      box.innerHTML = '<div class="cm-empty-msg" style="color:#f87171">Search error. Check connection.</div>';
+      box.innerHTML = '<div class="cm-empty-msg" style="color:#f87171">Search error.</div>';
     }
     btn.disabled = false;
-    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>Search';
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Search';
   }
 
-  function cmResultRow(m) {
-    const added = cmItems.some(x => x._id === m._id);
-    const poster = m.poster
-      ? '<img class="cm-result-poster" src="' + m.poster + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">'
-      : '<div class="cm-result-ph">' + (m.title||'?')[0].toUpperCase() + '</div>';
-    const meta = [m.year, m.type, m.language].filter(Boolean).join(' · ');
-    const onclick = added ? '' : 'cmAddItem(' + JSON.stringify(m._id) + ',' + JSON.stringify(m.title) + ',' + JSON.stringify(m.year||'') + ',' + JSON.stringify(m.poster||'') + ',' + JSON.stringify(m.type||'movie') + ')';
-    return '<div class="cm-result-item' + (added?' cm-added':'') + '" onclick="' + onclick + '" data-id="' + m._id + '">'
-      + poster
-      + '<div class="cm-result-info"><div class="cm-result-title">' + escH(m.title) + '</div><div class="cm-result-meta">' + escH(meta) + '</div></div>'
-      + '<div class="cm-result-add">' + (added ? '' : '+') + '</div></div>';
-  }
-
-  function cmAddItem(id, title, year, poster, type) {
-    if (cmItems.some(x => x._id === id)) return;
-    cmItems.push({ _id: id, title, year, poster, type, downloads: null });
+  function cmAddJsonItem(title, year, type) {
+    if (cmItems.some(x => x._title === title)) return;
+    cmItems.push({ _id: null, _title: title, title, year, poster:'', type, downloads: null });
     cmRenderList();
-    cmSyncMarkers();
     document.getElementById('cmGenerateBtn').disabled = false;
+    cmSyncMarkers();
     showToast('Added: ' + title);
   }
 
-  function cmRemoveItem(id) {
-    cmItems = cmItems.filter(x => x._id !== id);
+  function cmRemoveItem(titleOrId) {
+    cmItems = cmItems.filter(x => x._title !== titleOrId && x._id !== titleOrId);
     cmRenderList();
     cmSyncMarkers();
     document.getElementById('cmGenerateBtn').disabled = cmItems.length === 0;
@@ -339,7 +430,7 @@
       + (m.downloads !== null ? ' · <span style="color:var(--accent)">' + (m.downloads||[]).length + ' variants</span>' : '')
       + '</div></div>'
       + '<svg class="cm-drag-handle" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="6" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="18"/></svg>'
-      + '<button class="cm-item-rm" onclick="cmRemoveItem(\'' + m._id + '\')" title="Remove">&times;</button>'
+      + '<button class="cm-item-rm" onclick="cmRemoveItem(' + JSON.stringify(m._title || m._id) + ')" title="Remove">&times;</button>'
       + '</div>'
     ).join('');
   }
@@ -362,7 +453,7 @@
     document.getElementById('cmOutputArea').classList.remove('show');
   }
 
-  // ── Generate ────────────────────────────────────────────────────────────────
+  // ── Generate — pulls links from ExtractedLink for JSON-sourced items ────────
   async function cmGenerate() {
     const name = (document.getElementById('cmCollName').value.trim() || 'COLLECTION').toUpperCase();
     const btn  = document.getElementById('cmGenerateBtn');
@@ -377,12 +468,21 @@
     const total = cmItems.length;
     for (let i = 0; i < total; i++) {
       const item = cmItems[i];
-      txt.textContent = 'Fetching: ' + item.title + ' (' + (i+1) + '/' + total + ')...';
+      txt.textContent = 'Fetching links: ' + item.title + ' (' + (i+1) + '/' + total + ')...';
       bar.style.width = Math.round((i / total) * 80) + '%';
       if (item.downloads === null) {
         try {
-          const r = await fetch('/api/movies/' + item._id, { headers: AH });
-          item.downloads = r.ok ? ((await r.json()).downloads || []) : [];
+          // JSON-sourced items use collection-links (ExtractedLink DB)
+          if (!item._id) {
+            const r = await fetch('/api/scrape/collection-links?title=' + encodeURIComponent(item._title || item.title), { headers: AH });
+            const d = await r.json();
+            // Group by quality+language into download-like objects
+            item.downloads = cmGroupExtractedLinks(d.links || []);
+          } else {
+            // Imported movie — use normal movies API
+            const r = await fetch('/api/movies/' + item._id, { headers: AH });
+            item.downloads = r.ok ? ((await r.json()).downloads || []) : [];
+          }
         } catch(e) { item.downloads = []; }
       }
     }
@@ -407,6 +507,28 @@
     cmRenderList();
     document.getElementById('cmOutputArea').scrollIntoView({ behavior:'smooth', block:'start' });
     showToast('Collection generated!');
+  }
+
+  // Group raw ExtractedLink entries into Download-like objects for the output builder
+  function cmGroupExtractedLinks(links) {
+    const map = new Map();
+    for (const lk of links) {
+      const key = [lk.quality||'HD', lk.language||'', lk.size||'', lk.filename||'', lk.season??'', lk.episode??''].join('|');
+      if (!map.has(key)) {
+        map.set(key, {
+          quality: lk.quality || 'HD',
+          language: lk.language || '',
+          size: lk.size || '',
+          filename: lk.filename || '',
+          season: lk.season ?? null,
+          episode: lk.episode ?? null,
+          links: [],
+        });
+      }
+      const finalUrl = lk.bypassedUrl || lk.url || '';
+      if (finalUrl) map.get(key).links.push({ host: lk.host || 'Direct', url: finalUrl });
+    }
+    return [...map.values()];
   }
 
   function cmBuildOutput(name, items) {

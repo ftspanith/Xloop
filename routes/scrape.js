@@ -347,4 +347,58 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
   }
 });
 
+// ── GET /api/scrape/collection-search — search ExtractedLink by title (from uploaded JSON) ──
+// Returns distinct title groups matching the query, ordered by title.
+router.get('/collection-search', auth, async (req, res) => {
+  try {
+    const ExtractedLink = require('../models/ExtractedLink');
+    const q = (req.query.q || '').trim();
+    if (!q) return res.json({ results: [] });
+
+    // Case-insensitive title search on the extracted links collection
+    const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+    // Get distinct titles that match — aggregate to get one entry per title with stats
+    const groups = await ExtractedLink.aggregate([
+      { $match: { title: regex } },
+      { $group: {
+        _id: '$title',
+        title: { $first: '$title' },
+        year:  { $first: '$year' },
+        contentType: { $first: '$contentType' },
+        isSeries: { $first: '$isSeries' },
+        linkCount: { $sum: 1 },
+        messageId: { $first: '$messageId' },
+        qualities: { $addToSet: '$quality' },
+        languages: { $addToSet: '$language' },
+      }},
+      { $sort: { title: 1 } },
+      { $limit: 30 },
+    ]);
+
+    res.json({ results: groups });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/scrape/collection-links — fetch all download links for a title from ExtractedLink ──
+router.get('/collection-links', auth, async (req, res) => {
+  try {
+    const ExtractedLink = require('../models/ExtractedLink');
+    const title = (req.query.title || '').trim();
+    if (!title) return res.json({ links: [] });
+
+    const regex = new RegExp('^' + title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
+    const links = await ExtractedLink.find({ title: regex })
+      .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
+      .sort({ quality: -1, size: -1 })
+      .lean();
+
+    res.json({ title, count: links.length, links });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
