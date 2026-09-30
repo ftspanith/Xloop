@@ -403,9 +403,10 @@ router.get('/collection-links', auth, async (req, res) => {
   }
 });
 
-// ── GET /api/scrape/collection-links-fuzzy — ALL links for a keyword (finds all quality variants) ──
-// Unlike collection-links (exact title match), this searches by regex across ALL titles
-// so "RRR" finds "RRR 2160p BLURAY", "RRR 1080p BluRay", "RRR 720p" etc. — all formats.
+// ── GET /api/scrape/collection-links-fuzzy — ALL links for a keyword across all quality variants ──
+// Searches ExtractedLink titles by PREFIX regex (index-efficient) — since Telegram titles
+// always start with the movie name (e.g. "Iron Man (2008) 2160p BLURAY..." starts with "Iron Man").
+// Returns ALL matching links across every quality/format variant for the given title.
 router.get('/collection-links-fuzzy', auth, async (req, res) => {
   try {
     const mongoose = require('mongoose');
@@ -415,23 +416,46 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
     const year = (req.query.year || '').trim();
     if (!q) return res.json({ links: [] });
 
-    // Build a word-boundary-aware regex — "RRR" should not match "ERRRR"
     const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp('(?:^|[^a-zA-Z0-9])' + escaped + '(?:[^a-zA-Z0-9]|$)', 'i');
 
-    const filter = { title: regex };
-    // Optionally narrow by year — only apply if year is numeric and present
+    // Strategy 1: prefix search (uses index) — "Iron Man" → matches "Iron Man (2008) 4K..."
+    // The title field in ExtractedLink starts with the movie name, so prefix regex IS the right tool.
+    // MongoDB can use the { title: 1 } index for /^prefix/ patterns.
+    const prefixRegex = new RegExp('^' + escaped, 'i');
+
+    let filter = { title: prefixRegex };
     if (year && /^\d{4}$/.test(year)) filter.year = parseInt(year, 10);
 
-    const links = await ExtractedLink.find(filter)
+    let links = await ExtractedLink.find(filter)
       .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
-      .sort({ quality: -1 })
-      .maxTimeMS(10000)
       .lean();
 
-    // Build a clean display title: pick the shortest title (most likely the clean one)
+    // Strategy 2: if prefix found too few results (<3), also try a substring search
+    // (catches cases where title is stored differently, e.g. "[RRR]" or "- RRR -")
+    if (links.length < 3) {
+      const subRegex = new RegExp(escaped, 'i');
+      const subFilter = { title: subRegex };
+      if (year && /^\d{4}$/.test(year)) subFilter.year = parseInt(year, 10);
+      const subLinks = await ExtractedLink.find(subFilter)
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
+        .lean();
+      // Merge — deduplicate by url
+      const seen = new Set(links.map(l => l.url));
+      links = [...links, ...subLinks.filter(l => !seen.has(l.url))];
+    }
+
+    // Deduplicate by URL
+    const seenUrls = new Set();
+    links = links.filter(l => {
+      const u = l.bypassedUrl || l.url || '';
+      if (!u || seenUrls.has(u)) return false;
+      seenUrls.add(u);
+      return true;
+    });
+
+    // Build a clean display title: pick the shortest title (most likely the clean base title)
     const titles = [...new Set(links.map(l => l.title).filter(Boolean))];
-    const displayTitle = titles.sort((a,b) => a.length - b.length)[0] || q;
+    const displayTitle = titles.sort((a, b) => a.length - b.length)[0] || q;
 
     res.json({ query: q, year, displayTitle, count: links.length, links });
   } catch (err) {
