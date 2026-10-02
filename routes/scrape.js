@@ -508,4 +508,112 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
   }
 });
 
+
+// ── GET /api/scrape/json-search-links — search telegram_export.json DIRECTLY ──────────────────
+// This endpoint bypasses the DB entirely and reads the raw JSON file.
+// It uses the real parser to extract links — 100% complete, no DB incompleteness issues.
+// Primary source for the Collection Master (DB-based fuzzy is fallback when JSON not available).
+//
+// Flow:
+//   1. Read telegram_export.json from disk
+//   2. Parse ALL messages with parseMessageBlock()
+//   3. Find all messages where title matches the query
+//   4. Return ALL links (no host cap, no artificial limit)
+router.get('/json-search-links', auth, async (req, res) => {
+  try {
+    const q    = (req.query.q    || '').trim();
+    const year = (req.query.year || '').trim();
+    if (!q) return res.json({ links: [], source: 'json' });
+
+    // Check JSON file exists
+    if (!fs.existsSync(EXPORT_FILE)) {
+      return res.json({ links: [], source: 'none', error: 'telegram_export.json not found on server. Upload it via Scraper first.' });
+    }
+
+    // Load the parser
+    const { parseMessageBlock } = require('../utils/parser');
+
+    // Read and parse JSON
+    let allMessages = [];
+    try {
+      const raw  = fs.readFileSync(EXPORT_FILE, 'utf8');
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) {
+        allMessages = Array.isArray(data[0]?.messages) ? data.flatMap(d => d.messages || []) : data;
+      } else if (data.messages) {
+        allMessages = data.messages;
+      }
+    } catch (e) {
+      return res.status(500).json({ links: [], source: 'json', error: 'Failed to read telegram_export.json: ' + e.message });
+    }
+
+    // Build title-matching regex — same flexible logic as buildTitleRegex
+    const parts   = q.trim().split(/\s+/).map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const body    = parts.join('[\\s._\\-]+');
+    const strict  = new RegExp('^' + body + '(?=[\\s._\\-\\(\\[0-9]|$)', 'i');
+    const loose   = new RegExp('^' + body, 'i');   // fallback
+    const yearNum = year && /^\d{4}$/.test(year) ? parseInt(year, 10) : null;
+
+    // Shortener filter
+    const SHORTENER_RE = /fpgo\.xyz|filepress\.|bit\.ly|tinyurl\.com|gplinks\.co|vplink\.in|dtflix\.ink|dd-stream\.vercel\.app|driveleech\.|linkshost\.|shareus\.|ouo\.io|adf\.ly|youtu\.be|youtube\.com/i;
+
+    // Scan all messages
+    const links    = [];
+    const seenUrls = new Set();
+
+    for (const msg of allMessages) {
+      let rawText = '';
+      if (typeof msg.text === 'string') rawText = msg.text;
+      else if (Array.isArray(msg.text)) rawText = msg.text.map(p => {
+        if (typeof p === 'string') return p;
+        if (p.type === 'text_link' && p.href) return `${p.text}\n${p.href}\n`;
+        return p.text || '';
+      }).join('');
+      if (msg.reply_markup?.inline_keyboard) {
+        for (const row of msg.reply_markup.inline_keyboard)
+          for (const btn of (row||[])) if (btn.url) rawText += `\n${btn.url}`;
+      }
+      if (!rawText.trim()) continue;
+
+      let parsed;
+      try { parsed = parseMessageBlock(rawText, msg.id); } catch(_) { continue; }
+      if (!parsed || !parsed.title || !parsed.downloads?.length) continue;
+
+      // Match title against query (strict first, then loose)
+      const titleMatch = strict.test(parsed.title) || loose.test(parsed.title);
+      const yearMatch  = !yearNum || !parsed.year || parsed.year === yearNum;
+      if (!titleMatch || !yearMatch) continue;
+
+      // Extract ALL links from all download slots — no host cap
+      for (const dl of parsed.downloads) {
+        for (const lk of (dl.links || [])) {
+          const url = (lk.bypassedUrl || lk.url || '').trim();
+          if (!url || seenUrls.has(url) || SHORTENER_RE.test(url)) continue;
+          seenUrls.add(url);
+          links.push({
+            title:       parsed.title,
+            year:        parsed.year,
+            quality:     dl.quality || '',
+            size:        dl.size    || '',
+            filename:    dl.filename || parsed.title,
+            language:    dl.language || parsed.language || '',
+            host:        lk.host    || '',
+            url,
+            bypassedUrl: lk.bypassedUrl || null,
+            isSeries:    parsed.isSeries || false,
+            contentType: parsed.contentType || 'movie',
+            season:      dl.season ?? parsed.season ?? null,
+            episode:     dl.episode ?? parsed.episode ?? null,
+          });
+        }
+      }
+    }
+
+    const displayTitle = links.length ? links[0].title : q;
+    res.json({ query: q, year, displayTitle, count: links.length, links, source: 'json' });
+  } catch (err) {
+    res.status(500).json({ error: err.message, links: [], source: 'json' });
+  }
+});
+
 module.exports = router;

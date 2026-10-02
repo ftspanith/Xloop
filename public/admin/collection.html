@@ -343,17 +343,26 @@
         const displayYear = hintYear || String(pick.year || '');
         const isSeries    = matches.some(m => m.isSeries);
 
-        // ── Get actual total link count via fuzzy endpoint (includes ALL format variants) ──
-        // collection-search groups by full filename (one group = one file).
-        // collection-links-fuzzy searches all files across all quality variants for the same title.
-        // Use fuzzy count for the log so user sees the real total.
-        let fuzzyCount = matches.reduce((a, m) => a + (m.linkCount || 0), 0); // rough initial count
+        // ── Get actual total link count — try JSON first, fallback to DB ──
+        // JSON search: reads telegram_export.json directly → 100% complete
+        // DB search: fallback when JSON not on server
+        let fuzzyCount = matches.reduce((a, m) => a + (m.linkCount || 0), 0); // rough initial
+        let dataSource = 'db';
         try {
-          const fUrl = '/api/scrape/collection-links-fuzzy?q=' + encodeURIComponent(title)
-            + (hintYear ? '&year=' + encodeURIComponent(hintYear) : '');
-          const fr = await fetch(fUrl, { headers: AH });
-          const fd = await fr.json();
-          fuzzyCount = (fd.links || []).length;
+          const qp  = encodeURIComponent(title);
+          const yp  = hintYear ? '&year=' + encodeURIComponent(hintYear) : '';
+          // Try JSON direct search first
+          const fj  = await fetch('/api/scrape/json-search-links?q=' + qp + yp, { headers: AH });
+          const fdj = await fj.json();
+          if (fdj.links && fdj.links.length > 0) {
+            fuzzyCount = fdj.links.length;
+            dataSource = 'json';
+          } else {
+            // Fallback to DB fuzzy
+            const ff  = await fetch('/api/scrape/collection-links-fuzzy?q=' + qp + yp, { headers: AH });
+            const fdf = await ff.json();
+            fuzzyCount = (fdf.links || []).length;
+          }
         } catch(_) { /* keep rough count */ }
 
         cmItems.push({
@@ -367,7 +376,7 @@
           downloads: null,
         });
         found++;
-        logLine('✓', title + (displayYear ? ' (' + displayYear + ')' : ''), fuzzyCount + ' links found', '#22c55e');
+        logLine('✓', title + (displayYear ? ' (' + displayYear + ')' : ''), fuzzyCount + ' links found [' + dataSource + ']', '#22c55e');
       } catch(e) {
         logLine('!', rawLine, 'error: ' + e.message, '#f87171');
         notFound++;
@@ -656,14 +665,28 @@
           if (!item._id) {
             let links = [];
             if (item._query) {
-              // Batch-imported item: use fuzzy search to get ALL quality/size variants
-              const url = '/api/scrape/collection-links-fuzzy?q=' + encodeURIComponent(item._query)
-                        + (item._hintYear ? '&year=' + encodeURIComponent(item._hintYear) : '');
-              const r = await fetch(url, { headers: AH });
-              const d = await r.json();
+              // PRIMARY: search telegram_export.json directly — 100% accurate, no DB limit issues
+              // FALLBACK: DB fuzzy search (when JSON not on server or returns 0 results)
+              const qParam   = encodeURIComponent(item._query);
+              const yrParam  = item._hintYear ? '&year=' + encodeURIComponent(item._hintYear) : '';
+
+              let d = { links: [], source: 'none' };
+              try {
+                const rj = await fetch('/api/scrape/json-search-links?q=' + qParam + yrParam, { headers: AH });
+                d = await rj.json();
+              } catch(_) {}
+
+              // Fallback to DB if JSON not available or returned nothing
+              if (!d.links || !d.links.length) {
+                try {
+                  const rf = await fetch('/api/scrape/collection-links-fuzzy?q=' + qParam + yrParam, { headers: AH });
+                  d = await rf.json();
+                  if (d.links?.length) d.source = 'db';
+                } catch(_) {}
+              }
               links = d.links || [];
-              // NOTE: do NOT overwrite item.title — user's typed title is the canonical display name.
-              // d.displayTitle would be the full JSON filename string which is too long.
+              // Source indicator — helps debug which data source was used
+              item._source = d.source || 'unknown';
             } else {
               // Exact title item (from Browse JSON panel or auto-fill)
               const r = await fetch('/api/scrape/collection-links?title=' + encodeURIComponent(item._title || item.title), { headers: AH });
