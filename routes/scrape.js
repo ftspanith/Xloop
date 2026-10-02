@@ -418,35 +418,38 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
 
     const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-    // Strategy 1: prefix search (uses index) — "Iron Man" → matches "Iron Man (2008) 4K..."
-    // The title field in ExtractedLink starts with the movie name, so prefix regex IS the right tool.
-    // MongoDB can use the { title: 1 } index for /^prefix/ patterns.
-    const prefixRegex = new RegExp('^' + escaped, 'i');
+    // ── STRICT prefix regex — title must be followed by a non-word char or end of string ──
+    // Without this, "Hi" matches Hichki, Hijack, Hijab, Hindustan, Himmatwala, etc.
+    // With this, "Hi" only matches titles where "Hi" is the full word (followed by space/dot/bracket/digit/end):
+    //   "Hi (2021)"      ✓  — Hi + space
+    //   "Hi.2026"        ✓  — Hi + dot
+    //   "Hi Nanna"       ✓  — Hi + space (different movie — user would type "Hi Nanna" to get it)
+    //   "Hichki"         ✗  — Hi + c (word char)
+    //   "Hijack"         ✗  — Hi + j
+    //   "Higher Learning" ✗ — Hi + g
+    const strictPrefixRegex = new RegExp('^' + escaped + '(?=[\\s.\\(\\[\\-_0-9]|$)', 'i');
 
-    let filter = { title: prefixRegex };
+    let filter = { title: strictPrefixRegex };
     if (year && /^\d{4}$/.test(year)) filter.year = parseInt(year, 10);
 
     let links = await ExtractedLink.find(filter)
       .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
       .lean();
 
-    // Strategy 2: if prefix found too few results (<3), also try a substring search
-    // (catches cases where title is stored differently, e.g. "[RRR]" or "- RRR -")
+    // Strategy 2: if strict prefix found too few results (<3), fall back to broad prefix
+    // (catches edge cases where title is stored without standard punctuation)
     if (links.length < 3) {
-      const subRegex = new RegExp(escaped, 'i');
-      const subFilter = { title: subRegex };
-      if (year && /^\d{4}$/.test(year)) subFilter.year = parseInt(year, 10);
-      const subLinks = await ExtractedLink.find(subFilter)
+      const broadFilter = { title: new RegExp('^' + escaped, 'i') };
+      if (year && /^\d{4}$/.test(year)) broadFilter.year = parseInt(year, 10);
+      const broadLinks = await ExtractedLink.find(broadFilter)
         .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
         .lean();
-      // Merge — deduplicate by url
       const seen = new Set(links.map(l => l.url));
-      links = [...links, ...subLinks.filter(l => !seen.has(l.url))];
+      links = [...links, ...broadLinks.filter(l => !seen.has(l.url))];
     }
 
     // ── Filter out shortener/redirector links — keep only real cloud storage ──
-    // fpgo.xyz and FilePress are link shorteners, not cloud hosts.
-    const SHORTENER_RE = /fpgo\.xyz|filepress\.|bit\.ly|tinyurl\.com|t\.co|youtu\.be|youtube\.com|t\.me|instafily\.|link\.sharechat/i;
+    const SHORTENER_RE = /fpgo\.xyz|filepress\.|bit\.ly|tinyurl\.com|t\.co|youtu\.be|youtube\.com|t\.me|instafily\.|link\.sharechat|gplinks\.co|vplink\.in|dtflix\.ink|dd-stream\.vercel\.app|driveleech\.|linkshost\.|shareus\.|shorturl\.at|ouo\.io|adf\.ly|linkshub\./i;
     links = links.filter(l => {
       const u = (l.bypassedUrl || l.url || '');
       return u && !SHORTENER_RE.test(u);

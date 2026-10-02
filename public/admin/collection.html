@@ -702,7 +702,7 @@
   // ── Cloud host whitelist — only include direct cloud storage links ──────────
   // fpgo.xyz / FilePress are shorteners/redirectors, not cloud storage. Filter them out.
   const CM_CLOUD_REGEX = /gdflix\.dev|gdlink\.dev|hubcloud\.|gdtot\.|drivehub\.|katdrive\.|drivebot\.|send\.cm|krakenfiles\.|1drv\.|mega\.nz|mediafire\.com|gofile\.io|pixeldrain\.com/i;
-  const CM_SHORTENER_REGEX = /fpgo\.xyz|filepress\.|bit\.ly|tinyurl\.com|t\.co|youtu\.be|youtube\.com|t\.me|instafily\.|link\.sharechat/i;
+  const CM_SHORTENER_REGEX = /fpgo\.xyz|filepress\.|bit\.ly|tinyurl\.com|t\.co|youtu\.be|youtube\.com|t\.me|instafily\.|link\.sharechat|gplinks\.co|vplink\.in|dtflix\.ink|dd-stream\.vercel\.app|driveleech\.|linkshost\.|shareus\.|shorturl\.at|ouo\.io|adf\.ly|linkshub\./i;
 
   function cmIsCloudLink(url) {
     if (!url) return false;
@@ -713,30 +713,34 @@
   }
 
   // ── Extract variant label from a link's filename/quality ─────────────────
+  // Uses case-insensitive /i flag everywhere (do NOT uppercase fn first).
   // Priority: REMUX > IMAX > OPEN MATTE > 144FPS > 60FPS > HDR10+ > HDR10 > DV > HDR > SDR > quality tier
   function cmVariantLabel(lk) {
-    const fn = (lk.filename || lk.title || '').toUpperCase();
-    const q  = (lk.quality  || '').toUpperCase();
-    // Most specific type labels first (these override pure quality tiers)
-    if (/\bREMUX\b/.test(fn))               return 'REMUX';
-    if (/\bIMAX\b/.test(fn))                return 'IMAX';
-    if (/OPEN[\s-]?MATTE/.test(fn))          return 'OPEN MATTE';
-    if (/\b144\s*FPS\b/.test(fn))           return '144FPS';
-    if (/\b60\s*FPS\b/.test(fn))            return '60FPS';
-    if (/\bHDR10[\s+]/.test(fn) || /\bHDR10\b/.test(fn) && /\+/.test(fn)) return 'HDR10+';
-    if (/\bHDR10\b/.test(fn))               return 'HDR10';
-    if (/DOLBY[\s.-]?VISION|\bDOVI\b|\bDV\b/.test(fn)) return 'DOLBY VISION';
-    if (/\bHDR\b/.test(fn) && !/\bSDR\b/.test(fn)) return 'HDR';
-    if (/\bSDR\b/.test(fn))                 return 'SDR';
-    // Fall back to resolution/format tier
-    if (/\b2160p\b|\b4K\b/.test(fn) || /\b2160p\b|\b4K\b/.test(q)) return '4K';
-    if (/\b1080p\b/.test(fn) || /\b1080p\b/.test(q)) return '1080p';
-    if (/\b720p\b/.test(fn)  || /\b720p\b/.test(q))  return '720p';
-    if (/\b480p\b/.test(fn)  || /\b480p\b/.test(q))  return '480p';
-    if (/\b360p\b/.test(fn)  || /\b360p\b/.test(q))  return '360p';
-    if (/WEB[\s.-]?DL|WEBDL/.test(fn))       return 'WEB-DL';
-    if (/BLU[\s.-]?RAY|BLURAY/.test(fn))     return 'BLURAY';
-    return q || 'HD';
+    const fn = lk.filename || lk.title || '';  // keep original case — use /i flag below
+    const q  = lk.quality  || '';
+    if (/\bREMUX\b/i.test(fn))                    return 'REMUX';
+    if (/\bIMAX\b/i.test(fn))                     return 'IMAX';
+    if (/OPEN[\s-]?MATTE/i.test(fn))               return 'OPEN MATTE';
+    if (/\b144\s*FPS\b/i.test(fn))                return '144FPS';
+    if (/\b60\s*FPS\b/i.test(fn))                 return '60FPS';
+    if (/\bHDR10\+/i.test(fn) || (/\bHDR10\b/i.test(fn) && /\+/.test(fn))) return 'HDR10+';
+    if (/\bHDR10\b/i.test(fn))                    return 'HDR10';
+    if (/DOLBY[\s.-]?VISION|\bDOVI\b/i.test(fn)) return 'DOLBY VISION';
+    if (/\bDV\b/.test(fn) && /\bHDR\b/i.test(fn)) return 'DOLBY VISION'; // "DV HDR" in filenames
+    if (/\bHDR\b/i.test(fn) && !/\bSDR\b/i.test(fn)) return 'HDR';
+    if (/\bSDR\b/i.test(fn))                      return 'SDR';
+    // Resolution/format tier — check fn first, fall back to quality field
+    if (/\b2160p\b|\b4K\b/i.test(fn) || /\b2160p\b|\b4K\b/i.test(q)) return '4K';
+    if (/\b1080p\b/i.test(fn) || /\b1080p\b/i.test(q)) return '1080p';
+    if (/\b720p\b/i.test(fn)  || /\b720p\b/i.test(q))  return '720p';
+    if (/\b480p\b/i.test(fn)  || /\b480p\b/i.test(q))  return '480p';
+    if (/\b360p\b/i.test(fn)  || /\b360p\b/i.test(q))  return '360p';
+    if (/WEB[\s.-]?DL|WEBDL/i.test(fn))            return 'WEB-DL';
+    if (/BLU[\s.-]?RAY|BLURAY/i.test(fn))          return 'BLURAY';
+    // Normalize the quality field so it shows clean (e.g. '1080P' → '1080p')
+    const qn = q.replace(/2160P/,'2160p').replace(/1080P/,'1080p')
+                 .replace(/720P/,'720p').replace(/480P/,'480p');
+    return qn || 'HD';
   }
 
   // ── Group links by variant label ─────────────────────────────────────────────
