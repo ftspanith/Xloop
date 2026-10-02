@@ -331,37 +331,43 @@
           continue;
         }
 
-        // Pick best match: prefer exact title+year, then exact title, then first result
-        const pick = (hintYear
-          ? matches.find(m => m.title.toLowerCase() === title.toLowerCase() && String(m.year) === hintYear)
-          : null)
-          || matches.find(m => m.title.toLowerCase() === title.toLowerCase())
-          || matches[0];
-
-        // Final duplicate check with resolved title — also check raw query for dupes
-        if (cmItems.some(x => x._title === pick.title || x._query === title)) {
-          logLine('—', pick.title, 'already in collection', '#f59e0b');
+        // Duplicate check by query — no need to check _title since fuzzy fetch covers all variants
+        if (cmItems.some(x => x._query && x._query.toLowerCase() === title.toLowerCase())) {
+          logLine('—', title, 'already in collection', '#f59e0b');
           dupes++;
           continue;
         }
 
-        // Clean display title = what the user typed (e.g. "RRR")
-        // pick.title is the full raw JSON filename ("RRR (2022) 2160p UHD BLURAY...")
-        const displayYear  = hintYear || String(pick.year || '');
-        const displayTitle = title; // user-typed title — clean and short
+        // Determine year and type from first match (use hintYear if provided)
+        const pick        = matches[0]; // just for metadata; actual links come from fuzzy search
+        const displayYear = hintYear || String(pick.year || '');
+        const isSeries    = matches.some(m => m.isSeries);
+
+        // ── Get actual total link count via fuzzy endpoint (includes ALL format variants) ──
+        // collection-search groups by full filename (one group = one file).
+        // collection-links-fuzzy searches all files across all quality variants for the same title.
+        // Use fuzzy count for the log so user sees the real total.
+        let fuzzyCount = matches.reduce((a, m) => a + (m.linkCount || 0), 0); // rough initial count
+        try {
+          const fUrl = '/api/scrape/collection-links-fuzzy?q=' + encodeURIComponent(title)
+            + (hintYear ? '&year=' + encodeURIComponent(hintYear) : '');
+          const fr = await fetch(fUrl, { headers: AH });
+          const fd = await fr.json();
+          fuzzyCount = (fd.links || []).length;
+        } catch(_) { /* keep rough count */ }
 
         cmItems.push({
           _id: null,
-          _title: pick.title,       // full JSON title — used for exact dedup
-          _query: title,            // clean query — used for fuzzy link fetch
+          _title: pick.title,       // first matched full JSON title (for dedup display)
+          _query: title,            // user-typed clean title — used for fuzzy link fetch
           _hintYear: hintYear,
-          title: displayTitle,      // what shows in the Collection Items list
-          year: displayYear,
-          poster: '', type: pick.isSeries ? 'series' : (pick.contentType || 'movie'),
+          title: title,             // clean display title in Collection Items list
+          year:  displayYear,
+          poster: '', type: isSeries ? 'series' : (pick.contentType || 'movie'),
           downloads: null,
         });
         found++;
-        logLine('✓', displayTitle + (displayYear ? ' (' + displayYear + ')' : ''), pick.linkCount + ' links found', '#22c55e');
+        logLine('✓', title + (displayYear ? ' (' + displayYear + ')' : ''), fuzzyCount + ' links found', '#22c55e');
       } catch(e) {
         logLine('!', rawLine, 'error: ' + e.message, '#f87171');
         notFound++;

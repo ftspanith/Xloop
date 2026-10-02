@@ -347,6 +347,18 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
   }
 });
 
+// ── Shared: build a flexible title regex that matches both space- and dot-separated formats ──
+// "Hi Nanna" → /^Hi[\s.]+Nanna(?=[\s.\(\[\-_0-9]|$)/i
+// "Iron Man" → /^Iron[\s.]+Man(?=[\s.\(\[\-_0-9]|$)/i
+// "RRR"      → /^RRR(?=[\s.\(\[\-_0-9]|$)/i
+// This handles both "Hi Nanna (2023) 4K..." and "Hi.Nanna.2023.2160p..." (torrent filenames).
+function buildTitleRegex(q, { strict = true } = {}) {
+  const parts = q.trim().split(/\s+/).map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const body  = parts.join('[\\s.]+');          // allow space or dot between words
+  const tail  = strict ? '(?=[\\s.\\(\\[\\-_0-9]|$)' : ''; // word-boundary lookahead
+  return new RegExp('^' + body + tail, 'i');
+}
+
 // ── GET /api/scrape/collection-search — search ExtractedLink by title (from uploaded JSON) ──
 // Returns distinct title groups matching the query, ordered by title.
 router.get('/collection-search', auth, async (req, res) => {
@@ -357,23 +369,38 @@ router.get('/collection-search', auth, async (req, res) => {
     const q = (req.query.q || '').trim();
     if (!q) return res.json({ results: [] });
 
-    const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-
-    const groups = await ExtractedLink.aggregate([
+    // Use flexible regex: handles space- AND dot-separated title formats
+    const regex = buildTitleRegex(q, { strict: true });
+    // Fallback: if strict matches nothing, try non-strict (substring)
+    let groups = await ExtractedLink.aggregate([
       { $match: { title: regex } },
       { $group: {
         _id: '$title',
-        title: { $first: '$title' },
-        year:  { $first: '$year' },
+        title:       { $first: '$title' },
+        year:        { $first: '$year' },
         contentType: { $first: '$contentType' },
-        isSeries: { $first: '$isSeries' },
-        linkCount: { $sum: 1 },
-        qualities: { $addToSet: '$quality' },
-        languages: { $addToSet: '$language' },
+        isSeries:    { $first: '$isSeries' },
+        linkCount:   { $sum: 1 },
+        qualities:   { $addToSet: '$quality' },
+        languages:   { $addToSet: '$language' },
       }},
       { $sort: { title: 1 } },
-      { $limit: 50 },
-    ]).option({ maxTimeMS: 8000 });
+      { $limit: 200 },  // increased from 50 — wide queries return more title groups
+    ]).option({ maxTimeMS: 12000 });
+    if (!groups.length) {
+      // Strict search found nothing — fall back to loose substring search
+      const looseRegex = buildTitleRegex(q, { strict: false });
+      groups = await ExtractedLink.aggregate([
+        { $match: { title: looseRegex } },
+        { $group: {
+          _id: '$title', title: { $first: '$title' }, year: { $first: '$year' },
+          contentType: { $first: '$contentType' }, isSeries: { $first: '$isSeries' },
+          linkCount: { $sum: 1 }, qualities: { $addToSet: '$quality' }, languages: { $addToSet: '$language' },
+        }},
+        { $sort: { title: 1 } },
+        { $limit: 200 },
+      ]).option({ maxTimeMS: 12000 });
+    }
 
     res.json({ results: groups });
   } catch (err) {
@@ -416,36 +443,26 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
     const year = (req.query.year || '').trim();
     if (!q) return res.json({ links: [] });
 
-    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    // ── STRICT prefix regex — title must be followed by a non-word char or end of string ──
-    // Without this, "Hi" matches Hichki, Hijack, Hijab, Hindustan, Himmatwala, etc.
-    // With this, "Hi" only matches titles where "Hi" is the full word (followed by space/dot/bracket/digit/end):
-    //   "Hi (2021)"      ✓  — Hi + space
-    //   "Hi.2026"        ✓  — Hi + dot
-    //   "Hi Nanna"       ✓  — Hi + space (different movie — user would type "Hi Nanna" to get it)
-    //   "Hichki"         ✗  — Hi + c (word char)
-    //   "Hijack"         ✗  — Hi + j
-    //   "Higher Learning" ✗ — Hi + g
-    const strictPrefixRegex = new RegExp('^' + escaped + '(?=[\\s.\\(\\[\\-_0-9]|$)', 'i');
-
-    let filter = { title: strictPrefixRegex };
+    // Build flexible regex: "Hi Nanna" matches both "Hi Nanna (2023) 4K..." AND "Hi.Nanna.2023.2160p..."
+    // Strategy 1: strict (word-boundary after title) — prevents "Hi" matching "Hichki"
+    const strictRegex = buildTitleRegex(q, { strict: true });
+    let filter = { title: strictRegex };
     if (year && /^\d{4}$/.test(year)) filter.year = parseInt(year, 10);
 
     let links = await ExtractedLink.find(filter)
       .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
       .lean();
 
-    // Strategy 2: if strict prefix found too few results (<3), fall back to broad prefix
-    // (catches edge cases where title is stored without standard punctuation)
+    // Strategy 2: if strict search <3 results, try without word-boundary (catches edge cases)
     if (links.length < 3) {
-      const broadFilter = { title: new RegExp('^' + escaped, 'i') };
-      if (year && /^\d{4}$/.test(year)) broadFilter.year = parseInt(year, 10);
-      const broadLinks = await ExtractedLink.find(broadFilter)
+      const looseRegex = buildTitleRegex(q, { strict: false });
+      const looseFilter = { title: looseRegex };
+      if (year && /^\d{4}$/.test(year)) looseFilter.year = parseInt(year, 10);
+      const looseLinks = await ExtractedLink.find(looseFilter)
         .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
         .lean();
       const seen = new Set(links.map(l => l.url));
-      links = [...links, ...broadLinks.filter(l => !seen.has(l.url))];
+      links = [...links, ...looseLinks.filter(l => !seen.has(l.url))];
     }
 
     // ── Filter out shortener/redirector links — keep only real cloud storage ──
