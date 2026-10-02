@@ -356,10 +356,42 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
 // This handles both "Hi Nanna (2023) 4K..." and "Hi.Nanna.2023.2160p..." (torrent filenames).
 function buildTitleRegex(q, { strict = true } = {}) {
   const parts = q.trim().split(/\s+/).map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const body  = parts.join('[\\s._\\-]+');     // allow space, dot, underscore, hyphen between words
-  const tail  = strict ? '(?=[\\s.\\(\\[\\-_0-9]|$)' : ''; // word-boundary lookahead
+  const body  = parts.join('[\\s._\\-]+');   // space, dot, underscore, or hyphen between words
+  const tail  = strict ? '(?=[\\s._\\-(\\[0-9]|$)' : '';  // word-boundary: "Hi" ≠ "Hichki"
   return new RegExp('^' + body + tail, 'i');
 }
+
+// ── JSON Cache — parse telegram_export.json once, reuse for all collection requests ──
+// Prevents reading & parsing 50MB+ file on every collection title lookup.
+// Cache is invalidated automatically when the file changes (mtime check).
+let _jsonCache = null;  // { messages: [], mtime: Number }
+
+async function getJsonMessages() {
+  try {
+    const stat  = await fs.promises.stat(EXPORT_FILE);
+    const mtime = stat.mtimeMs;
+    if (_jsonCache && _jsonCache.mtime === mtime) return _jsonCache.messages; // cache hit
+    const raw   = await fs.promises.readFile(EXPORT_FILE, 'utf8');
+    const data  = JSON.parse(raw);
+    let msgs = [];
+    if (Array.isArray(data)) {
+      msgs = Array.isArray(data[0]?.messages) ? data.flatMap(d => d.messages || []) : data;
+    } else if (data.messages) {
+      msgs = data.messages;
+    }
+    // Dedup by channel_id:message_id
+    const seen = new Set(); const deduped = [];
+    for (const m of msgs) {
+      const k = `${m.channel_id||'0'}:${m.id}`;
+      if (!seen.has(k)) { seen.add(k); deduped.push(m); }
+    }
+    _jsonCache = { messages: deduped, mtime };
+    return deduped;
+  } catch(_) { return null; }
+}
+
+// ── Shared shortener filter — used by both json-search-links and collection-links-fuzzy ──
+const SHORTENER_FILTER_RE = /fpgo\.xyz|filepress\.|bit\.ly|tinyurl\.com|gplinks\.co|vplink\.in|dtflix\.ink|dd-stream\.vercel\.app|driveleech\.|linkshost\.|shareus\.|ouo\.io|adf\.ly|youtu\.be|youtube\.com|t\.me|instafily\.|link\.sharechat/i;
 
 // ── GET /api/scrape/collection-search — search ExtractedLink by title (from uploaded JSON) ──
 // Returns distinct title groups matching the query, ordered by title.
@@ -390,7 +422,7 @@ router.get('/collection-search', auth, async (req, res) => {
       { $limit: 200 },  // increased from 50 — wide queries return more title groups
     ]).option({ maxTimeMS: 12000 });
     if (!groups.length) {
-      // Strict search found nothing — fall back to loose substring search
+      // Strict DB search found nothing — fall back to loose substring search
       const looseRegex = buildTitleRegex(q, { strict: false });
       groups = await ExtractedLink.aggregate([
         { $match: { title: looseRegex } },
@@ -402,6 +434,38 @@ router.get('/collection-search', auth, async (req, res) => {
         { $sort: { title: 1 } },
         { $limit: 200 },
       ]).option({ maxTimeMS: 12000 });
+    }
+
+    // If DB has nothing — also scan JSON directly so batch import doesn't say "not found"
+    // when the title exists in the JSON but not yet in the DB (e.g. DB was never re-uploaded).
+    if (!groups.length) {
+      try {
+        const msgs = await getJsonMessages();
+        if (msgs) {
+          const { parseMessageBlock, isJunkTitle } = require('../utils/parser');
+          const strictRe = buildTitleRegex(q, { strict: true });
+          const looseRe2 = buildTitleRegex(q, { strict: false });
+          const jsonGroups = new Map();
+          for (const msg of msgs) {
+            let rawText = '';
+            if (typeof msg.text === 'string') rawText = msg.text;
+            else if (Array.isArray(msg.text)) rawText = msg.text.map(p =>
+              typeof p === 'string' ? p : (p.type === 'text_link' && p.href ? `${p.text}\n${p.href}\n` : p.text||'')).join('');
+            if (!rawText.trim()) continue;
+            let parsed; try { parsed = parseMessageBlock(rawText, msg.id); } catch(_) { continue; }
+            if (!parsed || !parsed.title || isJunkTitle(parsed.title) || !parsed.downloads?.length) continue;
+            if (!strictRe.test(parsed.title) && !looseRe2.test(parsed.title)) continue;
+            if (!jsonGroups.has(parsed.title)) {
+              jsonGroups.set(parsed.title, { _id: parsed.title, title: parsed.title, year: parsed.year,
+                contentType: parsed.contentType || 'movie', isSeries: parsed.isSeries || false, linkCount: 0,
+                qualities: [], languages: [], _fromJson: true });
+            }
+            const g = jsonGroups.get(parsed.title);
+            g.linkCount += parsed.downloads.reduce((a,d) => a + (d.links||[]).length, 0);
+          }
+          groups = [...jsonGroups.values()].sort((a,b) => a.title.localeCompare(b.title)).slice(0, 200);
+        }
+      } catch(_) { /* JSON scan failed silently */ }
     }
 
     res.json({ results: groups });
@@ -483,7 +547,7 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
     }
 
     // ── Filter out shortener/redirector links — keep only real cloud storage ──
-    const SHORTENER_RE = /fpgo\.xyz|filepress\.|bit\.ly|tinyurl\.com|t\.co|youtu\.be|youtube\.com|t\.me|instafily\.|link\.sharechat|gplinks\.co|vplink\.in|dtflix\.ink|dd-stream\.vercel\.app|driveleech\.|linkshost\.|shareus\.|shorturl\.at|ouo\.io|adf\.ly|linkshub\./i;
+    // Filter shorteners using shared SHORTENER_RE constant
     links = links.filter(l => {
       const u = (l.bypassedUrl || l.url || '');
       return u && !SHORTENER_RE.test(u);
@@ -509,59 +573,35 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
 });
 
 
-// ── GET /api/scrape/json-search-links — search telegram_export.json DIRECTLY ──────────────────
-// This endpoint bypasses the DB entirely and reads the raw JSON file.
-// It uses the real parser to extract links — 100% complete, no DB incompleteness issues.
-// Primary source for the Collection Master (DB-based fuzzy is fallback when JSON not available).
-//
-// Flow:
-//   1. Read telegram_export.json from disk
-//   2. Parse ALL messages with parseMessageBlock()
-//   3. Find all messages where title matches the query
-//   4. Return ALL links (no host cap, no artificial limit)
+// ── GET /api/scrape/json-search-links — search telegram_export.json DIRECTLY ──
+// Bypasses DB — reads raw JSON, parses with real parser, returns ALL matching links.
+// Uses module-level cache (getJsonMessages) — JSON only read/parsed when file changes.
 router.get('/json-search-links', auth, async (req, res) => {
   try {
     const q    = (req.query.q    || '').trim();
     const year = (req.query.year || '').trim();
     if (!q) return res.json({ links: [], source: 'json' });
 
-    // Check JSON file exists
-    if (!fs.existsSync(EXPORT_FILE)) {
-      return res.json({ links: [], source: 'none', error: 'telegram_export.json not found on server. Upload it via Scraper first.' });
-    }
+    // Check file exists without blocking
+    try { await fs.promises.access(EXPORT_FILE); }
+    catch(_) { return res.json({ links: [], source: 'none', error: 'telegram_export.json not found. Upload via Scraper.' }); }
 
-    // Load the parser
-    const { parseMessageBlock } = require('../utils/parser');
+    // Get cached messages (async, non-blocking)
+    const allMessages = await getJsonMessages();
+    if (!allMessages) return res.status(500).json({ links: [], source: 'json', error: 'Failed to read JSON file.' });
 
-    // Read and parse JSON
-    let allMessages = [];
-    try {
-      const raw  = fs.readFileSync(EXPORT_FILE, 'utf8');
-      const data = JSON.parse(raw);
-      if (Array.isArray(data)) {
-        allMessages = Array.isArray(data[0]?.messages) ? data.flatMap(d => d.messages || []) : data;
-      } else if (data.messages) {
-        allMessages = data.messages;
-      }
-    } catch (e) {
-      return res.status(500).json({ links: [], source: 'json', error: 'Failed to read telegram_export.json: ' + e.message });
-    }
+    const { parseMessageBlock, isJunkTitle } = require('../utils/parser');
 
-    // Build title-matching regex — same flexible logic as buildTitleRegex
-    const parts   = q.trim().split(/\s+/).map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-    const body    = parts.join('[\\s._\\-]+');
-    const strict  = new RegExp('^' + body + '(?=[\\s._\\-\\(\\[0-9]|$)', 'i');
-    const loose   = new RegExp('^' + body, 'i');   // fallback
-    const yearNum = year && /^\d{4}$/.test(year) ? parseInt(year, 10) : null;
+    // Use shared buildTitleRegex for consistent matching logic
+    const strictRe = buildTitleRegex(q, { strict: true });
+    const looseRe  = buildTitleRegex(q, { strict: false });
+    const yearNum  = year && /^\d{4}$/.test(year) ? parseInt(year, 10) : null;
 
-    // Shortener filter
-    const SHORTENER_RE = /fpgo\.xyz|filepress\.|bit\.ly|tinyurl\.com|gplinks\.co|vplink\.in|dtflix\.ink|dd-stream\.vercel\.app|driveleech\.|linkshost\.|shareus\.|ouo\.io|adf\.ly|youtu\.be|youtube\.com/i;
-
-    // Scan all messages
     const links    = [];
     const seenUrls = new Set();
 
     for (const msg of allMessages) {
+      // Extract raw text from message (same logic as upload-export route)
       let rawText = '';
       if (typeof msg.text === 'string') rawText = msg.text;
       else if (Array.isArray(msg.text)) rawText = msg.text.map(p => {
@@ -577,33 +617,33 @@ router.get('/json-search-links', auth, async (req, res) => {
 
       let parsed;
       try { parsed = parseMessageBlock(rawText, msg.id); } catch(_) { continue; }
-      if (!parsed || !parsed.title || !parsed.downloads?.length) continue;
+      if (!parsed || !parsed.title || isJunkTitle(parsed.title) || !parsed.downloads?.length) continue;
 
-      // Match title against query (strict first, then loose)
-      const titleMatch = strict.test(parsed.title) || loose.test(parsed.title);
-      const yearMatch  = !yearNum || !parsed.year || parsed.year === yearNum;
-      if (!titleMatch || !yearMatch) continue;
+      // Title must match query (strict first, loose fallback)
+      if (!strictRe.test(parsed.title) && !looseRe.test(parsed.title)) continue;
+      // Year filter: only filter if BOTH query year AND parsed year are known
+      if (yearNum && parsed.year && parsed.year !== yearNum) continue;
 
-      // Extract ALL links from all download slots — no host cap
-      for (const dl of parsed.downloads) {
+      // Collect ALL links from all download slots — no host cap
+      for (const dl of (parsed.downloads || [])) {
         for (const lk of (dl.links || [])) {
-          const url = (lk.bypassedUrl || lk.url || '').trim();
+          const url = (lk.url || '').trim();
           if (!url || seenUrls.has(url) || SHORTENER_RE.test(url)) continue;
           seenUrls.add(url);
           links.push({
             title:       parsed.title,
-            year:        parsed.year,
-            quality:     dl.quality || '',
-            size:        dl.size    || '',
-            filename:    dl.filename || parsed.title,
-            language:    dl.language || parsed.language || '',
-            host:        lk.host    || '',
+            year:        parsed.year   || null,
+            quality:     dl.quality   || '',
+            size:        dl.size      || '',
+            filename:    dl.filename  || parsed.title || '',
+            language:    dl.language  || parsed.language || '',
+            host:        lk.host     || '',
             url,
-            bypassedUrl: lk.bypassedUrl || null,
-            isSeries:    parsed.isSeries || false,
+            bypassedUrl: null,   // raw JSON has no bypassed URLs — they come from pipeline bypass step
+            isSeries:    parsed.isSeries   || false,
             contentType: parsed.contentType || 'movie',
-            season:      dl.season ?? parsed.season ?? null,
-            episode:     dl.episode ?? parsed.episode ?? null,
+            season:      dl.season   ?? parsed.season  ?? null,
+            episode:     dl.episode  ?? parsed.episode ?? null,
           });
         }
       }
