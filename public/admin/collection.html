@@ -308,20 +308,25 @@
 
     for (let i = 0; i < lines.length; i++) {
       const rawLine = lines[i];
-      // Parse Title(Year) or Title (Year) format
-      const ym = rawLine.match(/^(.+?)\s*\((\d{4})\)\s*$/);
-      const title    = ym ? ym[1].trim() : rawLine;
+      // Parse all year formats:
+      //   "Hi Nanna (2023)" or "RRR(2022)"  → parenthesized year
+      //   "Hi 2026"                          → bare year at end of line (no parens)
+      //   "Hi Nanna"                         → no year
+      const ymParens = rawLine.match(/^(.+?)\s*\(((?:19|20)\d{2})\)\s*$/);   // Title(Year)
+      const ymBare   = !ymParens && rawLine.match(/^(.+?)\s+((?:19|20)\d{2})$/); // Title YYYY
+      const ym       = ymParens || ymBare;
+      const title    = ym ? ym[1].trim() : rawLine.trim();
       const hintYear = ym ? ym[2] : null;
 
-      // Check duplicate before hitting API
-      if (cmItems.some(x => x._title && x._title.toLowerCase() === title.toLowerCase())) {
+      // Check duplicate by user-typed title (case-insensitive) before hitting API
+      if (cmItems.some(x => x._query && x._query.toLowerCase() === title.toLowerCase())) {
         logLine('—', rawLine, 'already in collection', '#f59e0b');
         dupes++;
         continue;
       }
 
       try {
-        const r  = await fetch('/api/scrape/collection-search?q=' + encodeURIComponent(title), { headers: AH });
+        const r  = await fetch('/api/scrape/collection-search?q=' + encodeURIComponent(title) + (hintYear ? '&year=' + encodeURIComponent(hintYear) : ''), { headers: AH });
         const d  = await r.json();
         const matches = d.results || [];
 
@@ -667,8 +672,11 @@
             if (item._query) {
               // PRIMARY: search telegram_export.json directly — 100% accurate, no DB limit issues
               // FALLBACK: DB fuzzy search (when JSON not on server or returns 0 results)
-              const qParam   = encodeURIComponent(item._query);
-              const yrParam  = item._hintYear ? '&year=' + encodeURIComponent(item._hintYear) : '';
+              // _query is always the clean title (no year embedded after batch import fix).
+              // _hintYear carries the year separately. Both are used in the search URL.
+              const qParam   = encodeURIComponent(item._query || item.title);
+              const yrParam  = item._hintYear ? '&year=' + encodeURIComponent(item._hintYear)
+                              : item.year     ? '&year=' + encodeURIComponent(item.year) : '';
 
               let d = { links: [], source: 'none' };
               try {

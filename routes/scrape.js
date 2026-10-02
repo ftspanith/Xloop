@@ -400,14 +400,18 @@ router.get('/collection-search', auth, async (req, res) => {
     const mongoose = require('mongoose');
     if (mongoose.connection.readyState !== 1) return res.status(503).json({ error: 'DB not connected', results: [] });
     const ExtractedLink = require('../models/ExtractedLink');
-    const q = (req.query.q || '').trim();
+    const q    = (req.query.q    || '').trim();
+    const year = (req.query.year || '').trim();
     if (!q) return res.json({ results: [] });
 
     // Use flexible regex: handles space- AND dot-separated title formats
-    const regex = buildTitleRegex(q, { strict: true });
+    const regex    = buildTitleRegex(q, { strict: true });
+    const yearNum  = year && /^\d{4}$/.test(year) ? parseInt(year, 10) : null;
+    const matchStg = yearNum ? { title: regex, year: yearNum } : { title: regex };
+
     // Fallback: if strict matches nothing, try non-strict (substring)
     let groups = await ExtractedLink.aggregate([
-      { $match: { title: regex } },
+      { $match: matchStg },
       { $group: {
         _id: '$title',
         title:       { $first: '$title' },
@@ -424,8 +428,9 @@ router.get('/collection-search', auth, async (req, res) => {
     if (!groups.length) {
       // Strict DB search found nothing — fall back to loose substring search
       const looseRegex = buildTitleRegex(q, { strict: false });
+      const looseMatch  = yearNum ? { title: looseRegex, year: yearNum } : { title: looseRegex };
       groups = await ExtractedLink.aggregate([
-        { $match: { title: looseRegex } },
+        { $match: looseMatch },
         { $group: {
           _id: '$title', title: { $first: '$title' }, year: { $first: '$year' },
           contentType: { $first: '$contentType' }, isSeries: { $first: '$isSeries' },
@@ -455,6 +460,8 @@ router.get('/collection-search', auth, async (req, res) => {
             let parsed; try { parsed = parseMessageBlock(rawText, msg.id); } catch(_) { continue; }
             if (!parsed || !parsed.title || isJunkTitle(parsed.title) || !parsed.downloads?.length) continue;
             if (!strictRe.test(parsed.title) && !looseRe2.test(parsed.title)) continue;
+            // Year filter — only apply if both query year and parsed year are known
+            if (yearNum && parsed.year && parsed.year !== yearNum) continue;
             if (!jsonGroups.has(parsed.title)) {
               jsonGroups.set(parsed.title, { _id: parsed.title, title: parsed.title, year: parsed.year,
                 contentType: parsed.contentType || 'movie', isSeries: parsed.isSeries || false, linkCount: 0,
