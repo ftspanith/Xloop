@@ -30,5 +30,6 @@ const ExtractedLinkSchema = new mongoose.Schema({
 ExtractedLinkSchema.index({ uploadBatch: 1, host: 1 });
 ExtractedLinkSchema.index({ title: 1 });           // collection-search regex queries
 ExtractedLinkSchema.index({ title: 1, year: 1 });  // collection-links exact fetch
+ExtractedLinkSchema.index({ filename: 1 });        // fuzzy search also checks filename field
 
 module.exports = mongoose.models.ExtractedLink || mongoose.model('ExtractedLink', ExtractedLinkSchema);

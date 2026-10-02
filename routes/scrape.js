@@ -155,7 +155,8 @@ router.post('/upload-export', auth, upload.array('files', 10), async (req, res) 
     // ── Run extraction inline (same logic as extract_links.js) ───────────────
     // We extract here instead of storing raw JSON (raw JSON = 50MB+ > MongoDB 16MB limit)
     const HOST_PRIORITY = ['GDFlix','HubCloud','FilePress','DTFlix','TMBCloud','Direct','Download'];
-    const MAX_HOSTS = 3;
+    // MAX_HOSTS removed — store ALL URLs per file, not just 3 per host type.
+    // The collection master needs every available cloud link for a given movie.
     const hostRank = h => { const i = HOST_PRIORITY.indexOf(h); return i === -1 ? 99 : i; };
     const CDN_RE = [/\.(m3u8|ts|m4s)(\?|$)/i, /\/(image|img|thumbnail|poster|banner|cover)\//i,
       /\/(uploads?|wp-content|static|assets?)\//i, /cdn\.(hotstar|zee5|sonyliv)/i,
@@ -210,8 +211,9 @@ router.post('/upload-export', auth, upload.array('files', 10), async (req, res) 
           if (urlType === 'Shortlink') { shortlinks.push(entry); seenUrls.add(url); continue; }
           const sk = slotKey(entry);
           if (msgSlots.has(sk)) {
-            const sl = msgSlots.get(sk);
-            if (!sl.some(e=>e.host===urlType) && sl.length < MAX_HOSTS) sl.push(entry);
+            // Allow ALL URLs for the same file slot — same file can have multiple GDFlix/HubCloud links.
+            // Only skip true duplicates (already seen by global seenUrls check above).
+            msgSlots.get(sk).push(entry);
           } else { msgSlots.set(sk, [entry]); }
         }
       }
@@ -354,7 +356,7 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
 // This handles both "Hi Nanna (2023) 4K..." and "Hi.Nanna.2023.2160p..." (torrent filenames).
 function buildTitleRegex(q, { strict = true } = {}) {
   const parts = q.trim().split(/\s+/).map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const body  = parts.join('[\\s.]+');          // allow space or dot between words
+  const body  = parts.join('[\\s._\\-]+');     // allow space, dot, underscore, hyphen between words
   const tail  = strict ? '(?=[\\s.\\(\\[\\-_0-9]|$)' : ''; // word-boundary lookahead
   return new RegExp('^' + body + tail, 'i');
 }
@@ -446,23 +448,38 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
     // Build flexible regex: "Hi Nanna" matches both "Hi Nanna (2023) 4K..." AND "Hi.Nanna.2023.2160p..."
     // Strategy 1: strict (word-boundary after title) — prevents "Hi" matching "Hichki"
     const strictRegex = buildTitleRegex(q, { strict: true });
-    let filter = { title: strictRegex };
-    if (year && /^\d{4}$/.test(year)) filter.year = parseInt(year, 10);
+    // Search BOTH title and filename fields.
+    // title = clean movie name ("Hi Nanna"). filename = full torrent string ("Hi.Nanna.2023.2160p...").
+    // A single message can have the movie name in title but its individual files listed under filename.
+    let titleFilter = { title: strictRegex };
+    let fileFilter  = { filename: strictRegex };
+    if (year && /^\d{4}$/.test(year)) {
+      const yr = parseInt(year, 10);
+      titleFilter.year = yr;
+      fileFilter.year  = yr;
+    }
 
-    let links = await ExtractedLink.find(filter)
-      .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
-      .lean();
+    const [titleLinks, fileLinks] = await Promise.all([
+      ExtractedLink.find(titleFilter)
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
+        .lean(),
+      ExtractedLink.find(fileFilter)
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
+        .lean(),
+    ]);
+    const seenInit = new Set(titleLinks.map(l => l.url));
+    let links = [...titleLinks, ...fileLinks.filter(l => !seenInit.has(l.url))];
 
-    // Strategy 2: if strict search <3 results, try without word-boundary (catches edge cases)
+    // Strategy 2: if combined result <3, retry with loose regex (no word-boundary)
     if (links.length < 3) {
       const looseRegex = buildTitleRegex(q, { strict: false });
-      const looseFilter = { title: looseRegex };
+      const looseFilter = { $or: [{ title: looseRegex }, { filename: looseRegex }] };
       if (year && /^\d{4}$/.test(year)) looseFilter.year = parseInt(year, 10);
       const looseLinks = await ExtractedLink.find(looseFilter)
         .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
         .lean();
-      const seen = new Set(links.map(l => l.url));
-      links = [...links, ...looseLinks.filter(l => !seen.has(l.url))];
+      const seen2 = new Set(links.map(l => l.url));
+      links = [...links, ...looseLinks.filter(l => !seen2.has(l.url))];
     }
 
     // ── Filter out shortener/redirector links — keep only real cloud storage ──
