@@ -256,6 +256,19 @@ router.post('/upload-export', auth, upload.array('files', 10), async (req, res) 
       fs.writeFileSync(path.join(os.tmpdir(), 'shortlinks_report.json'), JSON.stringify(shortlinks));
     } catch(_) {}
 
+    // ── Also write raw telegram_export.json to disk for json-search-links endpoint ──
+    // json-search-links reads this file directly to get 100% complete link data.
+    // The upload route only saved to DB before — json-search-links never found the file.
+    // Now we write { messages: [...all deduped messages...] } to EXPORT_FILE.
+    try {
+      const exportPayload = JSON.stringify({ messages });
+      fs.writeFileSync(EXPORT_FILE, exportPayload);
+      _jsonCache = null; // invalidate cache so next json-search-links request re-reads new file
+    } catch(writeErr) {
+      // Non-fatal — DB links are saved, json-search-links will fall back to DB
+      console.warn('[upload-export] Could not write telegram_export.json:', writeErr.message);
+    }
+
     const dedupNote = dedupCount > 0 ? ` (${dedupCount} duplicate messages removed across files)` : '';
     res.json({
       message: `[DONE] Extracted ${allLinks.length} links from ${messages.length} messages (${skipped} skipped)${dedupNote}. Saved to MongoDB. Run Full Pipeline now.`,
