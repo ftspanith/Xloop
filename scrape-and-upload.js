@@ -63,6 +63,8 @@ const days        = getArg('days')       || '1';
 const channels    = getArg('channels')   || 'all';
 const startDate   = getArg('start-date') || '';
 const endDate     = getArg('end-date')   || '';
+const account     = getArg('account')    || '1';   // 1 = primary, 2 = second account
+const mergeMode   = hasFlag('merge') || account === '2'; // account 2 always merges
 
 const MODE_LABELS = {
   '1': 'Full scrape — ALL messages from ALL channels',
@@ -87,11 +89,14 @@ Options:
   --no-pipeline           Upload only, don't trigger Full Pipeline
   --channels=ID1,ID2      Channel IDs for mode 2
   --days=N                Number of days back for mode 3
+  --account=2             Use second Telegram account (auto-uses TG_CHANNELS_2, merges with acc1 data)
+  --merge                 Upload in merge mode (don't wipe existing links)
 
 NPM shortcuts:
   npm run scrape           Daily update (mode 4)
   npm run scrape:full      Full scrape (mode 1)
   npm run scrape:upload-only
+  npm run scrape:acc2      Full scrape with account 2 (merge mode)
 `);
   process.exit(0);
 }
@@ -148,13 +153,24 @@ async function runScraper() {
     return;
   }
 
+  // Account 2: use TG_CHANNELS_2 from .env unless --channels was explicitly set
+  const acc2Channels = process.env.TG_CHANNELS_2 || '';
+  const effectiveChannels = (account === '2' && acc2Channels && channels === 'all')
+    ? acc2Channels   // account 2 dedicated channel list
+    : channels;      // --channels arg or 'all' for account 1
+
   const label = MODE_LABELS[mode] || `Mode ${mode}`;
   log(`Starting Telegram scraper: ${label}`);
-  if (mode === '1') log('⚠️  Full scrape may take 1-3 hours depending on channel sizes.');
+  if (account === '2') log(`Account 2 — ${acc2Channels ? acc2Channels.split(',').length : 0} dedicated channels`);
+  if (mode === '1') log('Full scrape may take 1-3 hours depending on channel sizes.');
   if (mode === '4') log('Mode 4: Only fetching new messages since last export (fast).');
 
-  // Build args for scrape_api.js
-  const scrapeArgs = [`--mode=${mode}`, `--channels=${channels}`];
+  // Build args for scrape_api.js — pass --account=2 so scraper uses TG_SESSION_2 credentials
+  const scrapeArgs = [
+    `--mode=${mode}`,
+    `--channels=${effectiveChannels}`,
+    ...(account === '2' ? ['--account=2'] : []),
+  ];
   if (mode === '3') {
     if (startDate) {
       scrapeArgs.push(`--start-date=${startDate}`);
@@ -342,8 +358,15 @@ async function main() {
 ${c.bold}${c.cyan}━━━ XLOOP ─ Scrape & Upload ━━━${c.reset}
 `);
   console.log(`  Site:     ${SITE_URL}`);
+  console.log(`  Account:  ${account === '2' ? 'Account 2 (rare channels, merge mode)' : 'Account 1 (primary)'}`);
   console.log(`  Mode:     ${uploadOnly ? 'Upload Only (skip scraper)' : MODE_LABELS[mode] || `Mode ${mode}`}`);
+  console.log(`  Upload:   ${mergeMode ? 'MERGE (keeps existing account 1 data)' : 'REPLACE (wipes old data)'}`);
   console.log(`  Pipeline: ${noPipeline ? 'Manual (go to dashboard)' : 'Auto-trigger after upload'}\n`);
+
+  if (mergeMode && account === '2') {
+    log('Merge mode: account 2 links will be ADDED to existing account 1 links.');
+    log('Duplicate URLs will be skipped. Unique rare links will be kept.');
+  }
 
   try {
     // Step 1: Scrape
@@ -352,13 +375,13 @@ ${c.bold}${c.cyan}━━━ XLOOP ─ Scrape & Upload ━━━${c.reset}
     // Step 2: Login
     const token = await login();
 
-    // Step 3: Upload
-    await uploadExport(token);
+    // Step 3: Upload (merge mode for account 2 — don't wipe account 1 data)
+    await uploadExport(token, mergeMode);
 
     // Step 4: Pipeline
     await triggerPipeline(token);
 
-    console.log(`\n${c.green}${c.bold}✅ All done!${c.reset}`);
+    console.log(`\n${c.green}${c.bold}All done!${c.reset}`);
     if (!noPipeline) {
       console.log(`\nWatch the pipeline at: ${SITE_URL}/admin/dashboard.html\n`);
     }
