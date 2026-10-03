@@ -194,25 +194,127 @@ async function login() {
   return res.body.token;
 }
 
-// ── Step 3: Upload telegram_export.json ───────────────────────────────────────
-async function uploadExport(token) {
+// ── Step 3: Upload telegram_export.json (chunked to avoid 413) ────────────────
+// Instead of sending the raw 17MB JSON (hits Vercel's 4.5MB limit),
+// we parse it locally and upload extracted links in 400-item chunks.
+async function uploadExport(token, mergeMode = false) {
   if (!fs.existsSync(EXPORT_FILE)) {
     throw new Error(`telegram_export.json not found at ${EXPORT_FILE}`);
   }
 
   const sizeMB = (fs.statSync(EXPORT_FILE).size / 1024 / 1024).toFixed(1);
   log(`Reading telegram_export.json (${sizeMB} MB)...`);
-  const data = JSON.parse(fs.readFileSync(EXPORT_FILE, 'utf8'));
-  const msgCount = (data.messages || data).length;
-  log(`Uploading ${msgCount} messages to ${SITE_URL}...`);
-  log('Extraction runs server-side, this may take 30-60 seconds...');
+  const raw  = JSON.parse(fs.readFileSync(EXPORT_FILE, 'utf8'));
+  const msgs = raw.messages || raw;
+  log(`Parsing ${msgs.length} messages locally (avoids 413 upload limit)...`);
 
-  const res = await apiRequest('POST', '/api/scrape/upload-export', data, token);
-  if (res.status !== 200) {
-    throw new Error(`Upload failed (${res.status}): ${JSON.stringify(res.body)}`);
+  // ── Local extraction (mirrors server-side upload-export logic) ──────────────
+  const { parseMessageBlock, isJunkTitle, classifyUrl } = (() => {
+    try { return require('./utils/parser'); } catch { return require('./utils/parser.js'); }
+  })();
+
+  const HOST_PRIORITY = ['GDFlix','HubCloud','FilePress','DTFlix','TMBCloud','Direct','Download'];
+  const hostRank = h => { const i = HOST_PRIORITY.indexOf(h); return i === -1 ? 99 : i; };
+  const CDN_RE = [/\.(m3u8|ts|m4s)(\?|$)/i, /\/(image|img|thumbnail|poster|banner|cover)\//i,
+    /\/(uploads?|wp-content|static|assets?)\//i, /cdn\.(hotstar|zee5|sonyliv)/i,
+    /vod\d*\./i, /img\d*\./i, /thumbs?\./i, /akamaized\.net/i, /cloudfront\.net/i];
+  const isJunkUrl = u => { if (!u) return true;
+    if (/workers\.dev/i.test(u)) return !/\.(mkv|mp4|avi|zip|rar)([?#]|$)/i.test(u);
+    return CDN_RE.some(r => r.test(u)); };
+
+  // Dedup messages by channel:msgId
+  const msgMap = new Map();
+  for (const m of msgs) { const k = `${m.channel_id||'0'}:${m.id}`; if (!msgMap.has(k)) msgMap.set(k, m); }
+  const dedupedMsgs = [...msgMap.values()];
+  log(`After message dedup: ${dedupedMsgs.length} unique messages (${msgs.length - dedupedMsgs.length} duplicates removed)`);
+
+  const extracted = []; const shortlinks = [];
+  const seenUrls  = new Set();
+  let   skipped   = 0;
+
+  for (const msg of dedupedMsgs) {
+    let rawText = '';
+    if (typeof msg.text === 'string') rawText = msg.text;
+    else if (Array.isArray(msg.text)) rawText = msg.text.map(p => {
+      if (typeof p === 'string') return p;
+      if (p.type === 'text_link' && p.href) return `${p.text}\n${p.href}\n`;
+      return p.text || '';
+    }).join('');
+    if (msg.reply_markup?.inline_keyboard) {
+      for (const row of msg.reply_markup.inline_keyboard)
+        for (const btn of (row||[])) if (btn.url) rawText += `\n${btn.url}`;
+    }
+    if (!rawText.trim()) { skipped++; continue; }
+    let parsed;
+    try { parsed = parseMessageBlock(rawText, msg.id); } catch { skipped++; continue; }
+    if (!parsed || !parsed.downloads?.length || !parsed.title || isJunkTitle(parsed.title)) { skipped++; continue; }
+
+    const msgSlots = new Map();
+    for (const dl of parsed.downloads) {
+      const lang = dl.language || parsed.language || '';
+      for (const link of dl.links) {
+        const url = link.url.replace(/^http:\/\//i,'https://').replace(/\/$/,'');
+        if (isJunkUrl(url) || seenUrls.has(url)) continue;
+        const urlType = typeof classifyUrl === 'function' ? classifyUrl(url) : (/gdflix|hubcloud|gdlink|fpgo/i.test(url) ? 'GDFlix' : 'Direct');
+        if (urlType === 'Ignore' || urlType === 'Paste') continue;
+        const entry = { messageId: parsed.messageId, title: parsed.title, year: parsed.year,
+          contentType: parsed.contentType, isSeries: parsed.isSeries,
+          season: dl.season??parsed.season, episode: dl.episode??parsed.episode,
+          language: lang, quality: dl.quality, size: dl.size, filename: dl.filename,
+          host: urlType, url, bypassedUrl: null,
+          isFast: /gdflix|hubcloud|gdlink|tmbcloud|fpgo|filebee/i.test(url),
+          imdbId: parsed.imdbId||null, tmdbIdHint: parsed.tmdbIdHint||null };
+        const sk = `${dl.quality||''}|${(dl.size||'').replace(/\s/g,'')}|${(dl.filename||'').slice(0,80)}|${lang}`;
+        if (urlType === 'Shortlink') { shortlinks.push(entry); seenUrls.add(url); continue; }
+        if (msgSlots.has(sk)) msgSlots.get(sk).push(entry);
+        else msgSlots.set(sk, [entry]);
+      }
+    }
+    for (const sl of msgSlots.values()) {
+      sl.sort((a,b)=>hostRank(a.host)-hostRank(b.host));
+      for (const e of sl) { seenUrls.add(e.url); extracted.push(e); }
+    }
   }
-  ok(res.body.message);
-  return res.body;
+  const allLinks = [...extracted, ...shortlinks];
+  log(`Extracted ${allLinks.length} links (${skipped} messages skipped)`);
+
+  // ── Upload in chunks of 400 links (~150-250KB each, well under 4.5MB limit) ──
+  const CHUNK = 400;
+  const modeQs = mergeMode ? '&merge=true' : '';
+  let batchId   = null;
+  let totalSent = 0;
+
+  for (let i = 0; i < allLinks.length; i += CHUNK) {
+    const chunk   = allLinks.slice(i, i + CHUNK);
+    const isFinal = i + CHUNK >= allLinks.length;
+    const body    = { links: chunk, batchId, isFinal,
+      messageCount: dedupedMsgs.length, skipped };
+    const res = await apiRequest('POST', `/api/scrape/save-extracted?${modeQs}`, body, token);
+    if (res.status !== 200) throw new Error(`Chunk upload failed (${res.status}): ${JSON.stringify(res.body)}`);
+    if (!batchId && res.body.batchId) batchId = res.body.batchId;
+    totalSent += chunk.length;
+    process.stdout.write(`\r${c.cyan}[xloop]${c.reset} Uploaded ${totalSent}/${allLinks.length} links...`);
+    if (isFinal) {
+      console.log(''); // newline after progress
+      ok(res.body.message || `Upload complete: ${totalSent} links sent`);
+    }
+  }
+
+  // ── Also upload the raw JSON export so json-search-links endpoint can use it ──
+  // Send just the messages array compressed to a dedicated endpoint
+  log('Uploading raw messages for search index...');
+  try {
+    const exportRes = await apiRequest('POST',
+      `/api/scrape/upload-export${mergeMode ? '?merge=true' : ''}`,
+      { messages: dedupedMsgs }, token);
+    if (exportRes.status === 200) {
+      log('Search index updated.');
+    } else if (exportRes.status === 413) {
+      warn('Raw export too large for search index upload (OK — DB links still work).');
+    }
+  } catch(e) { warn(`Search index upload skipped: ${e.message}`); }
+
+  return { count: totalSent, batchId };
 }
 
 // ── Step 4: Trigger Full Pipeline ─────────────────────────────────────────────

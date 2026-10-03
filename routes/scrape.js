@@ -382,18 +382,26 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
 
     // Only finalize on the last chunk
     if (isFinal) {
-      await ExtractedLink.deleteMany({ uploadBatch: { $ne: batchId } });
-      const totalCount = await ExtractedLink.countDocuments({ uploadBatch: batchId });
+      const mergeMode = req.query.merge === 'true';
+      if (!mergeMode) {
+        // Replace mode: delete all other batches (fresh start)
+        await ExtractedLink.deleteMany({ uploadBatch: { $ne: batchId } });
+      }
+      // In merge mode: keep all existing batches — just count total across all
+      const totalCount = mergeMode
+        ? await ExtractedLink.countDocuments()
+        : await ExtractedLink.countDocuments({ uploadBatch: batchId });
       await PipelineCache.findOneAndUpdate(
         { key: 'extracted_links' },
-        { key: 'extracted_links', data: { batchId, count: totalCount }, count: totalCount, savedAt: new Date() },
+        { key: 'extracted_links', data: { batchId, count: totalCount, mergeMode }, count: totalCount, savedAt: new Date() },
         { upsert: true, new: true }
       );
       try { fs.unlinkSync(path.join(os.tmpdir(), 'links_for_bypasser.json')); } catch(_) {}
       try { fs.unlinkSync(path.join(os.tmpdir(), 'shortlinks_report.json')); } catch(_) {}
+      const modeNote = mergeMode ? ` [MERGE — total across all accounts: ${totalCount}]` : '';
       return res.json({
-        message: `[DONE] Extracted ${totalCount} links from ${messageCount || '?'} messages (${skipped || 0} skipped). Saved to MongoDB. Run Full Pipeline now.`,
-        count: totalCount, batchId,
+        message: `[DONE] Extracted ${totalCount} links from ${messageCount || '?'} messages (${skipped || 0} skipped)${modeNote}. Saved to MongoDB. Run Full Pipeline now.`,
+        count: totalCount, batchId, mergeMode,
       });
     }
 
