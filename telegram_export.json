@@ -1,8 +1,32 @@
 {
-  "exported_at": "2026-10-03T04:32:04.424Z",
+  "exported_at": "2026-10-03T06:09:10.216Z",
   "scrape_mode": "full",
-  "total_messages_collected": 31510,
+  "total_messages_collected": 31513,
   "messages": [
+    {
+      "id": 2100,
+      "type": "message",
+      "channel_id": 2640824484,
+      "channel_name": "NA MOVIES",
+      "date": "2026-10-03T05:47:58.000Z",
+      "text": ""
+    },
+    {
+      "id": 2099,
+      "type": "message",
+      "channel_id": 2640824484,
+      "channel_name": "NA MOVIES",
+      "date": "2026-10-03T05:47:58.000Z",
+      "text": "New Future Request Movies Direct From Site"
+    },
+    {
+      "id": 2852,
+      "type": "message",
+      "channel_id": 3579217190,
+      "channel_name": "PVT - LRTX",
+      "date": "2026-10-03T04:56:47.000Z",
+      "text": ""
+    },
     {
       "id": 464,
       "type": "message",
@@ -1185,7 +1209,7 @@
       "channel_id": 2640824484,
       "channel_name": "NA MOVIES",
       "date": "2026-10-01T18:58:24.000Z",
-      "text": "Bethlehem.Kudumba.Unit.2026.Multi.2160p.WEB-DL.x265.DDP.5.1-14GB.ESub-NaMovies.mkv [14 GB] \nhttps://gdflix.dev/file/8hGVgPO4NI2D5VX\n\nBethlehem.Kudumba.Unit.2026.Multi.1080p.WEB-DL.x265.DDP.5.1-5.67GB.ESub-NaMovies.mkv [5.67 GB] \nhttps://gdflix.dev/file/bIkrQKEFq35VJcb\n\nTelugu\n\nBethlehem Kudumba Unit 2026 Telugu - 2160p - WEB-DL - x265 - DDP 5.1 - 12GB - ESub~S95.mkv\nhttps://gofile.io/d/WeX3iOaQ"
+      "text": "Bethlehem.Kudumba.Unit.2026.Multi.2160p.WEB-DL.x265.DDP.5.1-14GB.ESub-NaMovies.mkv [14 GB] \nhttps://gdflix.dev/file/8hGVgPO4NI2D5VX\n\nBethlehem.Kudumba.Unit.2026.Multi.1080p.WEB-DL.x265.DDP.5.1-5.67GB.ESub-NaMovies.mkv [5.67 GB] \nhttps://gdflix.dev/file/bIkrQKEFq35VJcb\n\nBethlehem.Kudumba.Unit.2026.1080p.HS.WEB-DL.MULTI.DDP5.1.Atmos.H.264-Friday4KPopcorn.mkv [5.14 GB] \nhttps://gdflix.dev/file/Cgrn5ka1ii016el\n\nBethlehem.Kudumba.Unit.2026.720p.HS.WEB-DL.MULTI.DDP5.1.Atmos.H.265-Friday4KPopcorn.mkv [2.4 GB] \nhttps://gdflix.dev/file/a77JOSgXgVqizIC\n\nBethlehem.Kudumba.Unit.2026.720p.HS.WEB-DL.MULTI.DDP5.1.H.265-Friday4KPopcorn.mkv [1.78 GB] \nhttps://gdflix.dev/file/yyM6MBi3gNp3XWj\n\n\nTelugu\n\nBethlehem Kudumba Unit 2026 Telugu - 2160p - WEB-DL - x265 - DDP 5.1 - 12GB - ESub~S95.mkv\nhttps://gofile.io/d/WeX3iOaQ"
     },
     {
       "id": 808,

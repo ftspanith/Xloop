@@ -296,6 +296,8 @@ async function uploadExport(token, mergeMode = false) {
 
   // ── Upload in chunks of 400 links (~150-250KB each, well under 4.5MB limit) ──
   const CHUNK = 400;
+  const MAX_RETRIES = 4;   // retry up to 4× on 503/timeout
+  const RETRY_DELAY_MS = 4000;
   const modeQs = mergeMode ? '&merge=true' : '';
   let batchId   = null;
   let totalSent = 0;
@@ -305,8 +307,26 @@ async function uploadExport(token, mergeMode = false) {
     const isFinal = i + CHUNK >= allLinks.length;
     const body    = { links: chunk, batchId, isFinal,
       messageCount: dedupedMsgs.length, skipped };
-    const res = await apiRequest('POST', `/api/scrape/save-extracted?${modeQs}`, body, token);
-    if (res.status !== 200) throw new Error(`Chunk upload failed (${res.status}): ${JSON.stringify(res.body)}`);
+
+    let res = null;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        res = await apiRequest('POST', `/api/scrape/save-extracted?${modeQs}`, body, token);
+        if (res.status === 200) break;   // success
+        if (res.status === 503 || res.status === 504 || res.status === 502) {
+          warn(`\nChunk ${Math.floor(i/CHUNK)+1}: Server busy (${res.status}), retry ${attempt}/${MAX_RETRIES} in ${RETRY_DELAY_MS/1000}s...`);
+          await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+        } else {
+          throw new Error(`Chunk upload failed (${res.status}): ${JSON.stringify(res.body)}`);
+        }
+      } catch (networkErr) {
+        if (attempt === MAX_RETRIES) throw networkErr;
+        warn(`\nChunk ${Math.floor(i/CHUNK)+1}: Network error, retry ${attempt}/${MAX_RETRIES}...`);
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+      }
+    }
+    if (!res || res.status !== 200) throw new Error(`Chunk upload failed after ${MAX_RETRIES} retries: ${JSON.stringify(res && res.body)}`);
+
     if (!batchId && res.body.batchId) batchId = res.body.batchId;
     totalSent += chunk.length;
     process.stdout.write(`\r${c.cyan}[xloop]${c.reset} Uploaded ${totalSent}/${allLinks.length} links...`);
@@ -352,16 +372,47 @@ async function triggerPipeline(token) {
   }
 }
 
+// ── Sync history helpers ──────────────────────────────────────────────────────
+const SYNC_FILE = path.join(__dirname, 'scrape_sync.json');
+
+function loadSyncHistory() {
+  try { return JSON.parse(fs.readFileSync(SYNC_FILE, 'utf8')); } catch { return {}; }
+}
+
+function saveSyncHistory(acc, extra = {}) {
+  const history = loadSyncHistory();
+  const now = new Date();
+  history[`acc${acc}`] = {
+    date: now.toISOString(),
+    dateHuman: now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }),
+    ...extra,
+  };
+  fs.writeFileSync(SYNC_FILE, JSON.stringify(history, null, 2));
+}
+
+function printSyncSummary() {
+  const history = loadSyncHistory();
+  console.log(`\n${c.bold}${c.cyan}━━━ SYNC STATUS ━━━${c.reset}`);
+  const acc1 = history.acc1;
+  const acc2 = history.acc2;
+  if (acc1) console.log(`  ${c.green}Acc 1 (Main):${c.reset}      Last synced ${c.bold}${acc1.dateHuman}${c.reset}  — ${acc1.links || '?'} links`);
+  else       console.log(`  ${c.yellow}Acc 1 (Main):${c.reset}      Never synced`);
+  if (acc2)  console.log(`  ${c.green}Acc 2 (Secondary):${c.reset} Last synced ${c.bold}${acc2.dateHuman}${c.reset}  — ${acc2.links || '?'} links`);
+  else       console.log(`  ${c.yellow}Acc 2 (Secondary):${c.reset} Never synced`);
+  console.log(`${c.cyan}━━━━━━━━━━━━━━━━━━━━━${c.reset}\n`);
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log(`
-${c.bold}${c.cyan}━━━ XLOOP ─ Scrape & Upload ━━━${c.reset}
-`);
+  console.log(`\n${c.bold}${c.cyan}━━━ XLOOP ─ Scrape & Upload ━━━${c.reset}\n`);
   console.log(`  Site:     ${SITE_URL}`);
   console.log(`  Account:  ${account === '2' ? 'Account 2 (rare channels, merge mode)' : 'Account 1 (primary)'}`);
   console.log(`  Mode:     ${uploadOnly ? 'Upload Only (skip scraper)' : MODE_LABELS[mode] || `Mode ${mode}`}`);
   console.log(`  Upload:   ${mergeMode ? 'MERGE (keeps existing account 1 data)' : 'REPLACE (wipes old data)'}`);
   console.log(`  Pipeline: ${noPipeline ? 'Manual (go to dashboard)' : 'Auto-trigger after upload'}\n`);
+
+  // Show previous sync history at the start
+  printSyncSummary();
 
   if (mergeMode && account === '2') {
     log('Merge mode: account 2 links will be ADDED to existing account 1 links.');
@@ -376,14 +427,19 @@ ${c.bold}${c.cyan}━━━ XLOOP ─ Scrape & Upload ━━━${c.reset}
     const token = await login();
 
     // Step 3: Upload (merge mode for account 2 — don't wipe account 1 data)
-    await uploadExport(token, mergeMode);
+    const { count: uploadedCount } = await uploadExport(token, mergeMode);
 
-    // Step 4: Pipeline
+    // Step 4: Save sync history
+    saveSyncHistory(account, { links: uploadedCount, mode });
+
+    // Step 5: Pipeline
     await triggerPipeline(token);
 
-    console.log(`\n${c.green}${c.bold}All done!${c.reset}`);
+    // Final summary
+    console.log(`\n${c.green}${c.bold}━━━ DONE ━━━${c.reset}`);
+    printSyncSummary();
     if (!noPipeline) {
-      console.log(`\nWatch the pipeline at: ${SITE_URL}/admin/dashboard.html\n`);
+      console.log(`Watch the pipeline at: ${SITE_URL}/admin/dashboard.html\n`);
     }
   } catch (err) {
     fail(err.message);

@@ -629,6 +629,8 @@
             Upload Accounts &amp; Run Pipeline
           </div>
           <div id="dashExportStatus" style="font-size:0.73rem; color:rgba(255,255,255,.45);">Checking status...</div>
+          <!-- Sync status badges -->
+          <div id="syncStatusRow" style="display:flex; gap:10px; margin-top:6px; flex-wrap:wrap;"></div>
         </div>
         <!-- Compact: only show single-file for quick re-uploads -->
         <div style="display:flex; gap:8px; align-items:center;">
@@ -1233,6 +1235,36 @@
         el.style.color = 'rgba(255,200,0,.8)';
         el.textContent = 'Not uploaded yet — choose a file to upload before running Full Pipeline';
       }
+    } catch(_) {}
+
+    // Also load sync timestamps
+    loadSyncStatus();
+  }
+
+  async function loadSyncStatus() {
+    try {
+      const token = localStorage.getItem('xloop_admin_token');
+      const res = await fetch('/api/scrape/sync-status', { headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      const row = document.getElementById('syncStatusRow');
+      if (!row) return;
+
+      function makeBadge(label, color, info) {
+        if (!info) {
+          return `<span style="font-size:0.7rem; display:flex; align-items:center; gap:5px; padding:3px 9px; border-radius:20px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:rgba(255,255,255,0.35);">
+            <span style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.2);flex-shrink:0;"></span>
+            ${label}: Never synced
+          </span>`;
+        }
+        return `<span style="font-size:0.7rem; display:flex; align-items:center; gap:5px; padding:3px 9px; border-radius:20px; background:rgba(${color},0.08); border:1px solid rgba(${color},0.25); color:rgba(255,255,255,0.8);" title="${info.links ? info.links.toLocaleString() + ' links uploaded' : ''}">
+          <span style="width:6px;height:6px;border-radius:50%;background:rgb(${color});flex-shrink:0;"></span>
+          <strong style="color:rgb(${color});">${label}</strong>: ${info.dateHuman || 'Unknown'}${info.links ? ' &middot; ' + Number(info.links).toLocaleString() + ' links' : ''}
+        </span>`;
+      }
+
+      row.innerHTML =
+        makeBadge('Acc 1', '229,9,20', data.acc1) +
+        makeBadge('Acc 2', '99,179,237', data.acc2);
     } catch(_) {}
   }
 

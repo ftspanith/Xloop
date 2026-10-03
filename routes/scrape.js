@@ -20,6 +20,20 @@ const EXPORT_FILE   = process.env.VERCEL ? path.join(os.tmpdir(), 'telegram_expo
 let _uploadAborted = false;
 module.exports.setUploadAborted = (v) => { _uploadAborted = v; };
 
+const SYNC_FILE = path.join(ROOT, 'scrape_sync.json');
+
+// ── GET /api/scrape/sync-status — return last sync timestamps ────────────────
+router.get('/sync-status', auth, (req, res) => {
+  try {
+    if (fs.existsSync(SYNC_FILE)) {
+      return res.json(JSON.parse(fs.readFileSync(SYNC_FILE, 'utf8')));
+    }
+    res.json({});
+  } catch (e) {
+    res.json({});
+  }
+});
+
 // ── GET /api/scrape/channels — return channel list (auth required) ────────
 router.get('/channels', auth, (req, res) => {
   res.json({
