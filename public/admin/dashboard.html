@@ -947,6 +947,8 @@
           if (!batchId) batchId=d.batchId;
         }
         _dashDStep(1,'done',`${links.length.toLocaleString()} links saved`);
+        // Record manual sync for Acc 1
+        fetch('/api/scrape/mark-sync', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ account:'1', source:'manual', links: links.length }) }).catch(()=>{});
       } catch(err) { _dashDStep(1,'error',err.message); btn.disabled=false; btn.style.opacity='1'; return; }
     } else { _dashDStep(1,'skip','no file'); }
 
@@ -971,6 +973,8 @@
           if (!batchId) batchId=d.batchId;
         }
         _dashDStep(2,'done',`${links.length.toLocaleString()} links merged`);
+        // Record manual sync for Acc 2
+        fetch('/api/scrape/mark-sync', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ account:'2', source:'manual', links: links.length }) }).catch(()=>{});
       } catch(err) { _dashDStep(2,'error',err.message); /* non-fatal, continue to pipeline */ }
     } else { _dashDStep(2,'skip','no file'); }
 
@@ -1249,17 +1253,32 @@
       const row = document.getElementById('syncStatusRow');
       if (!row) return;
 
-      function makeBadge(label, color, info) {
+      function makeBadge(accLabel, accentRgb, info) {
         if (!info) {
-          return `<span style="font-size:0.7rem; display:flex; align-items:center; gap:5px; padding:3px 9px; border-radius:20px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:rgba(255,255,255,0.35);">
-            <span style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.2);flex-shrink:0;"></span>
-            ${label}: Never synced
-          </span>`;
+          return `<div style="display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:9px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
+            <span style="width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,0.18);flex-shrink:0;"></span>
+            <span style="font-size:0.72rem;">
+              <span style="color:rgba(255,255,255,0.4);font-weight:700;">${accLabel}</span>
+              <span style="color:rgba(255,255,255,0.22);margin-left:4px;">— Never synced</span>
+            </span>
+          </div>`;
         }
-        return `<span style="font-size:0.7rem; display:flex; align-items:center; gap:5px; padding:3px 9px; border-radius:20px; background:rgba(${color},0.08); border:1px solid rgba(${color},0.25); color:rgba(255,255,255,0.8);" title="${info.links ? info.links.toLocaleString() + ' links uploaded' : ''}">
-          <span style="width:6px;height:6px;border-radius:50%;background:rgb(${color});flex-shrink:0;"></span>
-          <strong style="color:rgb(${color});">${label}</strong>: ${info.dateHuman || 'Unknown'}${info.links ? ' &middot; ' + Number(info.links).toLocaleString() + ' links' : ''}
-        </span>`;
+
+        const isAuto   = info.source === 'auto';
+        const srcLabel = isAuto ? 'Auto Synced' : 'Manual Upload';
+        const srcIcon  = isAuto
+          ? `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`
+          : `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`;
+
+        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 13px;border-radius:9px;background:rgba(${accentRgb},0.07);border:1px solid rgba(${accentRgb},0.25);" title="${info.links ? Number(info.links).toLocaleString() + ' links' : ''}">
+          <span style="width:7px;height:7px;border-radius:50%;background:rgb(${accentRgb});flex-shrink:0;box-shadow:0 0 5px rgba(${accentRgb},0.5);"></span>
+          <span style="font-size:0.72rem;line-height:1.6;">
+            <span style="font-weight:800;color:#fff;">${accLabel}</span>
+            <span style="display:inline-flex;align-items:center;gap:3px;margin:0 5px;padding:1px 7px;border-radius:10px;background:rgba(${accentRgb},0.15);font-size:0.66rem;font-weight:700;color:rgb(${accentRgb});">${srcIcon} ${srcLabel}</span>
+            <br>
+            <span style="color:rgba(255,255,255,0.45);font-size:0.69rem;">${info.dateHuman}${info.links ? ' &middot; ' + Number(info.links).toLocaleString() + ' links' : ''}</span>
+          </span>
+        </div>`;
       }
 
       row.innerHTML =

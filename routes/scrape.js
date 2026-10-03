@@ -34,6 +34,26 @@ router.get('/sync-status', auth, (req, res) => {
   }
 });
 
+// ── POST /api/scrape/mark-sync — record a sync event (called by dashboard UI) ─
+router.post('/mark-sync', auth, (req, res) => {
+  try {
+    const { account = '1', source = 'manual', links = 0 } = req.body || {};
+    let history = {};
+    try { history = JSON.parse(fs.readFileSync(SYNC_FILE, 'utf8')); } catch {}
+    const now = new Date();
+    history[`acc${account}`] = {
+      date: now.toISOString(),
+      dateHuman: now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }),
+      source, // 'auto' | 'manual'
+      links,
+    };
+    fs.writeFileSync(SYNC_FILE, JSON.stringify(history, null, 2));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── GET /api/scrape/channels — return channel list (auth required) ────────
 router.get('/channels', auth, (req, res) => {
   res.json({
