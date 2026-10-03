@@ -224,7 +224,9 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
              season: dl.season || null, episode: dl.episode || null };
   }
 
-  // ─ Flatten all (dl, link) → individual rows ─────────────────────────────
+  // ─ Flatten all (dl, link) → individual rows — one row per URL ─────────────
+  // Each URL is shown as its own download row.
+  // Filename is displayed on each row so different file variants are distinguishable.
   const rows = [];
   const seenUrls = new Set();
   const HOST_RANK = {'GDFlix':0,'HubCloud':1,'FilePress':2,'DTFlix':3,'TMBCloud':4,'Direct':5,'Download':6};
@@ -241,8 +243,8 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     if (info.platform) techParts.push(info.platform);
     const techTags = techParts.filter(Boolean).join(' · ');
 
-    // Cleaned display filename (strip inline size bracket)
-    let displayName = dl.filename || '';
+    // Cleaned display filename (strip inline size bracket — size shown separately)
+    let displayName = (dl.filename || '').trim();
     if (dl.size) displayName = displayName.replace(/\s*\[[\d.,]+ ?(GB|MB)\]\s*/gi, '').trim();
 
     dl.links.forEach(link => {
@@ -309,6 +311,30 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     return a.rank - b.rank;
   });
 
+  // ─ Mirror labeling: detect groups of rows with identical metadata ─────────
+  // When multiple rows have the same quality + size + techTags + lang,
+  // they are mirror servers for the same file. Label them "Mirror 1", "Mirror 2"...
+  // so users know to pick any one — NOT separate/different files.
+  // Different files (different quality/size/codec) keep their own distinct metadata.
+  const mirrorKeyCount = {};
+  const mirrorKeyIndex = {};
+  rows.forEach(r => {
+    const mk = [r.quality, r.size, r.techTags, r.lang || '', r.isMulti ? '1':'0', r.season??'', r.episode??''].join('|');
+    mirrorKeyCount[mk] = (mirrorKeyCount[mk] || 0) + 1;
+    r._mirrorKey = mk;
+  });
+  rows.forEach(r => {
+    const mk = r._mirrorKey;
+    if (mirrorKeyCount[mk] > 1) {
+      mirrorKeyIndex[mk] = (mirrorKeyIndex[mk] || 0) + 1;
+      r.mirrorIndex = mirrorKeyIndex[mk];
+      r.mirrorTotal = mirrorKeyCount[mk];
+    } else {
+      r.mirrorIndex = 0;
+      r.mirrorTotal = 1;
+    }
+  });
+
   // ─ Filter pills (only qualities that actually exist) ─────────────────────
   const quals = [...new Set(rows.map(r => r.quality))];
   const pillsHtml = quals.length > 1
@@ -345,6 +371,14 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       ? `<span class="dl-row-lang">${row.isMulti ? 'MULTI' : row.lang}</span>`
       : '';
 
+    // Mirror badge — shown only when multiple links share identical metadata (same file, different servers)
+    const mirrorBadge = row.mirrorIndex > 0
+      ? `<span class="dl-mirror-badge">Mirror ${row.mirrorIndex}</span>`
+      : '';
+
+    // Download button label — "Mirror N" for alternate servers, "Download" for unique files
+    const dlLabel = row.mirrorIndex > 0 ? `Mirror ${row.mirrorIndex}` : 'Download';
+
     return `
       <div class="dl-row" data-quality="${row.quality}">
         <div class="dl-row-info">
@@ -356,8 +390,10 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
             ${row.size ? `<span class="dl-dot">·</span><span class="dl-row-size">${row.size}</span>` : ''}
             ${hdrBadge}
             ${langBadge}
+            ${mirrorBadge}
           </div>
           ${row.techTags ? `<div class="dl-row-tags">${row.techTags}</div>` : ''}
+          ${row.displayName ? `<div class="dl-row-filename" title="${row.displayName.replace(/"/g,'&quot;')}">${row.displayName}</div>` : ''}
         </div>
         <div class="dl-row-actions">
           <button class="dl-copy-btn" title="Copy link" onclick="copyLink(this,\`${escapedCopy}\`)">
@@ -366,7 +402,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
           </button>
           <a href="${row.url}" target="_blank" rel="noopener noreferrer" class="dl-download-btn">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-            Download
+            ${dlLabel}
           </a>
         </div>
       </div>`;

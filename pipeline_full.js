@@ -742,7 +742,11 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
 
     const esc = (cleanTitle || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     let existing = null;
-    if (rep.year)  existing = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' }, year: rep.year });
+    // PRIMARY dedup: tmdbId hint from parser (fastest, avoids all title-variation duplicates)
+    if (rep.tmdbIdHint) existing = await Movie.findOne({ tmdbId: String(rep.tmdbIdHint) });
+    // SECONDARY: title+year exact match
+    if (!existing && rep.year && cleanTitle)  existing = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' }, year: rep.year });
+    // TERTIARY: title-only match (different years, same franchise name)
     if (!existing && cleanTitle) existing = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' } });
 
     let meta = {};
@@ -818,7 +822,11 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       const correctSeason = seasonFromFilename(item.filename) ?? item.season ?? null;
 
       let dbRec = existing;
-      if (!dbRec && meta.tmdbId) dbRec = await Movie.findOne({ tmdbId: meta.tmdbId });
+      // Re-check by tmdbId in case meta search found a different record than initial lookup
+      if (!dbRec && meta.tmdbId) dbRec = await Movie.findOne({ tmdbId: String(meta.tmdbId) });
+      // Last resort: title+year again (in case race condition between items in same group)
+      if (!dbRec && cleanTitle && rep.year) dbRec = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' }, year: rep.year });
+      if (!dbRec && cleanTitle) dbRec = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' } });
 
       const newDl = {
         quality, size, filename: item.filename || '', language, codec, hdr, audio,
