@@ -855,17 +855,22 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
             matchedIdx = j; break;
           }
 
-          // TIER 2 — Quality + size match: same quality AND size within 1% → same file
-          // Size comparison: tolerate up to 1% difference (50MB on a 5GB file)
-          // This handles "3.5GB" vs "3.51GB" or "1.21GB" vs "1.22GB" from different posts
+          // TIER 2 — Quality + size + codec match: same quality AND size within 1% AND same codec
+          // Size tolerance: 1% handles rounding differences between different Telegram posts
+          // Codec check prevents merging x264 720p 1.1GB with HEVC 720p 1.1GB (different encodes!)
+          // If codec is unknown on either side, skip codec check (avoid false negatives)
           const qualOk    = ex.quality === quality;
           const exMB      = toMB(ex.size);
           const bothKnown = newMB > 0 && exMB > 0;
           const pct       = bothKnown ? Math.abs(newMB - exMB) / Math.max(newMB, exMB) : 1;
           const sizeClose = bothKnown && pct < 0.01; // within 1%
+          const exCodec   = (ex.codec  || '').toLowerCase().trim();
+          const newCodec  = (codec     || '').toLowerCase().trim();
+          // Codecs must match IF both are known — prevents x264 merging with HEVC
+          const codecOk   = !exCodec || !newCodec || exCodec === newCodec;
 
-          if (qualOk && sizeClose) {
-            // Same quality + same size → same file. Update language if new one is more specific.
+          if (qualOk && sizeClose && codecOk) {
+            // Confirmed same file on different host — update language if new is more specific
             matchedIdx = j;
             if (language && language !== 'Multi' && (!ex.language || ex.language === 'Multi')) {
               ex.language = language;
