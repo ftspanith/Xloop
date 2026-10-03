@@ -632,33 +632,70 @@
           <!-- Sync status badges -->
           <div id="syncStatusRow" style="display:flex; gap:10px; margin-top:6px; flex-wrap:wrap;"></div>
         </div>
-        <!-- Compact: only show single-file for quick re-uploads -->
-        <div style="display:flex; gap:8px; align-items:center;">
-          <label for="dashExportFile" style="cursor:pointer; border:1px solid rgba(229,9,20,0.45); color:#e50914; padding:6px 12px; border-radius:6px; font-size:0.75rem; font-weight:600; display:flex; align-items:center; gap:5px; transition:background 0.2s;" onmouseover="this.style.background='rgba(229,9,20,0.1)'" onmouseout="this.style.background='transparent'">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            Acc 1 (replace)
-          </label>
-          <input type="file" id="dashExportFile" accept=".json" style="display:none;" onchange="dashPreviewExport(this)">
-          <label for="dashExportFile2" style="cursor:pointer; border:1px solid rgba(99,179,237,0.4); color:#63b3ed; padding:6px 12px; border-radius:6px; font-size:0.75rem; font-weight:600; display:flex; align-items:center; gap:5px; transition:background 0.2s;" onmouseover="this.style.background='rgba(99,179,237,0.08)'" onmouseout="this.style.background='transparent'">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            Acc 2 (merge)
-          </label>
-          <input type="file" id="dashExportFile2" accept=".json" style="display:none;" onchange="dashPreviewExport2(this)">
+      </div>
+
+      <!-- ── Per-account Source Selectors ── -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+
+        <!-- Acc 1 -->
+        <div style="background:rgba(229,9,20,0.06); border:1px solid rgba(229,9,20,0.2); border-radius:10px; padding:12px;">
+          <div style="font-size:0.75rem; font-weight:800; color:#e50914; margin-bottom:8px; display:flex; align-items:center; gap:5px;">
+            <span style="width:6px;height:6px;border-radius:50%;background:#e50914;display:inline-block;"></span> Acc 1 (replace)
+          </div>
+          <!-- Toggle -->
+          <div style="display:flex; gap:5px; margin-bottom:8px;" id="acc1SourceToggle">
+            <button onclick="setAccSource(1,'auto')" id="acc1BtnAuto"
+              style="flex:1;padding:5px 0;border-radius:6px;border:1px solid rgba(229,9,20,0.5);background:rgba(229,9,20,0.18);color:#e50914;font-size:0.7rem;font-weight:700;cursor:pointer;transition:all 0.2s;">
+              Auto Sync
+            </button>
+            <button onclick="setAccSource(1,'file')" id="acc1BtnFile"
+              style="flex:1;padding:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.35);font-size:0.7rem;font-weight:700;cursor:pointer;transition:all 0.2s;">
+              File Upload
+            </button>
+          </div>
+          <!-- File picker (hidden by default) -->
+          <div id="acc1FilePicker" style="display:none;">
+            <label for="dashExportFile" style="cursor:pointer; border:1px solid rgba(229,9,20,0.35); color:#e50914; padding:5px 10px; border-radius:6px; font-size:0.7rem; font-weight:600; display:flex; align-items:center; gap:5px; background:transparent; transition:background 0.2s;" onmouseover="this.style.background='rgba(229,9,20,0.1)'" onmouseout="this.style.background='transparent'">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Choose file...
+            </label>
+            <input type="file" id="dashExportFile" accept=".json" style="display:none;" onchange="dashPreviewExport(this)">
+            <span id="dashExportFileName" style="display:block; margin-top:5px; font-size:0.68rem; color:rgba(255,255,255,0.35);">No file selected</span>
+          </div>
+          <div id="acc1AutoInfo" style="font-size:0.68rem; color:rgba(255,255,255,0.35);">Uses existing auto-synced data</div>
+        </div>
+
+        <!-- Acc 2 -->
+        <div style="background:rgba(99,179,237,0.06); border:1px solid rgba(99,179,237,0.2); border-radius:10px; padding:12px;">
+          <div style="font-size:0.75rem; font-weight:800; color:#63b3ed; margin-bottom:8px; display:flex; align-items:center; gap:5px;">
+            <span style="width:6px;height:6px;border-radius:50%;background:#63b3ed;display:inline-block;"></span> Acc 2 (merge)
+          </div>
+          <!-- Toggle -->
+          <div style="display:flex; gap:5px; margin-bottom:8px;" id="acc2SourceToggle">
+            <button onclick="setAccSource(2,'auto')" id="acc2BtnAuto"
+              style="flex:1;padding:5px 0;border-radius:6px;border:1px solid rgba(99,179,237,0.5);background:rgba(99,179,237,0.18);color:#63b3ed;font-size:0.7rem;font-weight:700;cursor:pointer;transition:all 0.2s;">
+              Auto Sync
+            </button>
+            <button onclick="setAccSource(2,'file')" id="acc2BtnFile"
+              style="flex:1;padding:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.35);font-size:0.7rem;font-weight:700;cursor:pointer;transition:all 0.2s;">
+              File Upload
+            </button>
+          </div>
+          <!-- File picker (hidden by default) -->
+          <div id="acc2FilePicker" style="display:none;">
+            <label for="dashExportFile2" style="cursor:pointer; border:1px solid rgba(99,179,237,0.35); color:#63b3ed; padding:5px 10px; border-radius:6px; font-size:0.7rem; font-weight:600; display:flex; align-items:center; gap:5px; background:transparent; transition:background 0.2s;" onmouseover="this.style.background='rgba(99,179,237,0.1)'" onmouseout="this.style.background='transparent'">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Choose file...
+            </label>
+            <input type="file" id="dashExportFile2" accept=".json" style="display:none;" onchange="dashPreviewExport2(this)">
+            <span id="dashExportFileName2" style="display:block; margin-top:5px; font-size:0.68rem; color:rgba(255,255,255,0.35);">No file selected</span>
+          </div>
+          <div id="acc2AutoInfo" style="font-size:0.68rem; color:rgba(255,255,255,0.35);">Merges with existing auto-synced data</div>
         </div>
       </div>
 
-      <!-- File labels -->
-      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; font-size:0.75rem;">
-        <span id="dashExportFileName" style="color:rgba(255,255,255,.45); display:flex; align-items:center; gap:4px;">
-          <span style="color:#e50914; font-weight:700;">Acc1:</span> No file selected
-        </span>
-        <span id="dashExportFileName2" style="color:rgba(255,255,255,.45); display:flex; align-items:center; gap:4px;">
-          <span style="color:#63b3ed; font-weight:700;">Acc2:</span> No file selected (optional)
-        </span>
-      </div>
-
-      <!-- Main action button -->
-      <button id="dashUploadBtn" onclick="dashUploadBothAndRun()" style="display:none; background:linear-gradient(135deg,#2b6cb0,#3182ce); border:none; color:#fff; padding:9px 22px; border-radius:7px; cursor:pointer; font-weight:700; font-size:0.82rem; align-items:center; gap:7px; transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''">
+      <!-- Run button -->
+      <button id="dashUploadBtn" onclick="dashUploadBothAndRun()" style="background:linear-gradient(135deg,#2b6cb0,#3182ce); border:none; color:#fff; padding:9px 22px; border-radius:7px; cursor:pointer; font-weight:700; font-size:0.82rem; display:inline-flex; align-items:center; gap:7px; transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         Upload &amp; Start Pipeline
       </button>
@@ -684,6 +721,7 @@
 
       <div id="dashUploadMsg" style="margin-top:10px; font-size:0.78rem; display:none; padding:8px; background:rgba(255,255,255,0.05); border-radius:6px;"></div>
     </div>
+
 
     <!-- Big animated progress widget -->
     <div id="orchProgress">
@@ -917,7 +955,10 @@
   }
 
   async function dashUploadBothAndRun() {
-    if (!_dashRawFiles.length && !_dashRawFiles2.length) { alert('Select at least one JSON file.'); return; }
+    // Validate: if file mode selected, file must be chosen
+    if (_acc1Source === 'file' && !_dashRawFiles.length)  { alert('Acc 1 is set to File Upload — please choose a file first.'); return; }
+    if (_acc2Source === 'file' && !_dashRawFiles2.length) { alert('Acc 2 is set to File Upload — please choose a file first.'); return; }
+
     const btn = document.getElementById('dashUploadBtn');
     btn.disabled = true; btn.style.opacity = '0.7';
     document.getElementById('dashBothProgress').style.display = 'block';
@@ -926,8 +967,8 @@
     const token = localStorage.getItem('xloop_admin_token');
     const readFile = f => new Promise((res,rej) => { const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=()=>rej(new Error('Read error')); r.readAsText(f,'utf-8'); });
 
-    // ── Step 1: Upload Account 1 (replace) ────────────────────────────────────
-    if (_dashRawFiles.length) {
+    // ── Step 1: Account 1 ─────────────────────────────────────────────────────
+    if (_acc1Source === 'file' && _dashRawFiles.length) {
       _dashDStep(1,'running','parsing...');
       try {
         const text = await readFile(_dashRawFiles[0]);
@@ -947,13 +988,15 @@
           if (!batchId) batchId=d.batchId;
         }
         _dashDStep(1,'done',`${links.length.toLocaleString()} links saved`);
-        // Record manual sync for Acc 1
         fetch('/api/scrape/mark-sync', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ account:'1', source:'manual', links: links.length }) }).catch(()=>{});
       } catch(err) { _dashDStep(1,'error',err.message); btn.disabled=false; btn.style.opacity='1'; return; }
-    } else { _dashDStep(1,'skip','no file'); }
+    } else {
+      // Auto sync — skip upload, just note it
+      _dashDStep(1,'done', _acc1Source === 'auto' ? 'using auto-synced data' : 'skipped');
+    }
 
-    // ── Step 2: Upload Account 2 (merge) ──────────────────────────────────────
-    if (_dashRawFiles2.length) {
+    // ── Step 2: Account 2 ─────────────────────────────────────────────────────
+    if (_acc2Source === 'file' && _dashRawFiles2.length) {
       _dashDStep(2,'running','parsing...');
       try {
         const text = await readFile(_dashRawFiles2[0]);
@@ -973,10 +1016,11 @@
           if (!batchId) batchId=d.batchId;
         }
         _dashDStep(2,'done',`${links.length.toLocaleString()} links merged`);
-        // Record manual sync for Acc 2
         fetch('/api/scrape/mark-sync', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ account:'2', source:'manual', links: links.length }) }).catch(()=>{});
       } catch(err) { _dashDStep(2,'error',err.message); /* non-fatal, continue to pipeline */ }
-    } else { _dashDStep(2,'skip','no file'); }
+    } else {
+      _dashDStep(2,'done', _acc2Source === 'auto' ? 'using auto-synced data' : 'skipped');
+    }
 
     // ── Step 3: Trigger Full Pipeline ─────────────────────────────────────────
     _dashDStep(3,'running','starting...');
@@ -986,8 +1030,6 @@
         _dashDStep(3,'done','running on Vercel');
         document.getElementById('dashSafeClose').style.display = 'block';
         dashCheckExportStatus();
-        
-        // Wait 1 second then hook the orchestrator terminal to the stream
         setTimeout(syncOrchState2, 1000);
       } else {
         const d = await res.json().catch(()=>({}));
@@ -997,6 +1039,7 @@
 
     btn.disabled=false; btn.style.opacity='1';
   }
+
 
   // ── Client-side URL classifier (mirrors utils/parser.js classifyUrl) ────────
   const _IGNORE_RE = [/t\.me\//i,/telegram\.me\//i,/youtube\.com/i,/youtu\.be/i,/drive\.google\.com/i,/image\.tmdb\.org/i,/m\.media-amazon\.com/i,/hotstar/i,/jiohotstar\./i,/jiocinema\./i,/primevideo\./i,/netflix\./i,/play\.google\./i,/mxplayer\./i,/zee5\./i,/aha\.(video|in|com)/i,/sonyliv\./i,/x\.com/i,/twitter\.com/i,/instagram\.com/i,/facebook\.com/i,/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i];
@@ -1222,6 +1265,43 @@
       msg.style.color = '#ef4444';
       msg.textContent = `Failed: ${err.message}`;
     } finally { btn.disabled = false; }
+  }
+
+  // ── Per-account Source Selector ──────────────────────────────────────────────
+  var _acc1Source = 'auto', _acc2Source = 'auto';
+
+  function setAccSource(acc, source) {
+    if (acc === 1) {
+      _acc1Source = source;
+      var btnAuto = document.getElementById('acc1BtnAuto');
+      var btnFile = document.getElementById('acc1BtnFile');
+      var picker  = document.getElementById('acc1FilePicker');
+      var info    = document.getElementById('acc1AutoInfo');
+      if (source === 'auto') {
+        btnAuto.style.background = 'rgba(229,9,20,0.18)'; btnAuto.style.color = '#e50914'; btnAuto.style.borderColor = 'rgba(229,9,20,0.5)';
+        btnFile.style.background = 'transparent'; btnFile.style.color = 'rgba(255,255,255,0.35)'; btnFile.style.borderColor = 'rgba(255,255,255,0.1)';
+        picker.style.display = 'none'; info.style.display = 'block';
+      } else {
+        btnFile.style.background = 'rgba(229,9,20,0.18)'; btnFile.style.color = '#e50914'; btnFile.style.borderColor = 'rgba(229,9,20,0.5)';
+        btnAuto.style.background = 'transparent'; btnAuto.style.color = 'rgba(255,255,255,0.35)'; btnAuto.style.borderColor = 'rgba(255,255,255,0.1)';
+        picker.style.display = 'block'; info.style.display = 'none';
+      }
+    } else {
+      _acc2Source = source;
+      var btnAuto = document.getElementById('acc2BtnAuto');
+      var btnFile = document.getElementById('acc2BtnFile');
+      var picker  = document.getElementById('acc2FilePicker');
+      var info    = document.getElementById('acc2AutoInfo');
+      if (source === 'auto') {
+        btnAuto.style.background = 'rgba(99,179,237,0.18)'; btnAuto.style.color = '#63b3ed'; btnAuto.style.borderColor = 'rgba(99,179,237,0.5)';
+        btnFile.style.background = 'transparent'; btnFile.style.color = 'rgba(255,255,255,0.35)'; btnFile.style.borderColor = 'rgba(255,255,255,0.1)';
+        picker.style.display = 'none'; info.style.display = 'block';
+      } else {
+        btnFile.style.background = 'rgba(99,179,237,0.18)'; btnFile.style.color = '#63b3ed'; btnFile.style.borderColor = 'rgba(99,179,237,0.5)';
+        btnAuto.style.background = 'transparent'; btnAuto.style.color = 'rgba(255,255,255,0.35)'; btnAuto.style.borderColor = 'rgba(255,255,255,0.1)';
+        picker.style.display = 'block'; info.style.display = 'none';
+      }
+    }
   }
 
   async function dashCheckExportStatus() {
