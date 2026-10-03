@@ -28,7 +28,10 @@ require('dotenv').config();
 
 // ── Config ───────────────────────────────────────────────────
 const os = require('os');
-const EXPORT_FILE    = process.env.VERCEL ? path.join(os.tmpdir(), 'telegram_export.json') : path.join(__dirname, 'telegram_export.json');
+const accountArg     = process.argv.find(a => a.startsWith('--account='));
+const account        = accountArg ? accountArg.split('=')[1] : '1';
+const exportFileName = account === '2' ? 'telegram_export_2.json' : 'telegram_export.json';
+const EXPORT_FILE    = process.env.VERCEL ? path.join(os.tmpdir(), exportFileName) : path.join(__dirname, exportFileName);
 const PROGRESS_FILE  = process.env.VERCEL ? path.join(os.tmpdir(), '.scrape_progress.json') : path.join(__dirname, '.scrape_progress.json');
 const BATCH_SIZE     = 100;
 const PARALLEL_LIMIT = 3;      // max concurrent channels

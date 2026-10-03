@@ -47,13 +47,14 @@ const http        = require('http');
 const SITE_URL      = process.env.XLOOP_URL      || 'https://xloop-rose.vercel.app';
 const ADMIN_USER    = process.env.ADMIN_USERNAME  || 'admin';
 const ADMIN_PASS    = process.env.ADMIN_PASSWORD  || 'xloop@admin123';
-const EXPORT_FILE   = path.join(__dirname, 'telegram_export.json');
-const SCRAPE_SCRIPT = path.join(__dirname, 'scrape_api.js');
-
-// Parse CLI args
+// Parse CLI args (need to parse account early to set EXPORT_FILE)
 const rawArgs    = process.argv.slice(2);
 const getArg     = (name) => { const a = rawArgs.find(a => a.startsWith(`--${name}=`)); return a ? a.split('=').slice(1).join('=') : null; };
 const hasFlag    = (name) => rawArgs.includes(`--${name}`);
+
+const account       = getArg('account') || '1';
+const EXPORT_FILE   = path.join(__dirname, account === '2' ? 'telegram_export_2.json' : 'telegram_export.json');
+const SCRAPE_SCRIPT = path.join(__dirname, 'scrape_api.js');
 
 const uploadOnly  = hasFlag('upload-only');
 const noPipeline  = hasFlag('no-pipeline');
@@ -63,7 +64,6 @@ const days        = getArg('days')       || '1';
 const channels    = getArg('channels')   || 'all';
 const startDate   = getArg('start-date') || '';
 const endDate     = getArg('end-date')   || '';
-const account     = getArg('account')    || '1';   // 1 = primary, 2 = second account
 const mergeMode   = hasFlag('merge') || account === '2'; // account 2 always merges
 
 const MODE_LABELS = {

@@ -275,9 +275,18 @@
     </div>
 
     <!--  Generate Command  -->
-    <button id="startBtn" onclick="generateCommand()" style="margin-bottom:0;">
-      <span></span> Generate Command
-    </button>
+    <div style="display:flex; gap:12px; margin-bottom:0; align-items:stretch;">
+      <div style="flex-shrink:0; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:12px; padding:0 12px; display:flex; align-items:center; gap:8px;">
+        <label for="accountSelect" style="font-size:0.85rem; color:rgba(255,255,255,.6); font-weight:600;">Account:</label>
+        <select id="accountSelect" style="background:transparent; border:none; color:#fff; font-size:0.9rem; font-weight:700; outline:none; cursor:pointer;">
+          <option value="1" style="background:#141414;">Account 1 (Main)</option>
+          <option value="2" style="background:#141414;">Account 2 (Secondary)</option>
+        </select>
+      </div>
+      <button id="startBtn" onclick="generateCommand()" style="margin-bottom:0; flex:1;">
+        <span></span> Generate Command
+      </button>
+    </div>
 
     <!--  Command Output Panel  -->
     <div id="commandPanel" style="display:none; margin-top:20px;">
@@ -418,6 +427,7 @@
   function generateCommand() {
     const startDate = document.getElementById('startDateInput')?.value || '';
     const endDate   = document.getElementById('endDateInput')?.value   || '';
+    const acc       = document.getElementById('accountSelect')?.value  || '1';
 
     let cmd = 'node scrape-and-upload.js';
     let desc = '';
@@ -446,6 +456,11 @@
         cmd  += ' --mode=4';
         desc  = ' Fastest — only new messages since last scrape. Use for daily updates.';
         break;
+    }
+
+    if (acc === '2') {
+      cmd += ' --account=2';
+      desc += ' Uses Account 2 (merges automatically without wiping old links). Outputs to telegram_export_2.json';
     }
 
     document.getElementById('generatedCmd').textContent   = cmd;
