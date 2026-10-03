@@ -586,26 +586,67 @@
       <input id="scopeTitleInput" placeholder="e.g. Pushpa, RRR, KGF..." style="display:none; flex:1; min-width:180px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:6px; color:#fff; padding:6px 12px; font-size:0.8rem; outline:none;" oninput="" />
     </div>
 
-    <!-- ── Upload telegram_export.json ── -->
-    <div id="uploadExportPanel" style="margin: 16px 0; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid rgba(229,9,20,0.3); box-shadow: inset 0 2px 10px rgba(0,0,0,0.1);">
-      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <!-- ── Upload Both Accounts & Run Pipeline ── -->
+    <div id="uploadExportPanel" style="margin:16px 0; padding:18px; background:rgba(0,0,0,0.25); border-radius:12px; border:1px solid rgba(99,179,237,0.3); box-shadow:inset 0 2px 10px rgba(0,0,0,0.15);">
+      <!-- Header -->
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
         <div>
-          <div style="font-size:0.85rem; font-weight:700; color:#fff; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg>
-            telegram_export.json
+          <div style="font-size:0.87rem; font-weight:700; color:#fff; display:flex; align-items:center; gap:7px; margin-bottom:3px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#63b3ed" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload Accounts &amp; Run Pipeline
           </div>
-          <div id="dashExportStatus" style="font-size:0.75rem; color:rgba(255,255,255,.5);">Checking status...</div>
+          <div id="dashExportStatus" style="font-size:0.73rem; color:rgba(255,255,255,.45);">Checking status...</div>
         </div>
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <label for="dashExportFile" style="cursor:pointer; background:transparent; border:1px solid rgba(229,9,20,0.5); color:var(--primary, #e50914); padding:8px 16px; border-radius:6px; font-size:0.8rem; font-weight:600; white-space:nowrap; transition: all 0.2s ease; display:flex; align-items:center; gap:6px;" onmouseover="this.style.background='rgba(229,9,20,0.1)'" onmouseout="this.style.background='transparent'">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            Choose File
+        <!-- Compact: only show single-file for quick re-uploads -->
+        <div style="display:flex; gap:8px; align-items:center;">
+          <label for="dashExportFile" style="cursor:pointer; border:1px solid rgba(229,9,20,0.45); color:#e50914; padding:6px 12px; border-radius:6px; font-size:0.75rem; font-weight:600; display:flex; align-items:center; gap:5px; transition:background 0.2s;" onmouseover="this.style.background='rgba(229,9,20,0.1)'" onmouseout="this.style.background='transparent'">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Acc 1 (replace)
           </label>
-          <input type="file" id="dashExportFile" accept=".json" multiple style="display:none;" onchange="dashPreviewExport(this)">
-          <span id="dashExportFileName" style="font-size:0.75rem; color:rgba(255,255,255,.5); max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">No file selected</span>
-          <button id="dashUploadBtn" onclick="dashUploadExport()" style="display:none; background:var(--primary,#e50914); border:none; color:#fff; padding:8px 18px; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.8rem; white-space:nowrap; transition: background 0.2s ease;" onmouseover="this.style.background='#b20710'" onmouseout="this.style.background='var(--primary,#e50914)'">Upload to Server</button>
+          <input type="file" id="dashExportFile" accept=".json" style="display:none;" onchange="dashPreviewExport(this)">
+          <label for="dashExportFile2" style="cursor:pointer; border:1px solid rgba(99,179,237,0.4); color:#63b3ed; padding:6px 12px; border-radius:6px; font-size:0.75rem; font-weight:600; display:flex; align-items:center; gap:5px; transition:background 0.2s;" onmouseover="this.style.background='rgba(99,179,237,0.08)'" onmouseout="this.style.background='transparent'">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Acc 2 (merge)
+          </label>
+          <input type="file" id="dashExportFile2" accept=".json" style="display:none;" onchange="dashPreviewExport2(this)">
         </div>
       </div>
+
+      <!-- File labels -->
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; font-size:0.75rem;">
+        <span id="dashExportFileName" style="color:rgba(255,255,255,.45); display:flex; align-items:center; gap:4px;">
+          <span style="color:#e50914; font-weight:700;">Acc1:</span> No file selected
+        </span>
+        <span id="dashExportFileName2" style="color:rgba(255,255,255,.45); display:flex; align-items:center; gap:4px;">
+          <span style="color:#63b3ed; font-weight:700;">Acc2:</span> No file selected (optional)
+        </span>
+      </div>
+
+      <!-- Main action button -->
+      <button id="dashUploadBtn" onclick="dashUploadBothAndRun()" style="display:none; background:linear-gradient(135deg,#2b6cb0,#3182ce); border:none; color:#fff; padding:9px 22px; border-radius:7px; cursor:pointer; font-weight:700; font-size:0.82rem; align-items:center; gap:7px; transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Upload &amp; Start Pipeline
+      </button>
+
+      <!-- Step progress -->
+      <div id="dashBothProgress" style="margin-top:12px; display:none; font-size:0.78rem;">
+        <div id="dBothStep1" style="display:flex; align-items:center; gap:7px; margin-bottom:5px; color:rgba(255,255,255,.55);">
+          <span id="ds1icon">⬜</span> Account 1 upload (replace) <span id="ds1detail" style="margin-left:auto; font-size:0.72rem;"></span>
+        </div>
+        <div id="dBothStep2" style="display:flex; align-items:center; gap:7px; margin-bottom:5px; color:rgba(255,255,255,.55);">
+          <span id="ds2icon">⬜</span> Account 2 upload (merge) <span id="ds2detail" style="margin-left:auto; font-size:0.72rem;"></span>
+        </div>
+        <div id="dBothStep3" style="display:flex; align-items:center; gap:7px; color:rgba(255,255,255,.55);">
+          <span id="ds3icon">⬜</span> Starting Full Pipeline on Vercel <span id="ds3detail" style="margin-left:auto; font-size:0.72rem;"></span>
+        </div>
+      </div>
+
+      <!-- Safe-to-close banner -->
+      <div id="dashSafeClose" style="display:none; margin-top:14px; padding:12px 16px; background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.35); border-radius:8px; text-align:center;">
+        <div style="font-weight:800; color:#22c55e; font-size:0.95rem; margin-bottom:3px;">Pipeline running on Vercel</div>
+        <div style="color:rgba(255,255,255,.55); font-size:0.78rem;">Safe to close this page or your device.</div>
+      </div>
+
       <div id="dashUploadMsg" style="margin-top:10px; font-size:0.78rem; display:none; padding:8px; background:rgba(255,255,255,0.05); border-radius:6px;"></div>
     </div>
 
@@ -1012,21 +1053,118 @@
 
   // ── Upload export functions (inline in dashboard) ───────────────────────────
   // Store raw File objects — no FileReader needed
-  let _dashRawFiles = [];
+  let _dashRawFiles = [];   // acc1 (replace)
+  let _dashRawFiles2 = [];  // acc2 (merge)
 
   function dashPreviewExport(input) {
     _dashRawFiles = Array.from(input.files || []);
     if (!_dashRawFiles.length) return;
-    const totalMB = (_dashRawFiles.reduce((s, f) => s + f.size, 0) / 1024 / 1024).toFixed(1);
-    const label = _dashRawFiles.length === 1
-      ? `${_dashRawFiles[0].name} (${totalMB} MB)`
-      : `${_dashRawFiles.length} files (${totalMB} MB total)`;
-    document.getElementById('dashExportFileName').textContent = label;
-    document.getElementById('dashUploadBtn').style.display = 'inline-block';
-    const msg = document.getElementById('dashUploadMsg');
-    msg.style.display = 'block';
-    msg.style.color = 'rgba(255,255,255,.5)';
-    msg.textContent = `${_dashRawFiles.length} file(s) ready — click Upload to Server.`;
+    const mb = (_dashRawFiles[0].size / 1024 / 1024).toFixed(1);
+    const nameEl = document.getElementById('dashExportFileName');
+    nameEl.innerHTML = `<span style="color:#e50914;font-weight:700;">Acc1:</span> ${_dashRawFiles[0].name} (${mb} MB)`;
+    nameEl.style.color = '#fff';
+    document.getElementById('dashUploadBtn').style.display = 'inline-flex';
+    document.getElementById('dashUploadMsg').style.display = 'none';
+    document.getElementById('dashSafeClose').style.display = 'none';
+    document.getElementById('dashBothProgress').style.display = 'none';
+    // reset steps
+    ['ds1icon','ds2icon','ds3icon'].forEach(id => document.getElementById(id).textContent = '⬜');
+    ['ds1detail','ds2detail','ds3detail'].forEach(id => document.getElementById(id).textContent = '');
+    ['dBothStep1','dBothStep2','dBothStep3'].forEach(id => document.getElementById(id).style.color = 'rgba(255,255,255,.55)');
+  }
+
+  function dashPreviewExport2(input) {
+    _dashRawFiles2 = Array.from(input.files || []);
+    if (!_dashRawFiles2.length) return;
+    const mb = (_dashRawFiles2[0].size / 1024 / 1024).toFixed(1);
+    const nameEl = document.getElementById('dashExportFileName2');
+    nameEl.innerHTML = `<span style="color:#63b3ed;font-weight:700;">Acc2:</span> ${_dashRawFiles2[0].name} (${mb} MB)`;
+    nameEl.style.color = '#fff';
+    // Show button if acc1 not already picked but acc2 is picked
+    if (!_dashRawFiles.length) document.getElementById('dashUploadBtn').style.display = 'inline-flex';
+  }
+
+  function _dashDStep(n, state, detail='') {
+    const icons = { wait:'⬜', running:'🔄', done:'✅', skip:'⏭️', error:'❌' };
+    const colors = { wait:'rgba(255,255,255,.55)', running:'#fff', done:'#22c55e', skip:'rgba(255,255,255,.35)', error:'#ef4444' };
+    document.getElementById(`ds${n}icon`).textContent = icons[state]||'⬜';
+    document.getElementById(`dBothStep${n}`).style.color = colors[state]||'';
+    document.getElementById(`ds${n}detail`).textContent = detail;
+  }
+
+  async function dashUploadBothAndRun() {
+    if (!_dashRawFiles.length && !_dashRawFiles2.length) { alert('Select at least one JSON file.'); return; }
+    const btn = document.getElementById('dashUploadBtn');
+    btn.disabled = true; btn.style.opacity = '0.7';
+    document.getElementById('dashBothProgress').style.display = 'block';
+    document.getElementById('dashSafeClose').style.display = 'none';
+    document.getElementById('dashUploadMsg').style.display = 'none';
+    const token = localStorage.getItem('xloop_admin_token');
+    const readFile = f => new Promise((res,rej) => { const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=()=>rej(new Error('Read error')); r.readAsText(f,'utf-8'); });
+
+    // ── Step 1: Upload Account 1 (replace) ────────────────────────────────────
+    if (_dashRawFiles.length) {
+      _dashDStep(1,'running','parsing...');
+      try {
+        const text = await readFile(_dashRawFiles[0]);
+        let parsed; try { parsed = JSON.parse(text); } catch(e) { throw new Error('Invalid JSON'); }
+        const msgs = Array.isArray(parsed) ? parsed : (parsed.messages||[]);
+        const {links, skipped} = _parseMessages(msgs);
+        if (!links.length) throw new Error('No links found in Acc1 file');
+        const CHUNK=400, total=Math.ceil(links.length/CHUNK);
+        let batchId=null;
+        for (let ci=0;ci<total;ci++) {
+          _dashDStep(1,'running',`chunk ${ci+1}/${total}...`);
+          const chunk=links.slice(ci*CHUNK,(ci+1)*CHUNK);
+          const isFinal=ci===total-1;
+          const res = await fetch('/api/scrape/save-extracted',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
+          const d = await res.json().catch(()=>({}));
+          if (!res.ok) throw new Error(d.message||'Save failed');
+          if (!batchId) batchId=d.batchId;
+        }
+        _dashDStep(1,'done',`${links.length.toLocaleString()} links saved`);
+      } catch(err) { _dashDStep(1,'error',err.message); btn.disabled=false; btn.style.opacity='1'; return; }
+    } else { _dashDStep(1,'skip','no file'); }
+
+    // ── Step 2: Upload Account 2 (merge) ──────────────────────────────────────
+    if (_dashRawFiles2.length) {
+      _dashDStep(2,'running','parsing...');
+      try {
+        const text = await readFile(_dashRawFiles2[0]);
+        let parsed; try { parsed = JSON.parse(text); } catch(e) { throw new Error('Invalid JSON'); }
+        const msgs = Array.isArray(parsed) ? parsed : (parsed.messages||[]);
+        const {links, skipped} = _parseMessages(msgs);
+        if (!links.length) throw new Error('No links found in Acc2 file');
+        const CHUNK=400, total=Math.ceil(links.length/CHUNK);
+        let batchId=null;
+        for (let ci=0;ci<total;ci++) {
+          _dashDStep(2,'running',`chunk ${ci+1}/${total}...`);
+          const chunk=links.slice(ci*CHUNK,(ci+1)*CHUNK);
+          const isFinal=ci===total-1;
+          const res = await fetch('/api/scrape/save-extracted?merge=true',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
+          const d = await res.json().catch(()=>({}));
+          if (!res.ok) throw new Error(d.message||'Merge failed');
+          if (!batchId) batchId=d.batchId;
+        }
+        _dashDStep(2,'done',`${links.length.toLocaleString()} links merged`);
+      } catch(err) { _dashDStep(2,'error',err.message); /* non-fatal, continue to pipeline */ }
+    } else { _dashDStep(2,'skip','no file'); }
+
+    // ── Step 3: Trigger Full Pipeline ─────────────────────────────────────────
+    _dashDStep(3,'running','starting...');
+    try {
+      const res = await fetch('/api/orchestrator/start',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({skipScraper:true})});
+      if (res.ok || res.status===409) {
+        _dashDStep(3,'done','running on Vercel');
+        document.getElementById('dashSafeClose').style.display = 'block';
+        dashCheckExportStatus();
+      } else {
+        const d = await res.json().catch(()=>({}));
+        _dashDStep(3,'error',d.message||`HTTP ${res.status}`);
+      }
+    } catch(err) { _dashDStep(3,'error',err.message); }
+
+    btn.disabled=false; btn.style.opacity='1';
   }
 
   // ── Client-side URL classifier (mirrors utils/parser.js classifyUrl) ────────
