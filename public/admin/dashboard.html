@@ -486,16 +486,17 @@
       XLOOP Admin
       <button class="sidebar-close-btn" id="sidebarCloseBtn" onclick="closeMobileSidebar()" aria-label="Close menu"></button>
     </div>
-    <nav class="admin-nav">
+        <nav class="admin-nav">
       <a href="/admin/dashboard.html" class="active">Dashboard</a>
       <a href="/admin/add-movie.html">+ Add Movie</a>
       <a href="/admin/add-series.html">+ Add Series</a>
+      <a href="/admin/add-manual.html">Smart Add</a>
       <a href="/admin/bulk-import.html">Bulk Import</a>
       <a href="/admin/manager.html">Content Manager</a>
       <a href="/admin/fix-posters.html">Fix Posters</a>
-      <a href="/admin/scraper.html">Scraper</a>
       <a href="/admin/collection.html">Collection Master</a>
-      <a href="/" target="_blank" style="margin-top:auto;border-top:1px solid var(--border);border-radius:0;padding-top:16px;">View Site</a>
+      <a href="/admin/scraper.html">Scraper</a>
+      <a href="/" target="_blank" style="margin-top:auto;border-top:1px solid var(--border);border-radius:0;padding-top:16px;">View Site ↗</a>
       <a href="#" onclick="logout()" style="color:var(--red);">Logout</a>
     </nav>
   </aside>
@@ -870,218 +871,7 @@
       showToast('Deleted');
       loadDashboard();
     } catch (e) { showToast(e.message, true); }
-  };
-
-  // ── Terminal helpers ──────────────────────────────────────
-  const MAX_LOG_LINES = 100;
-
-  function appendLog(text) {
-    const term = document.getElementById('orchTerminalBody');
-    // Prune old lines to avoid memory bloat
-    while (term.children.length >= MAX_LOG_LINES) term.removeChild(term.firstChild);
-    const span = document.createElement('span');
-    span.className = 'orch-log ' + classifyLine(text);
-    span.textContent = text;
-    term.appendChild(span);
-    term.scrollTop = term.scrollHeight;
-  }
-
-  function classifyLine(t) {
-    if (/ERROR|Fatal:|failed with code [^0]/i.test(t))             return 'err';
-    if (/.*exit code 0|successfully|completed|healed/i.test(t))    return 'success';
-    if (/.*exit code [^0]|failed with code/i.test(t))              return 'err';
-    if (/Starting Master|ORCHESTRATOR\]|Starting:/i.test(t))       return 'highlight';
-    if (/^\[NEW\]/i.test(t))                                       return 'add';
-    if (/^\[MERGED\]/i.test(t))                                    return 'merge';
-    if (/^\[UPDATED\]/i.test(t))                                   return 'merge';
-    if (/Connected|Skipping|Ready|Wiping/i.test(t))                return 'sys';
-    return '';
-  }
-
-  async function clearTerm() {
-    document.getElementById('orchTerminalBody').innerHTML = '<span class="orch-log sys">Terminal cleared.</span>';
-    try {
-      await fetch('/api/orchestrator/clear-logs', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('xloop_admin_token')}` }
-      });
-    } catch (_) {}
-  }
-
-  // ── Badge & button state ──────────────────────────────────
-  function setLive(live) {
-    const badge    = document.getElementById('orchLiveStatus');
-    const btnStart = document.getElementById('btnStartOrch');
-    const btnManual= document.getElementById('btnStartOrchManual');
-    const btnHeal  = document.getElementById('btnHealDB');
-    
-    if (live) {
-      badge.className   = 'orch-status-badge live';
-      badge.innerHTML   = '<span class="dot"></span>Live';
-      if (btnStart)  btnStart.style.display  = 'none';
-      if (btnManual) btnManual.style.display = 'none';
-      if (btnHeal)   btnHeal.style.display   = 'none';
-    } else {
-      badge.className   = 'orch-status-badge';
-      badge.innerHTML   = '<span class="dot"></span>Offline';
-      if (btnStart)  btnStart.style.display  = 'flex';
-      if (btnManual) btnManual.style.display = 'flex';
-      if (btnHeal)   btnHeal.style.display   = 'flex';
-    }
-  }
-
-  function setBusy(busy) {
-    ['btnStartOrch','btnStartOrchManual','btnHealDB'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.disabled = busy;
-    });
-  }
-
-  // ── Orchestrator SSE ──────────────────────────────────────
-  let eventSource    = null;
-  let reconnectTimer = null;
-
-  function connectOrchestratorStream() {
-    if (eventSource) { eventSource.close(); eventSource = null; }
-    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-
-    eventSource = new EventSource('/api/orchestrator/stream');
-
-    eventSource.onopen = () => {
-      // Clear any lingering reconnect timer
-      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-    };
-
-    eventSource.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        const text = data.text || '';
-        appendLog(text);
-
-        // Sync badge based on key messages from broadcast()
-        if (/ Starting|Starting.*Pipeline|Wiping database/i.test(text)) setLive(true);
-        if (/ Pipeline finished| Healer finished| Stop requested| Pipeline error/i.test(text)) {
-          setLive(false);
-          syncOrchestratorStatus();
-        }
-      } catch (_) {}
-    };
-
-    // onerror fires on ANY transport error — DON'T set Offline immediately
-    // because transient network blips shouldn't kill the status badge.
-    // Instead, try to reconnect silently after 3 s.
-    eventSource.onerror = () => {
-      eventSource.close();
-      eventSource = null;
-      // Re-poll status immediately on disconnect so badge doesn't go stale
-      syncOrchestratorStatus();
-      reconnectTimer = setTimeout(connectOrchestratorStream, 3000);
-    };
-  }
-
-  // ── Sync status on page load + keep polling every 5s ────────────────────────────
-  async function syncOrchestratorStatus() {
-    try {
-      const res  = await fetch('/api/orchestrator/status');
-      if (!res.ok) return;
-      const data = await res.json();
-      setLive(!!data.running);
-    } catch (_) { /* server not reachable yet — leave as Offline */ }
-  }
-
-  // ── API helpers ───────────────────────────────────────────
-  async function startOrchestrator(skipScraper = false) {
-    setBusy(true);
-    const token = localStorage.getItem('xloop_admin_token');
-    const skipBypass = document.getElementById('chkSkipBypass')?.checked || false;
-
-    // Full pipeline via GET SSE (keeps connection open for long runs locally)
-    try {
-      appendLog(skipScraper ? 'Starting Skip Scraper Fast Loop...' : 'Starting Full Pipeline...');
-      if (window._pipelineES) { window._pipelineES.close(); }
-      window._pipelineES = new EventSource('/api/orchestrator/start?skipScraper=' + skipScraper + '&skipBypass=' + skipBypass + '&token=' + encodeURIComponent(token));
-      window._pipelineES.onmessage = (e) => {
-        try {
-          const ev = JSON.parse(e.data);
-          if (ev.text) appendLog(ev.text);
-          if (/Pipeline finished/i.test(ev.text || '')) { setLive(false); setBusy(false); window._pipelineES.close(); }
-        } catch(_) {}
-      };
-      window._pipelineES.onerror = () => {
-        // Only log error if not explicitly closed
-        if (window._pipelineES.readyState !== 2) {
-          appendLog(' Connection to live log stream lost.');
-        }
-        window._pipelineES.close();
-      };
-      setLive(true);
-    } catch(e) {
-      appendLog(` Error: ${e.message}`);
-      showToast(e.message, true);
-    }
-    setBusy(false);
-  }
-
-
-  async function healDatabaseOnly() {
-    setBusy(true);
-    try {
-      appendLog('Sending heal command...');
-      const res = await fetch('/api/orchestrator/heal', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('xloop_admin_token')}` }
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || data.message || 'Failed to heal');
-      appendLog(' API accepted heal request. Waiting for logs...');
-      setLive(true);
-    } catch (e) {
-      appendLog(` Error: ${e.message}`);
-      showToast(e.message, true);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function stopOrchestrator() {
-    setBusy(true);
-    try {
-      const res = await fetch('/api/orchestrator/stop', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('xloop_admin_token')}` }
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || data.message || 'Failed to stop');
-      appendLog(' API accepted stop request.');
-      setLive(false);
-    } catch (e) {
-      appendLog(` Error: ${e.message}`);
-      showToast(e.message, true);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function confirmWipe() {
-    if (!confirm('DANGER: Wipe the ENTIRE database? This cannot be undone.')) return;
-    setBusy(true);
-    try {
-      appendLog('Sending wipe command...');
-      const res = await fetch('/api/orchestrator/wipe', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('xloop_admin_token')}` }
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || data.message || 'Failed to wipe');
-      appendLog(' API accepted wipe request. Waiting for logs...');
-      setLive(true);
-    } catch (e) {
-      appendLog(` Error: ${e.message}`);
-      showToast(e.message, true);
-    } finally {
-      setBusy(false);
-    }
-  }
+  // Removed orphaned code block from localhost.html
 
   // ── Upload export functions (inline in dashboard) ───────────────────────────
   // Store raw File objects — no FileReader needed
@@ -1190,6 +980,9 @@
         _dashDStep(3,'done','running on Vercel');
         document.getElementById('dashSafeClose').style.display = 'block';
         dashCheckExportStatus();
+        
+        // Wait 1 second then hook the orchestrator terminal to the stream
+        setTimeout(syncOrchState2, 1000);
       } else {
         const d = await res.json().catch(()=>({}));
         _dashDStep(3,'error',d.message||`HTTP ${res.status}`);
@@ -1679,6 +1472,24 @@
     try { await fetch('/api/orchestrator/clear-logs', { method:'POST', headers:{'Authorization':'Bearer '+getToken()} }); } catch(_) {}
   }
 
+  async function healDatabaseOnly() {
+    try {
+      clearLog2();
+      setStatus2('running', 'HEALING DB');
+      appendLog2('Sending heal command...');
+      const res = await fetch('/api/orchestrator/heal', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || data.message || 'Failed to heal');
+      appendLog2(' API accepted heal request. Logs stream via EventSource...');
+    } catch (e) {
+      appendLog2(` Error: ${e.message}`);
+      setStatus2('error', 'HEAL ERROR');
+    }
+  }
+
   async function startPipeline2(resume = false) {
     if (_isRunning2) return;
     _isRunning2 = true; _cAdded2 = 0; _cUpdated2 = 0;
@@ -1779,28 +1590,30 @@
   }
 
   // Init: check if already running
-  (async function initOrch2() {
+  async function syncOrchState2() {
     try {
       const res = await fetch('/api/orchestrator/status');
       if (!res.ok) return;
       const { running, offset, total, label } = await res.json();
       if (total > 0) updateProgress2(offset || 0, total);
-      if (running) {
+      if (running && !_isRunning2) {
         _isRunning2 = true;
         setStatus2('running', label ? 'RUNNING — ' + label : 'RUNNING');
         document.getElementById('startBtn2').disabled = true;
         document.getElementById('stopBtn2').disabled = false;
         document.getElementById('wipeBtn2').disabled = true;
-        appendLog2('[INFO] Pipeline already running — reconnecting...');
+        appendLog2('[INFO] Pipeline running — streaming logs...');
+        if (_evSrc2) _evSrc2.close();
         _evSrc2 = new EventSource('/api/orchestrator/stream');
         _evSrc2.onmessage = (e) => { try { const ev = JSON.parse(e.data); if (ev.text) { appendLog2(ev.text); if (/Pipeline finished/i.test(ev.text)) onFinished2(ev.text); } } catch(_) {} };
-      } else if (total > 0 && offset < total) {
+      } else if (!running && total > 0 && offset < total) {
         document.getElementById('continueBtn2').textContent = 'Continue from group ' + offset.toLocaleString() + ' / ' + total.toLocaleString();
         document.getElementById('continueBtn2').classList.add('visible');
         setStatus2('fail', 'STOPPED — click Continue');
       }
     } catch(_) {}
-  })();
+  }
+  syncOrchState2();
 
 </script>
 

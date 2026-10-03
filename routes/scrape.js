@@ -381,19 +381,32 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
 
     // Use provided batchId (subsequent chunks) or create new one (first chunk)
     const batchId = incomingBatchId || `batch_${Date.now()}`;
+    const mergeMode = req.query.merge === 'true';
 
     // Tag and insert this chunk
     links.forEach(e => { e.uploadBatch = batchId; });
     if (links.length > 0) {
       const CHUNK = 500;
       for (let i = 0; i < links.length; i += CHUNK) {
-        await ExtractedLink.insertMany(links.slice(i, i + CHUNK), { ordered: false });
+        const slice = links.slice(i, i + CHUNK);
+        if (mergeMode) {
+          // Merge mode: skip URLs that already exist in the database
+          const incomingUrls = slice.map(l => l.url);
+          const existing = await ExtractedLink.find({ url: { $in: incomingUrls } }).select('url').lean();
+          const existingUrls = new Set(existing.map(e => e.url));
+          const uniqueLinks = slice.filter(l => !existingUrls.has(l.url));
+          if (uniqueLinks.length > 0) {
+            await ExtractedLink.insertMany(uniqueLinks, { ordered: false });
+          }
+        } else {
+          // Replace mode: insert everything
+          await ExtractedLink.insertMany(slice, { ordered: false });
+        }
       }
     }
 
     // Only finalize on the last chunk
     if (isFinal) {
-      const mergeMode = req.query.merge === 'true';
       if (!mergeMode) {
         // Replace mode: delete all other batches (fresh start)
         await ExtractedLink.deleteMany({ uploadBatch: { $ne: batchId } });

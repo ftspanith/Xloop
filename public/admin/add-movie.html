@@ -10,16 +10,19 @@
   <div class="admin-layout">
     <aside class="admin-sidebar" id="adminSidebar">
       <div class="admin-logo"><button class="sidebar-close-btn" onclick="closeMobileSidebar()" aria-label="Close menu"></button></div>
-      <nav class="admin-nav">
-        <a href="/admin/dashboard.html">Dashboard</a>
-        <a href="/admin/add-movie.html" class="active">+ Add Movie</a>
-        <a href="/admin/add-series.html">+ Add Series</a>
-        <a href="/admin/fix-posters.html"> Fix Posters</a>
-        <a href="/admin/scraper.html"> Scraper</a>
+          <nav class="admin-nav">
+      <a href="/admin/dashboard.html">Dashboard</a>
+      <a href="/admin/add-movie.html" class="active">+ Add Movie</a>
+      <a href="/admin/add-series.html">+ Add Series</a>
+      <a href="/admin/add-manual.html">Smart Add</a>
+      <a href="/admin/bulk-import.html">Bulk Import</a>
+      <a href="/admin/manager.html">Content Manager</a>
+      <a href="/admin/fix-posters.html">Fix Posters</a>
       <a href="/admin/collection.html">Collection Master</a>
-        <a href="/" target="_blank" style="margin-top:auto; border-top:1px solid var(--border); border-radius:0; padding-top:16px;">View Site ↗</a>
-        <a href="#" onclick="logout()" style="color:var(--red);">Logout</a>
-      </nav>
+      <a href="/admin/scraper.html">Scraper</a>
+      <a href="/" target="_blank" style="margin-top:auto;border-top:1px solid var(--border);border-radius:0;padding-top:16px;">View Site ↗</a>
+      <a href="#" onclick="logout()" style="color:var(--red);">Logout</a>
+    </nav>
     </aside>
     
     <main class="admin-content">
@@ -292,6 +295,7 @@
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
     Dashboard
   </a>
+  <a href="/admin/dashboard.html" id="bnav-orchestrator">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
     Pipeline
   </a>
@@ -308,6 +312,28 @@
     Import
   </a>
 </nav>
+<script>
+(function(){
+  var path = window.location.pathname;
+  var map = {
+    'dashboard': 'bnav-dashboard',
+    'orchestrator': 'bnav-orchestrator',
+    'manager': 'bnav-manager',
+    'fix-posters': 'bnav-posters',
+    'bulk-import': 'bnav-import',
+    'scraper': 'bnav-orchestrator',
+    'add-movie': 'bnav-manager',
+    'add-series': 'bnav-manager'
+  };
+  for (var key in map) {
+    if (path.indexOf(key) !== -1) {
+      var el = document.getElementById(map[key]);
+      if (el) el.classList.add('active');
+      break;
+    }
+  }
+})();
+</script>
 <script>
 (function(){
   var path = window.location.pathname;
