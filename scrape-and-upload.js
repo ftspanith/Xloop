@@ -429,8 +429,16 @@ async function main() {
     // Step 3: Upload (merge mode for account 2 — don't wipe account 1 data)
     const { count: uploadedCount } = await uploadExport(token, mergeMode);
 
-    // Step 4: Save sync history
-    saveSyncHistory(account, { links: uploadedCount, mode });
+    // Step 4: Save sync history — locally AND on Vercel (so dashboard badges update)
+    saveSyncHistory(account, { links: uploadedCount, mode, source: 'auto' });
+    try {
+      const syncRes = await apiRequest('POST', '/api/scrape/mark-sync', {
+        account,
+        source: 'auto',
+        links: uploadedCount,
+      }, token);
+      if (syncRes.status === 200) ok(`Sync status saved to dashboard (Acc ${account}: ${uploadedCount} links)`);
+    } catch (e) { warn(`Could not update dashboard sync status: ${e.message}`); }
 
     // Step 5: Pipeline
     await triggerPipeline(token);

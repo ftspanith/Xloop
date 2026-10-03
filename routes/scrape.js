@@ -20,34 +20,57 @@ const EXPORT_FILE   = process.env.VERCEL ? path.join(os.tmpdir(), 'telegram_expo
 let _uploadAborted = false;
 module.exports.setUploadAborted = (v) => { _uploadAborted = v; };
 
-const SYNC_FILE = path.join(ROOT, 'scrape_sync.json');
+// ── Sync status helpers — stored in MongoDB so they persist on Vercel ────────
+const SYNC_CACHE_KEY = '_scrape_sync_status';
+
+async function getSyncStatus() {
+  try {
+    const PipelineCache = require('../models/PipelineCache');
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1)
+      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+    const doc = await PipelineCache.findOne({ key: SYNC_CACHE_KEY }).lean();
+    return doc && doc.data ? doc.data : {};
+  } catch { return {}; }
+}
+
+async function saveSyncStatus(history) {
+  try {
+    const PipelineCache = require('../models/PipelineCache');
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1)
+      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+    await PipelineCache.findOneAndUpdate(
+      { key: SYNC_CACHE_KEY },
+      { $set: { data: history, updatedAt: new Date() } },
+      { upsert: true }
+    );
+  } catch { /* non-critical */ }
+}
 
 // ── GET /api/scrape/sync-status — return last sync timestamps ────────────────
-router.get('/sync-status', auth, (req, res) => {
+router.get('/sync-status', auth, async (req, res) => {
   try {
-    if (fs.existsSync(SYNC_FILE)) {
-      return res.json(JSON.parse(fs.readFileSync(SYNC_FILE, 'utf8')));
-    }
-    res.json({});
+    const data = await getSyncStatus();
+    res.json(data);
   } catch (e) {
     res.json({});
   }
 });
 
-// ── POST /api/scrape/mark-sync — record a sync event (called by dashboard UI) ─
-router.post('/mark-sync', auth, (req, res) => {
+// ── POST /api/scrape/mark-sync — record a sync event ─────────────────────────
+router.post('/mark-sync', auth, async (req, res) => {
   try {
     const { account = '1', source = 'manual', links = 0 } = req.body || {};
-    let history = {};
-    try { history = JSON.parse(fs.readFileSync(SYNC_FILE, 'utf8')); } catch {}
+    const history = await getSyncStatus();
     const now = new Date();
     history[`acc${account}`] = {
       date: now.toISOString(),
       dateHuman: now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }),
       source, // 'auto' | 'manual'
-      links,
+      links: Number(links),
     };
-    fs.writeFileSync(SYNC_FILE, JSON.stringify(history, null, 2));
+    await saveSyncStatus(history);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
