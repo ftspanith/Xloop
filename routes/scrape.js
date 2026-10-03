@@ -48,8 +48,8 @@ async function saveSyncStatus(history) {
   } catch { /* non-critical */ }
 }
 
-// ── GET /api/scrape/sync-status — return last sync timestamps ────────────────
-router.get('/sync-status', auth, async (req, res) => {
+// ── GET /api/scrape/sync-status — return last sync timestamps (public, read-only) ────────────────
+router.get('/sync-status', async (req, res) => {
   try {
     const data = await getSyncStatus();
     res.json(data);
@@ -57,6 +57,7 @@ router.get('/sync-status', auth, async (req, res) => {
     res.json({});
   }
 });
+
 
 // ── POST /api/scrape/mark-sync — record a sync event ─────────────────────────
 router.post('/mark-sync', auth, async (req, res) => {

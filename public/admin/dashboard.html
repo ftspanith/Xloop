@@ -1250,8 +1250,7 @@
 
   async function loadSyncStatus() {
     try {
-      const token = localStorage.getItem('xloop_admin_token');
-      const res = await fetch('/api/scrape/sync-status', { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await fetch('/api/scrape/sync-status');
       const data = await res.json();
       const row = document.getElementById('syncStatusRow');
       if (!row) return;
@@ -1742,6 +1741,33 @@
   }
 })();
 </script>
+
+<script>
+  // Load sync badges immediately on page load — no auth needed (endpoint is public)
+  window.addEventListener('DOMContentLoaded', function() {
+    fetch('/api/scrape/sync-status')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var row = document.getElementById('syncStatusRow');
+        if (!row) return;
+        function badge(label, rgb, info) {
+          if (!info) return '<div style="display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:9px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);"><span style="width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,0.18);flex-shrink:0;"></span><span style="font-size:0.72rem;color:rgba(255,255,255,0.4);">' + label + ' <span style="color:rgba(255,255,255,0.22);">— Never synced</span></span></div>';
+          var isAuto = info.source === 'auto';
+          var srcLabel = isAuto ? 'Auto Synced' : 'Manual Upload';
+          var links = info.links ? ' &middot; ' + Number(info.links).toLocaleString() + ' links' : '';
+          return '<div style="display:flex;align-items:center;gap:8px;padding:7px 13px;border-radius:9px;background:rgba(' + rgb + ',0.07);border:1px solid rgba(' + rgb + ',0.25);"><span style="width:7px;height:7px;border-radius:50%;background:rgb(' + rgb + ');flex-shrink:0;box-shadow:0 0 5px rgba(' + rgb + ',0.5);"></span><span style="font-size:0.72rem;line-height:1.6;"><span style="font-weight:800;color:#fff;">' + label + '</span><span style="display:inline-flex;align-items:center;gap:3px;margin:0 5px;padding:1px 7px;border-radius:10px;background:rgba(' + rgb + ',0.15);font-size:0.66rem;font-weight:700;color:rgb(' + rgb + ');">' + srcLabel + '</span><br><span style="color:rgba(255,255,255,0.45);font-size:0.69rem;">' + info.dateHuman + links + '</span></span></div>';
+        }
+        row.innerHTML = badge('Acc 1', '229,9,20', data.acc1) + badge('Acc 2', '99,179,237', data.acc2);
+        var status = document.getElementById('dashExportStatus');
+        if (status && status.textContent === 'Checking status...') {
+          status.style.color = 'rgba(255,255,255,0.3)';
+          status.textContent = 'Ready';
+        }
+      })
+      .catch(function() {});
+  });
+</script>
+
 
 
 <!-- Wipe Confirm Modal -->
