@@ -229,50 +229,92 @@ router.post('/upload-export', auth, upload.array('files', 10), async (req, res) 
     // ── Save to ExtractedLink collection (one doc per link — no 16MB limit) ──
     // Each upload gets a batch ID so we can atomically replace the previous batch.
     const ExtractedLink = require('../models/ExtractedLink');
+    const mergeMode = req.query.merge === 'true'; // ?merge=true = add to existing (multi-account)
     const batchId = `batch_${Date.now()}`;
 
+    // In merge mode: filter out URLs already stored in any existing batch
+    // This prevents exact-duplicate URLs from being saved twice across accounts.
+    // Different URL for same file (mirror on different host) IS kept — pipeline handles slot merge.
+    let linksToSave = allLinks;
+    if (mergeMode) {
+      // Get all URLs already stored so we can skip exact duplicates
+      const existingUrls = new Set(
+        (await ExtractedLink.find({}, 'url').lean()).map(d => d.url)
+      );
+      const before = linksToSave.length;
+      linksToSave = linksToSave.filter(e => !existingUrls.has(e.url));
+      const skippedDupes = before - linksToSave.length;
+      if (skippedDupes > 0) console.log(`[merge] Skipped ${skippedDupes} exact-duplicate URLs from previous account`);
+    }
+
     // Tag all entries with this batch ID
-    allLinks.forEach(e => { e.uploadBatch = batchId; });
+    linksToSave.forEach(e => { e.uploadBatch = batchId; });
 
     // Insert new batch in chunks of 500
     const CHUNK = 500;
-    for (let i = 0; i < allLinks.length; i += CHUNK) {
-      await ExtractedLink.insertMany(allLinks.slice(i, i + CHUNK), { ordered: false });
+    for (let i = 0; i < linksToSave.length; i += CHUNK) {
+      await ExtractedLink.insertMany(linksToSave.slice(i, i + CHUNK), { ordered: false });
     }
 
-    // Delete all previous batches (keep only the new one)
-    await ExtractedLink.deleteMany({ uploadBatch: { $ne: batchId } });
+    // In REPLACE mode (default): delete all previous batches — fresh start
+    // In MERGE mode: keep all existing batches — accumulate across accounts
+    if (!mergeMode) {
+      await ExtractedLink.deleteMany({ uploadBatch: { $ne: batchId } });
+    }
 
-    // Save a small metadata record in PipelineCache (just count + batchId, no data)
+    // Update PipelineCache with total link count (across ALL batches in merge mode)
+    const totalCount = mergeMode
+      ? await ExtractedLink.countDocuments()
+      : linksToSave.length;
     await PipelineCache.findOneAndUpdate(
       { key: 'extracted_links' },
-      { key: 'extracted_links', data: { batchId, count: allLinks.length }, count: allLinks.length, savedAt: new Date() },
+      { key: 'extracted_links', data: { batchId, count: totalCount, mergeMode }, count: totalCount, savedAt: new Date() },
       { upsert: true, new: true }
     );
 
     // Write links_for_bypasser.json to /tmp for immediate same-Lambda pipeline use
     try {
-      fs.writeFileSync(path.join(os.tmpdir(), 'links_for_bypasser.json'), JSON.stringify(allLinks));
+      fs.writeFileSync(path.join(os.tmpdir(), 'links_for_bypasser.json'), JSON.stringify(linksToSave));
       fs.writeFileSync(path.join(os.tmpdir(), 'shortlinks_report.json'), JSON.stringify(shortlinks));
     } catch(_) {}
 
-    // ── Also write raw telegram_export.json to disk for json-search-links endpoint ──
-    // json-search-links reads this file directly to get 100% complete link data.
-    // The upload route only saved to DB before — json-search-links never found the file.
-    // Now we write { messages: [...all deduped messages...] } to EXPORT_FILE.
+    // ── Write telegram_export.json to disk for json-search-links endpoint ──────
+    // In REPLACE mode: overwrite with new messages only
+    // In MERGE mode: load existing messages, merge new ones in (dedup by channel:msgId)
     try {
-      const exportPayload = JSON.stringify({ messages });
-      fs.writeFileSync(EXPORT_FILE, exportPayload);
-      _jsonCache = null; // invalidate cache so next json-search-links request re-reads new file
+      let finalMessages = messages;
+      if (mergeMode && fs.existsSync(EXPORT_FILE)) {
+        try {
+          const existing = JSON.parse(fs.readFileSync(EXPORT_FILE, 'utf8'));
+          const existingMsgs = existing.messages || [];
+          // Build dedup map from existing messages
+          const existingKeys = new Map();
+          for (const m of existingMsgs) {
+            existingKeys.set(`${m.channel_id||'0'}:${m.id}`, m);
+          }
+          // Add new messages not already present
+          let addedCount = 0;
+          for (const m of messages) {
+            const k = `${m.channel_id||'0'}:${m.id}`;
+            if (!existingKeys.has(k)) { existingKeys.set(k, m); addedCount++; }
+          }
+          finalMessages = [...existingKeys.values()];
+          console.log(`[merge] telegram_export.json: ${existingMsgs.length} existing + ${addedCount} new = ${finalMessages.length} total messages`);
+        } catch(readErr) {
+          console.warn('[merge] Could not read existing telegram_export.json, overwriting:', readErr.message);
+        }
+      }
+      fs.writeFileSync(EXPORT_FILE, JSON.stringify({ messages: finalMessages }));
+      _jsonCache = null; // invalidate cache so next json-search-links reads fresh file
     } catch(writeErr) {
-      // Non-fatal — DB links are saved, json-search-links will fall back to DB
       console.warn('[upload-export] Could not write telegram_export.json:', writeErr.message);
     }
 
     const dedupNote = dedupCount > 0 ? ` (${dedupCount} duplicate messages removed across files)` : '';
+    const modeNote  = mergeMode ? ` [MERGE MODE — total across all accounts: ${totalCount} links]` : '';
     res.json({
-      message: `[DONE] Extracted ${allLinks.length} links from ${messages.length} messages (${skipped} skipped)${dedupNote}. Saved to MongoDB. Run Full Pipeline now.`,
-      count: allLinks.length, messages: messages.length, rawMessages: rawCount, duplicatesRemoved: dedupCount, skipped,
+      message: `[DONE] Extracted ${linksToSave.length} new links from ${messages.length} messages (${skipped} skipped)${dedupNote}${modeNote}. Saved to MongoDB. Run Full Pipeline now.`,
+      count: linksToSave.length, totalCount, messages: messages.length, rawMessages: rawCount, duplicatesRemoved: dedupCount, skipped, mergeMode,
     });
   } catch (err) {
     res.status(500).json({ message: `Upload failed: ${err.message}` });

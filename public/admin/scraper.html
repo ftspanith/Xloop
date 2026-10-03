@@ -188,16 +188,29 @@
 
     <!-- Upload Export File -->
     <div class="options-panel" style="margin-bottom:20px; border:1px solid rgba(229,9,20,0.4);">
-      <h3 style="color:var(--primary,#e50914); margin-bottom:8px;">&#128228; Upload telegram_export.json</h3>
-      <p style="color:rgba(255,255,255,.6); font-size:0.85rem; margin-bottom:14px;">Generate this file locally using the Telegram scraper, then upload it here. It will be saved to MongoDB so the Full Pipeline can use it anytime.</p>
+      <h3 style="color:var(--primary,#e50914); margin-bottom:4px;">Upload telegram_export.json</h3>
+      <p style="color:rgba(255,255,255,.6); font-size:0.85rem; margin-bottom:14px;">Generate this file locally using the Telegram scraper, then upload it here. Supports multiple Telegram accounts — use <strong style="color:#fff">Add Another Account</strong> to merge without wiping existing links.</p>
       <div id="exportStatus" style="margin-bottom:12px; padding:8px 12px; background:rgba(255,255,255,.05); border-radius:6px; font-size:0.85rem; color:rgba(255,255,255,.5);">Checking status...</div>
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <label for="exportFileInput" style="cursor:pointer; background:rgba(229,9,20,0.15); border:1px solid rgba(229,9,20,0.5); color:#fff; padding:10px 20px; border-radius:6px; font-size:0.9rem; font-weight:600;">&#128193; Choose File</label>
+        <label for="exportFileInput" style="cursor:pointer; background:rgba(229,9,20,0.15); border:1px solid rgba(229,9,20,0.5); color:#fff; padding:10px 20px; border-radius:6px; font-size:0.9rem; font-weight:600; display:flex; align-items:center; gap:6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Choose File
+        </label>
         <input type="file" id="exportFileInput" accept=".json" style="display:none;" onchange="previewExport(this)">
         <span id="exportFileName" style="color:rgba(255,255,255,.6); font-size:0.85rem;">No file selected</span>
-        <button id="uploadExportBtn" onclick="uploadExport()" style="display:none; background:var(--primary,#e50914); border:none; color:#fff; padding:10px 24px; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.9rem;">Upload &amp; Save to MongoDB</button>
+        <button id="uploadExportBtn" onclick="uploadExport(false)" style="display:none; background:var(--primary,#e50914); border:none; color:#fff; padding:10px 24px; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.9rem; display:none; align-items:center; gap:6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+          Upload &amp; Save
+        </button>
+        <button id="mergeExportBtn" onclick="uploadExport(true)" style="display:none; background:rgba(99,179,237,0.15); border:1px solid rgba(99,179,237,0.4); color:#63b3ed; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.9rem; align-items:center; gap:6px;" title="Merge with existing links — skips duplicate URLs, keeps all unique links from both accounts">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M8 6v6"/><path d="M16 6v6"/><path d="M12 12v6"/><path d="M8 12h8"/></svg>
+          Add Another Account (Merge)
+        </button>
       </div>
       <div id="uploadProgress" style="margin-top:10px; font-size:0.85rem;"></div>
+      <div id="mergeInfo" style="display:none; margin-top:8px; padding:8px 12px; background:rgba(99,179,237,0.08); border:1px solid rgba(99,179,237,0.2); border-radius:6px; font-size:0.82rem; color:rgba(99,179,237,0.9);">
+        <strong>Merge mode:</strong> Duplicate URLs will be skipped. Unique links from this account will be added to existing data. Different URLs for the same file (mirror links) are kept.
+      </div>
     </div>
 
     <!--  Mode Selection  -->
@@ -342,32 +355,37 @@
     const file = input.files[0];
     if (!file) return;
     document.getElementById('exportFileName').textContent = `${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`;
-    document.getElementById('uploadExportBtn').style.display = 'inline-block';
+    document.getElementById('uploadExportBtn').style.display = 'inline-flex';
+    document.getElementById('mergeExportBtn').style.display = 'inline-flex';
+    document.getElementById('mergeInfo').style.display = 'none';
     const reader = new FileReader();
     reader.onload = (e) => { _exportFileData = e.target.result; };
     reader.readAsText(file);
   }
 
-  async function uploadExport() {
+  async function uploadExport(mergeMode = false) {
     if (!_exportFileData) return;
-    const btn  = document.getElementById('uploadExportBtn');
-    const prog = document.getElementById('uploadProgress');
+    const btn   = document.getElementById(mergeMode ? 'mergeExportBtn' : 'uploadExportBtn');
+    const prog  = document.getElementById('uploadProgress');
+    const mInfo = document.getElementById('mergeInfo');
     btn.disabled = true;
-    btn.textContent = 'Uploading...';
+    btn.textContent = mergeMode ? 'Merging...' : 'Uploading...';
     prog.style.color = 'rgba(255,255,255,.6)';
-    prog.textContent = ' Parsing and uploading to MongoDB...';
+    prog.textContent = mergeMode ? ' Merging with existing links — skipping duplicates...' : ' Parsing and uploading to MongoDB...';
+    if (mergeMode) mInfo.style.display = 'block';
     try {
       let parsed;
       try { parsed = JSON.parse(_exportFileData); } catch(e) { throw new Error('Invalid JSON file'); }
       const token = localStorage.getItem('xloop_admin_token');
-      const res = await fetch('/api/scrape/upload-export', {
+      const url   = `/api/scrape/upload-export${mergeMode ? '?merge=true' : ''}`;
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(parsed),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Upload failed');
-      prog.style.color = '#22c55e';
+      prog.style.color = mergeMode ? '#63b3ed' : '#22c55e';
       prog.textContent = data.message;
       checkExportStatus();
     } catch (err) {
@@ -375,7 +393,7 @@
       prog.textContent = ` ${err.message}`;
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Upload & Save to MongoDB';
+      btn.textContent = mergeMode ? 'Add Another Account (Merge)' : 'Upload & Save';
     }
   }
 
