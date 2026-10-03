@@ -840,23 +840,46 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         let matchedIdx = -1;
         for (let j = 0; j < dbRec.downloads.length; j++) {
           const ex = dbRec.downloads[j];
-          const qualOk   = ex.quality === quality;
-          const seasOk   = (finalType === 'series' || finalType === 'anime') ? (ex.season == correctSeason && ex.episode == (item.episode ?? null)) : true;
-          
-          const exactSizeMatch = (newMB > 0 && toMB(ex.size) > 0 && Math.abs(newMB - toMB(ex.size)) < 2);
-          const langOk        = (ex.language || '') === (language || '');
-          // Only merge into an existing slot if sizes match (or both are unknown)
-          // NEVER merge links with different known file sizes into the same slot!
-          const bothSizeKnown = newMB > 0 && toMB(ex.size) > 0;
-          const bothSizeUnknown = !size && !ex.size;
-          const sizeOk = bothSizeUnknown || exactSizeMatch;
-          
-          if (qualOk && seasOk && langOk && sizeOk) {
-             matchedIdx = j; 
-             if (language && language !== 'Multi' && (!ex.language || ex.language === 'Multi')) {
-                ex.language = language;
-             }
-             break; 
+
+          // Series/anime: season+episode must match
+          const seasOk = (finalType === 'series' || finalType === 'anime')
+            ? (ex.season == correctSeason && ex.episode == (item.episode ?? null))
+            : true;
+          if (!seasOk) continue;
+
+          // TIER 1 — Filename match: same .mkv/.mp4 name = definitely same file
+          // Handles all language/quality label variations between posts
+          const exFn  = (ex.filename  || '').trim().toLowerCase();
+          const newFn = (item.filename || '').trim().toLowerCase();
+          if (exFn && newFn && exFn === newFn) {
+            matchedIdx = j; break;
+          }
+
+          // TIER 2 — Quality + size match: same quality AND size within 1% → same file
+          // Size comparison: tolerate up to 1% difference (50MB on a 5GB file)
+          // This handles "3.5GB" vs "3.51GB" or "1.21GB" vs "1.22GB" from different posts
+          const qualOk    = ex.quality === quality;
+          const exMB      = toMB(ex.size);
+          const bothKnown = newMB > 0 && exMB > 0;
+          const pct       = bothKnown ? Math.abs(newMB - exMB) / Math.max(newMB, exMB) : 1;
+          const sizeClose = bothKnown && pct < 0.01; // within 1%
+
+          if (qualOk && sizeClose) {
+            // Same quality + same size → same file. Update language if new one is more specific.
+            matchedIdx = j;
+            if (language && language !== 'Multi' && (!ex.language || ex.language === 'Multi')) {
+              ex.language = language;
+            }
+            break;
+          }
+
+          // TIER 3 — Quality + language (both sizes unknown): same quality + same language
+          // Only used when neither file has a known size (rare)
+          const langNorm  = (s) => (s||'').toLowerCase().replace(/\s+/g,'');
+          const langOk    = langNorm(ex.language) === langNorm(language);
+          const bothUnknown = !size && !ex.size;
+          if (qualOk && langOk && bothUnknown) {
+            matchedIdx = j; break;
           }
         }
         const metaSet = {};
