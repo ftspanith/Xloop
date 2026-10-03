@@ -75,13 +75,17 @@ const MODE         = parseInt(args.mode) || 1;
 const DAYS         = parseInt(args.days) || 1;
 const START_DATE   = args['start-date'];
 const END_DATE     = args['end-date'];
-const PROFILE      = parseInt(args.profile) || 1;   // --profile=1 or --profile=2
-const ACCOUNT_NAME = args['account-name'] || `acc${PROFILE}`;
 
 // ── Pick credentials based on profile ────────────────────────────────────────
+// Accept --account=2 (from scrape-and-upload.js) OR --profile=2 (legacy)
+const _accountArg  = parseInt(args.account) || parseInt(args.profile) || 1;
+const PROFILE      = _accountArg;  // 1 = primary, 2 = secondary
+const ACCOUNT_NAME = args['account-name'] || `acc${PROFILE}`;
 const TG_API_ID   = PROFILE === 2 ? process.env.TG_API_ID_2   : process.env.TG_API_ID;
 const TG_API_HASH = PROFILE === 2 ? process.env.TG_API_HASH_2 : process.env.TG_API_HASH;
 const TG_SESSION  = PROFILE === 2 ? process.env.TG_SESSION_2  : process.env.TG_SESSION;
+
+
 
 // Each account can have its own channel list (TG_CHANNELS_2=id1,id2,...)
 // If not set, falls back to the built-in ALL_CHANNEL_IDS
