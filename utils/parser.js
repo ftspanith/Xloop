@@ -118,6 +118,8 @@ const IGNORE_RE = [
 function classifyUrl(url) {
   if (!url) return 'Ignore';
   if (IGNORE_RE.some(r=>r.test(url)))    return 'Ignore';
+  // Mediainfo links are never download links — always filter
+  if (/mediainfo|media\.info|mfinfo/i.test(url)) return 'Ignore';
   if (PASTE_RE.some(r=>r.test(url)))     return 'Paste';
   if (SHORTLINK_RE.some(r=>r.test(url))) return 'Shortlink';
   if (/gdflix\.|gdlink\.dev|gdtot\./i.test(url))   return 'GDFlix';
@@ -125,6 +127,7 @@ function classifyUrl(url) {
   if (/filepress\.|fpgo\.xyz/i.test(url))           return 'FilePress';
   if (/dtflix\.ink|dotflix\.wtf/i.test(url))        return 'DTFlix';
   if (/tmbcloud\./i.test(url))                       return 'TMBCloud';
+  if (/drivenext\./i.test(url))                      return 'DriveNext';
   if (DIRECT_RE.some(r=>r.test(url)))   return 'Direct';
   if (/\/(file|download|d|dl|f)\/[a-zA-Z0-9_\-]{4,}/i.test(url)) return 'Direct';
   if (/\.(mkv|mp4|avi|zip|rar|m2ts|ts|mov)(\?.*)?$/i.test(url))  return 'Direct';
@@ -488,7 +491,15 @@ const JUNK_PATTERNS = [
 
   // ── "Updates Channel", "Backup Channel", "Daily Updates" patterns ──────
   /^(?:Daily|Latest|New|Hot|Top|Fresh)\s+(?:Updates?|Movies?|Releases?)\s*$/i,
-  /^#?requested$/i,
+  // ── Junk patterns from account 2 "messy" channels ───────────────────────
+  /^(?:Shared\s+By|Credits?\s+To|Ripped\s+By|Encoded?\s+By|Uploaded\s+By)\b/i,  // "Shared By - Kd Creation"
+  /^Forwarded\s+from\b/i,                                              // "Forwarded from KD CREATION™"
+  /^\d+\.\s*DDP\b|^\d+\.\s*AAC\b|^\d+\.\s*AC3\b|^\d+\.\s*DD\b/i,  // "1. DDP | 5.1 | 640 kb/s"
+  /^\d+\.\s+\d+\s*\|\s*\d+\s*kb/i,                                   // "5.1 | 640 kb/s | Tamil"
+  /^\d{3,4}x\d{3,4}\s*[~\-]\s*(HEVC|AVC|H\.?26[45])/i,             // "1920x1080 ~ HEVC"
+  /^(?:Audio\s+Track|Video\s+Track)\s*:/i,                            // "Audio Track:"
+  /^(?:TEL|HIN|TAM|MAL|KAN|ENG|BEN|PUN)[,\s]*(?:TEL|HIN|TAM|MAL|KAN|ENG|BEN|PUN|KOR|JPN)[,\s&|]*$/i, // standalone lang codes
+  /^@[A-Za-z0-9_]+\s*-\s*\S+\.mkv/i,                                 // @MULTIVERSE_OFCL - filename.mkv (TG file upload)
 ];
 function isJunkTitle(title) {
   if (!title || title.length < 2) return true;
@@ -700,6 +711,19 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     pairs.push({url:line, rawFilename:fc||'', size:fsz, urlType:cls});
     processedUrlIdx.add(i);
     let k=i+1;
+    // URL-first format (Screenshot 2): URL on line N, filename on line N+1
+    // If we found no filename looking backwards, check the NEXT non-blank line
+    if (!fc && k < lines.length) {
+      // Skip any consecutive URLs first
+      let fwdIdx = k;
+      while (fwdIdx < lines.length && isUrl(lines[fwdIdx])) fwdIdx++;
+      if (fwdIdx < lines.length && isFileDesc(lines[fwdIdx])) {
+        // Found a filename line AFTER the URL — this is URL-first format
+        const fwdFc = lines[fwdIdx];
+        pairs[pairs.length - 1].rawFilename = fwdFc;
+        if (!pairs[pairs.length - 1].size) pairs[pairs.length - 1].size = extractSizeFromMeta(fwdFc);
+      }
+    }
     while(k<lines.length&&isUrl(lines[k])&&!isTgLink(lines[k])&&!isYtLink(lines[k])) {
       const cls2=classifyUrl(lines[k]);
       if (cls2!=='Ignore') {
