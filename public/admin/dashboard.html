@@ -1579,7 +1579,31 @@
         }
       } catch(_) {}
     };
-    _evSrc2.onerror = () => { if (_isRunning2) { appendLog2('[WARN] Connection closed.'); onFinished2('', true); } };
+    _evSrc2.onerror = () => {
+      if (!_isRunning2) return;
+      if (_evSrc2) { _evSrc2.close(); _evSrc2 = null; }
+      appendLog2('[INFO] Connection dropped — reconnecting to pipeline...');
+      setTimeout(() => {
+        if (!_isRunning2) return;
+        const streamUrl = `/api/orchestrator/stream?token=${encodeURIComponent(getToken())}`;
+        _evSrc2 = new EventSource(streamUrl);
+        _evSrc2.onmessage = (e) => {
+          try {
+            const ev = JSON.parse(e.data), text = ev.text || '';
+            if (text) {
+              appendLog2(text);
+              if (/Pipeline finished|Pipeline complete|\[DONE\]/i.test(text)) onFinished2(text);
+              if (/Pipeline stopped|exit code [^0]|\[ERROR\]/i.test(text))   onFinished2(text, true);
+            }
+          } catch(_) {}
+        };
+        _evSrc2.onerror = () => {
+          if (!_isRunning2) return;
+          fetch('/api/orchestrator/status', { headers: { 'Authorization': 'Bearer ' + getToken() } })
+            .then(r => r.json()).then(d => { if (!d.running) onFinished2('', false); }).catch(() => {});
+        };
+      }, 2000);
+    };
   }
 
   async function stopPipeline2() {
