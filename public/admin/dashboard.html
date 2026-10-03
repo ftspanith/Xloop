@@ -694,13 +694,6 @@
         </div>
       </div>
 
-      <!-- Run button -->
-      <button id="dashUploadBtn" onclick="dashUploadBothAndRun()" style="background:linear-gradient(135deg,#2b6cb0,#3182ce); border:none; color:#fff; padding:9px 22px; border-radius:7px; cursor:pointer; font-weight:700; font-size:0.82rem; display:inline-flex; align-items:center; gap:7px; transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        Upload &amp; Start Pipeline
-      </button>
-
-      <div id="dashUploadMsg" style="margin-top:10px; font-size:0.78rem; display:none; padding:8px; background:rgba(255,255,255,0.05); border-radius:6px;"></div>
     </div>
 
 
@@ -1611,6 +1604,50 @@
 
   async function startPipeline2(resume = false) {
     if (_isRunning2) return;
+
+    // ── If any account has File Upload selected, upload first ─────────────────
+    const token = getToken();
+    const readFile = f => new Promise((res,rej) => { const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=()=>rej(new Error('Read error')); r.readAsText(f,'utf-8'); });
+    if (_acc1Source === 'file') {
+      if (!_dashRawFiles || !_dashRawFiles.length) { alert('Acc 1 is set to File Upload — please choose a file first.'); return; }
+      try {
+        appendLog2 && appendLog2('[INFO] Uploading Acc 1 file...');
+        const text = await readFile(_dashRawFiles[0]);
+        let parsed; try { parsed = JSON.parse(text); } catch(e) { throw new Error('Invalid JSON in Acc 1 file'); }
+        const msgs = Array.isArray(parsed) ? parsed : (parsed.messages||[]);
+        const {links, skipped} = _parseMessages(msgs);
+        if (!links.length) throw new Error('No links found in Acc 1 file');
+        const CHUNK=400, total=Math.ceil(links.length/CHUNK); let batchId=null;
+        for (let ci=0;ci<total;ci++) {
+          const chunk=links.slice(ci*CHUNK,(ci+1)*CHUNK), isFinal=ci===total-1;
+          const res = await fetch('/api/scrape/save-extracted',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
+          const d = await res.json().catch(()=>({})); if (!res.ok) throw new Error(d.message||'Save failed'); if (!batchId) batchId=d.batchId;
+        }
+        fetch('/api/scrape/mark-sync',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({account:'1',source:'manual',links:links.length})}).catch(()=>{});
+        appendLog2 && appendLog2(`[INFO] Acc 1: ${links.length.toLocaleString()} links saved.`);
+      } catch(err) { alert('Acc 1 upload failed: ' + err.message); return; }
+    }
+    if (_acc2Source === 'file') {
+      if (!_dashRawFiles2 || !_dashRawFiles2.length) { alert('Acc 2 is set to File Upload — please choose a file first.'); return; }
+      try {
+        appendLog2 && appendLog2('[INFO] Uploading Acc 2 file...');
+        const text = await readFile(_dashRawFiles2[0]);
+        let parsed; try { parsed = JSON.parse(text); } catch(e) { throw new Error('Invalid JSON in Acc 2 file'); }
+        const msgs = Array.isArray(parsed) ? parsed : (parsed.messages||[]);
+        const {links, skipped} = _parseMessages(msgs);
+        if (!links.length) throw new Error('No links found in Acc 2 file');
+        const CHUNK=400, total=Math.ceil(links.length/CHUNK); let batchId=null;
+        for (let ci=0;ci<total;ci++) {
+          const chunk=links.slice(ci*CHUNK,(ci+1)*CHUNK), isFinal=ci===total-1;
+          const res = await fetch('/api/scrape/save-extracted?merge=true',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
+          const d = await res.json().catch(()=>({})); if (!res.ok) throw new Error(d.message||'Merge failed'); if (!batchId) batchId=d.batchId;
+        }
+        fetch('/api/scrape/mark-sync',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({account:'2',source:'manual',links:links.length})}).catch(()=>{});
+        appendLog2 && appendLog2(`[INFO] Acc 2: ${links.length.toLocaleString()} links merged.`);
+      } catch(err) { alert('Acc 2 upload failed: ' + err.message); return; }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     _isRunning2 = true; _cAdded2 = 0; _cUpdated2 = 0;
     document.getElementById('logBox2').innerHTML = '';
     document.getElementById('doneBanner2').classList.remove('visible');
