@@ -1782,10 +1782,25 @@
         document.getElementById('startBtn2').disabled = true;
         document.getElementById('stopBtn2').disabled = false;
         document.getElementById('wipeBtn2').disabled = true;
-        appendLog2('[INFO] Pipeline running — streaming logs...');
+
+        // Fetch persisted log history first (works across devices/instances)
+        try {
+          const logRes = await fetch('/api/orchestrator/logs', { headers: { 'Authorization': 'Bearer ' + getToken() } });
+          if (logRes.ok) {
+            const { logs } = await logRes.json();
+            if (logs && logs.length > 0) {
+              appendLog2('[INFO] --- Reconnected: showing last ' + logs.length + ' log lines ---');
+              logs.forEach(line => appendLog2(line));
+            } else {
+              appendLog2('[INFO] Pipeline running — connecting to live stream...');
+            }
+          }
+        } catch(_) { appendLog2('[INFO] Pipeline running — connecting to live stream...'); }
+
         if (_evSrc2) _evSrc2.close();
-        _evSrc2 = new EventSource('/api/orchestrator/stream');
-        _evSrc2.onmessage = (e) => { try { const ev = JSON.parse(e.data); if (ev.text) { appendLog2(ev.text); if (/Pipeline finished/i.test(ev.text)) onFinished2(ev.text); } } catch(_) {} };
+        _evSrc2 = new EventSource('/api/orchestrator/stream?token=' + encodeURIComponent(getToken()));
+        _evSrc2.onmessage = (e) => { try { const ev = JSON.parse(e.data); if (ev.text) { appendLog2(ev.text); if (/Pipeline finished|Pipeline complete|\[DONE\]/i.test(ev.text)) onFinished2(ev.text); if (/Pipeline stopped|\[ERROR\]/i.test(ev.text)) onFinished2(ev.text, true); } } catch(_) {} };
+        _evSrc2.onerror = () => { if (!_isRunning2) return; if (_evSrc2) { _evSrc2.close(); _evSrc2 = null; } setTimeout(() => syncOrchState2(), 5000); };
       } else if (!running && total > 0 && offset < total) {
         document.getElementById('continueBtn2').textContent = 'Continue from group ' + offset.toLocaleString() + ' / ' + total.toLocaleString();
         document.getElementById('continueBtn2').classList.add('visible');
@@ -1794,6 +1809,7 @@
     } catch(_) {}
   }
   syncOrchState2();
+
 
 </script>
 

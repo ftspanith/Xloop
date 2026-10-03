@@ -24,12 +24,34 @@ let logBuffer        = [];     // last 500 lines for replay
 let pipelineProgress = { offset: 0, total: 0, label: '' }; // live progress
 const MAX_LOG_HISTORY = 500;
 
+// ── Log persistence (MongoDB) — survives Vercel instance restarts ────────────
+let _logPersistTimer = null;
+async function persistLogs() {
+  if (!logBuffer.length) return;
+  try {
+    const PipelineCache = require('../models/PipelineCache');
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1)
+      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+    await PipelineCache.findOneAndUpdate(
+      { key: '_pipeline_logs' },
+      { $set: { data: logBuffer.slice(-200), updatedAt: new Date() } },
+      { upsert: true }
+    );
+  } catch (_) { /* non-critical */ }
+}
+
 // ── Broadcast a log line to all SSE clients ───────────────────────────────────
 function broadcast(message) {
-  // Strip ANSI color codes (they look bad in the terminal UI)
+  // Strip ANSI color codes
   const clean = message.replace(/\x1b\[[0-9;]*m/g, '');
   logBuffer.push(clean);
   if (logBuffer.length > MAX_LOG_HISTORY) logBuffer.shift();
+
+  // Debounced persist — write to MongoDB at most every 3s
+  if (!_logPersistTimer) {
+    _logPersistTimer = setTimeout(() => { _logPersistTimer = null; persistLogs(); }, 3000);
+  }
 
   const payload = `data: ${JSON.stringify({ text: clean })}\n\n`;
   clients = clients.filter(c => {
@@ -49,11 +71,17 @@ router.get('/stream', auth, (req, res) => {
   const clientId = Date.now() + Math.random();
   clients.push({ id: clientId, res });
 
-  // Send connection confirmation only — do NOT replay log buffer
-  // (replaying stale error lines caused confusion on page load)
-  res.write(`data: ${JSON.stringify({ text: 'Connected to Orchestrator Live Stream' })}\n\n`);
-  if (pipelineRunning) {
-    res.write(`data: ${JSON.stringify({ text: 'Pipeline is currently running.' })}\n\n`);
+  // Replay in-memory log buffer so reconnecting clients see recent history
+  if (logBuffer.length > 0) {
+    const replay = logBuffer.slice(-100); // last 100 lines
+    for (const line of replay) {
+      try { res.write(`data: ${JSON.stringify({ text: line })}\n\n`); } catch(_) { break; }
+    }
+  } else {
+    res.write(`data: ${JSON.stringify({ text: '[INFO] Connected to live stream.' })}\n\n`);
+    if (pipelineRunning) {
+      res.write(`data: ${JSON.stringify({ text: '[INFO] Pipeline is currently running — logs will appear below.' })}\n\n`);
+    }
   }
 
   const heartbeat = setInterval(() => {
@@ -595,11 +623,43 @@ router.post('/wipe', auth, async (req, res) => {
 });
 
 // ── Clear Logs ────────────────────────────────────────────────────────────────
-router.post('/clear-logs', auth, (req, res) => {
+router.post('/clear-logs', auth, async (req, res) => {
   logBuffer = [];
+  // Also clear from MongoDB
+  try {
+    const PipelineCache = require('../models/PipelineCache');
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1)
+      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+    await PipelineCache.findOneAndUpdate(
+      { key: '_pipeline_logs' },
+      { $set: { data: [], updatedAt: new Date() } },
+      { upsert: true }
+    );
+  } catch (_) {}
   broadcast('[INFO] Log buffer cleared.');
   res.json({ message: 'Logs cleared' });
 });
+
+// ── GET /logs — return persisted log history (for phone/new-tab reconnect) ────
+router.get('/logs', auth, async (req, res) => {
+  try {
+    // First try in-memory buffer (same Vercel instance)
+    if (logBuffer.length > 0) {
+      return res.json({ logs: logBuffer.slice(-200) });
+    }
+    // Fallback: read from MongoDB (different Vercel instance / phone)
+    const PipelineCache = require('../models/PipelineCache');
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1)
+      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+    const doc = await PipelineCache.findOne({ key: '_pipeline_logs' }).lean();
+    res.json({ logs: (doc && doc.data) ? doc.data : [] });
+  } catch (e) {
+    res.json({ logs: [] });
+  }
+});
+
 
 module.exports = router;
 router.get('/start-local', async (req, res) => {
