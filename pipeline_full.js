@@ -856,21 +856,16 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           }
 
           // TIER 2 — Quality + size + codec match: same quality AND size within 1% AND same codec
-          // Size tolerance: 1% handles rounding differences between different Telegram posts
-          // Codec check prevents merging x264 720p 1.1GB with HEVC 720p 1.1GB (different encodes!)
-          // If codec is unknown on either side, skip codec check (avoid false negatives)
           const qualOk    = ex.quality === quality;
           const exMB      = toMB(ex.size);
           const bothKnown = newMB > 0 && exMB > 0;
           const pct       = bothKnown ? Math.abs(newMB - exMB) / Math.max(newMB, exMB) : 1;
-          const sizeClose = bothKnown && pct < 0.01; // within 1%
+          const sizeClose = bothKnown && pct < 0.01;
           const exCodec   = (ex.codec  || '').toLowerCase().trim();
           const newCodec  = (codec     || '').toLowerCase().trim();
-          // Codecs must match IF both are known — prevents x264 merging with HEVC
           const codecOk   = !exCodec || !newCodec || exCodec === newCodec;
 
           if (qualOk && sizeClose && codecOk) {
-            // Confirmed same file on different host — update language if new is more specific
             matchedIdx = j;
             if (language && language !== 'Multi' && (!ex.language || ex.language === 'Multi')) {
               ex.language = language;
@@ -879,11 +874,18 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           }
 
           // TIER 3 — Quality + language (both sizes unknown): same quality + same language
-          // Only used when neither file has a known size (rare)
-          const langNorm  = (s) => (s||'').toLowerCase().replace(/\s+/g,'');
-          const langOk    = langNorm(ex.language) === langNorm(language);
+          const langNorm    = (s) => (s||'').toLowerCase().replace(/\s+/g,'');
+          const langOk      = langNorm(ex.language) === langNorm(language);
           const bothUnknown = !size && !ex.size;
           if (qualOk && langOk && bothUnknown) {
+            matchedIdx = j; break;
+          }
+
+          // TIER 4 — Quality + host match: same quality on same host = same download group
+          // Prevents 73-link explosions when the same movie is posted by both channels
+          // with slightly different size strings (e.g. "1.4GB" vs "1.40 GB")
+          const exHostsInGroup = (ex.links || []).map(l => detectHost(l.url));
+          if (qualOk && exHostsInGroup.includes(host)) {
             matchedIdx = j; break;
           }
         }
@@ -902,8 +904,12 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
               metaSet[`downloads.${matchedIdx}.language`] = dbRec.downloads[matchedIdx].language;
           }
           const existLinks = dbRec.downloads[matchedIdx]?.links || [];
-          // Only skip if this exact URL is already there — don't cap by host or count
+          // Skip: exact URL already present
           if (existLinks.some(l => l.url === finalUrl)) { skipped++; continue; }
+          // Cap: never more than 8 links per download group (safety valve against post spam)
+          const MAX_LINKS_PER_DL = 8;
+          if (existLinks.length >= MAX_LINKS_PER_DL) { skipped++; continue; }
+
           const op = { $addToSet: { [`downloads.${matchedIdx}.links`]: newDl.links[0] } };
           if (Object.keys(metaSet).length) op.$set = metaSet;
           const res = await Movie.findOneAndUpdate({ _id: dbRec._id, [`downloads.${matchedIdx}.links.url`]: { $ne: finalUrl } }, op, { new: true });
