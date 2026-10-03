@@ -1239,10 +1239,13 @@
         el.style.color = 'rgba(255,200,0,.8)';
         el.textContent = 'Not uploaded yet — choose a file to upload before running Full Pipeline';
       }
-    } catch(_) {}
-
-    // Also load sync timestamps
-    loadSyncStatus();
+    } catch(_) {
+      const el = document.getElementById('dashExportStatus');
+      if (el) { el.style.color = 'rgba(255,255,255,0.3)'; el.textContent = 'Status unavailable'; }
+    } finally {
+      // Always load sync badges regardless of export-status result
+      loadSyncStatus();
+    }
   }
 
   async function loadSyncStatus() {
@@ -1404,6 +1407,8 @@
       }, 3000);
       // Check if telegram_export.json is available
       dashCheckExportStatus();
+      // Load sync badges directly (independent of export-status)
+      loadSyncStatus();
     }
   });
 
