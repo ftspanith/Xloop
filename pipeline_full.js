@@ -906,9 +906,9 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           const existLinks = dbRec.downloads[matchedIdx]?.links || [];
           // Skip: exact URL already present
           if (existLinks.some(l => l.url === finalUrl)) { skipped++; continue; }
-          // Cap: never more than 18 links per download group (safety valve against post spam)
-          const MAX_LINKS_PER_DL = 18;
-          if (existLinks.length >= MAX_LINKS_PER_DL) { skipped++; continue; }
+          // Cap: max 18 total links per content (all quality groups combined, both Acc1 + Acc2)
+          const totalLinksInContent = dbRec.downloads.reduce((sum, d) => sum + (d.links?.length || 0), 0);
+          if (totalLinksInContent >= 18) { skipped++; continue; }
 
           const op = { $addToSet: { [`downloads.${matchedIdx}.links`]: newDl.links[0] } };
           if (Object.keys(metaSet).length) op.$set = metaSet;
@@ -920,6 +920,9 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
             updated++;
           } else skipped++;
         } else {
+          // Cap: max 18 total links per content before adding new download group
+          const totalLinksInContent2 = dbRec.downloads.reduce((sum, d) => sum + (d.links?.length || 0), 0);
+          if (totalLinksInContent2 >= 18) { skipped++; continue; }
           const op = { $push: { downloads: newDl } };
           if (Object.keys(metaSet).length) op.$set = metaSet;
           const res = await Movie.findByIdAndUpdate(dbRec._id, op, { new: true });
