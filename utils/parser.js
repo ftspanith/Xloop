@@ -69,7 +69,7 @@ function extractTitleFromStreamingUrl(url) {
 
 // ─── URL CLASSIFIER ──────────────────────────────────────────────────────────
 const DIRECT_RE = [
-  /gdflix\.(dev|to|one|link|net|dad|cfd)/i, /gdlink\.dev/i, /gd\.vifix\.site/i,
+  /gdflix\.(dev|to|one|link|net|dad|cfd)/i, /gdlink\.dev/i,
   /hubcloud\.(foo|one|art|cx|lol|bz|club|in|to|work|zone|dev|me|best)/i,
   /drivehub\.(dev|to|in|online)/i,
   /filepress\.(store|wiki|in|me|xyz)/i, /fpgo\.xyz/i,
@@ -112,6 +112,7 @@ const IGNORE_RE = [
   /encrypted-tbn0\.gstatic\.com/i,/i\.ibb\.co/i,/iili\.io/i,
   /occ-0-\d+-\d+\./i,/img\d*\.hotstar\.com/i,/i\.slow\.pics/i,
   /photo\.chelpbot\.me/i,/akamaized\.net/i,/cloudfront\.net/i,
+  /vflix\./i, /vifix\./i,
   /\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i,
 ];
 
