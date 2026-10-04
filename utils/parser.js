@@ -390,14 +390,15 @@ function cleanTitleForApi(title, year = null) {
     .replace(/\bSeason\s*\d+\b/gi,'')
     .replace(/\.(mkv|mp4|avi|mov|ts|m2ts|zip|rar)\b/gi,'')
     .replace(/v\d+|reloaded|uncut|extended/gi,'')
-    .replace(/#[a-zA-Z0-9_]+/g,'')
+    .replace(/(?<!^)#[a-zA-Z0-9_]+/g,'')   // strip mid/end hashtags (channel tags) but NOT leading # (part of title like #Love)
     // ── Strip trailing standalone year (1900–2099) at end of title ───────────
     // Handles: 'Hi 2026', 'The Batman 2022', 'Movie (2024)', '2024-2025'
     .replace(/\s*\(\s*(19|20)\d{2}\s*\)\s*$/, '')          // trailing (2024)
     .replace(/\s+(19|20)\d{2}(?:[\s\-–]+(19|20)\d{2})?\s*$/, '')  // trailing 2024 or 2024-2025
     // ── Final stray digit pairs and cleanup ───────────────────────────────
     .replace(/\b\d\s+\d\b/g, '')
-    .replace(/[^a-zA-Z0-9 \-']/g,' ')
+    .replace(/(?<!^[#])[^a-zA-Z0-9 \-'#]/g,' ')  // strip symbols but preserve leading # (title like #Love)
+    .replace(/(?<=\s)#/g,' ')                      // strip # that appear mid-title after cleanup
     // ── Split CamelCase for unspaced titles (AhanaPellanta -> Ahana Pellanta) ─────────────
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/\s+/g,' ')

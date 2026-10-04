@@ -471,9 +471,16 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       if (!dr) return null;
       const sd = await fetchSeasonData(best.r.id, season, isTv);
       const d  = dr.data;
+      // Prefer query title when it differs from TMDB title (dubbed names like Policeodu vs Theri)
+      // Only use TMDB title when similarity is high (same script, same name)
+      const tmdbTitle   = d.title || d.name || title;
+      const queryClean  = cleanTitleForApi(queryTitle) || queryTitle;
+      const tmdbClean   = cleanTitleForApi(tmdbTitle) || tmdbTitle;
+      const titleSim    = stringSimilarity(queryClean.toLowerCase(), tmdbClean.toLowerCase());
+      const displayTitle = titleSim >= 0.5 ? tmdbTitle : (cleanTitleForApi(title) || title);
       return {
         tmdbId: String(d.id), type: isTv ? 'series' : 'movie', totalSeasons: d.number_of_seasons || 0,
-        title: d.title || d.name || title,
+        title: displayTitle,
         description: sd.seasonOverview || d.overview || '',
         poster: sd.seasonPoster || (d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : ''),
         backdrop: d.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : '',
@@ -550,9 +557,14 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       if (!dr) return null;
       const sd = await fetchSeasonData(best.r.id, season, isTv);
       const d  = dr.data;
+      const tmdbTitle2  = d.title || d.name || title;
+      const qClean2     = cleanTitleForApi(params.query) || params.query;
+      const tClean2     = cleanTitleForApi(tmdbTitle2) || tmdbTitle2;
+      const titleSim2   = stringSimilarity(qClean2.toLowerCase(), tClean2.toLowerCase());
+      const displayTitle2 = titleSim2 >= 0.5 ? tmdbTitle2 : (cleanTitleForApi(title) || title);
       return {
         tmdbId: String(d.id), type: isTv ? 'series' : 'movie', totalSeasons: d.number_of_seasons || 0,
-        title: d.title || d.name || title,
+        title: displayTitle2,
         description: sd.seasonOverview || d.overview || '',
         poster: sd.seasonPoster || (d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : ''),
         backdrop: d.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : '',
