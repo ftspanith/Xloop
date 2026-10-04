@@ -112,7 +112,7 @@ const IGNORE_RE = [
   /encrypted-tbn0\.gstatic\.com/i,/i\.ibb\.co/i,/iili\.io/i,
   /occ-0-\d+-\d+\./i,/img\d*\.hotstar\.com/i,/i\.slow\.pics/i,
   /photo\.chelpbot\.me/i,/akamaized\.net/i,/cloudfront\.net/i,
-  /vflix\./i, /vifix\./i,
+  /vflix\./i, /vifix\./i, /dtflix\./i, /dotflix\./i,
   /\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i,
 ];
 
@@ -126,7 +126,6 @@ function classifyUrl(url) {
   if (/gdflix\.|gdlink\.dev|gdtot\./i.test(url))   return 'GDFlix';
   if (/hubcloud\.|drivehub\./i.test(url))           return 'HubCloud';
   if (/filepress\.|fpgo\.xyz/i.test(url))           return 'FilePress';
-  if (/dtflix\.ink|dotflix\.wtf/i.test(url))        return 'DTFlix';
   if (/tmbcloud\./i.test(url))                       return 'TMBCloud';
   if (/drivenext\./i.test(url))                      return 'DriveNext';
   if (DIRECT_RE.some(r=>r.test(url)))   return 'Direct';

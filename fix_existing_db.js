@@ -12,7 +12,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const Movie = require('./models/Movie');
 
-const BLOCKED_RE = [/vflix\./i, /vifix\./i, /gofile\.io/i];
+const BLOCKED_RE = [/vflix\./i, /vifix\./i, /gofile\.io/i, /dtflix\./i, /dotflix\./i];
 const MAX_LINKS  = 18;
 
 function detectHost(url = '') {

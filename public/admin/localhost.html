@@ -906,7 +906,7 @@
   }
 
   // ── Client-side URL classifier (mirrors utils/parser.js classifyUrl) ────────
-  const _IGNORE_RE = [/t\.me\//i,/telegram\.me\//i,/youtube\.com/i,/youtu\.be/i,/drive\.google\.com/i,/image\.tmdb\.org/i,/m\.media-amazon\.com/i,/hotstar/i,/jiohotstar\./i,/jiocinema\./i,/primevideo\./i,/netflix\./i,/play\.google\./i,/mxplayer\./i,/zee5\./i,/aha\.(video|in|com)/i,/sonyliv\./i,/x\.com/i,/twitter\.com/i,/instagram\.com/i,/facebook\.com/i,/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i];
+  const _IGNORE_RE = [/t\.me\//i,/telegram\.me\//i,/youtube\.com/i,/youtu\.be/i,/drive\.google\.com/i,/image\.tmdb\.org/i,/m\.media-amazon\.com/i,/hotstar/i,/jiohotstar\./i,/jiocinema\./i,/primevideo\./i,/netflix\./i,/play\.google\./i,/mxplayer\./i,/zee5\./i,/aha\.(video|in|com)/i,/sonyliv\./i,/x\.com/i,/twitter\.com/i,/instagram\.com/i,/facebook\.com/i,/vflix\./i,/vifix\./i,/dtflix\./i,/dotflix\./i,/gofile\.io/i,/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i];
   const _PASTE_RE  = [/paste\.rs/i,/pastebin\.com/i,/telegra\.ph/i,/graph\.org/i,/justpaste\.it/i,/rentry\.co/i];
   const _SHORT_RE  = [/oyy\./i,/ouo\./i,/gplinks\./i,/softurl\./i,/droplink\./i,/mdisk\./i,/terabox/i,/bit\.ly/i,/tinyurl\./i,/rb\.gy/i,/t\.ly/i,/cutt\.ly/i,/iir\.ai/i,/kglinks\./i,/dl\.fliprs\./i];
   const _CDN_RE    = [/\.(m3u8|ts|m4s)(\?|$)/i,/\/(image|img|thumbnail|poster|banner|cover)\//i,/\/(uploads?|wp-content|static|assets?)\//i,/vod\d*\./i,/img\d*\./i,/thumbs?\./i];
