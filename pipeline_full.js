@@ -918,9 +918,12 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           const existLinks = dbRec.downloads[matchedIdx]?.links || [];
           // Skip: exact same URL already stored
           if (existLinks.some(l => l.url === finalUrl)) { skipped++; continue; }
+          // Skip: same host already has a link in this download group (prevents 5x GDFlix rows for same size)
+          if (existLinks.some(l => detectHost(l.url) === host)) { skipped++; continue; }
           // Cap: max 18 total links per content across all quality groups from both accounts
           const totalLinksInContent = dbRec.downloads.reduce((sum, d) => sum + (d.links?.length || 0), 0);
           if (totalLinksInContent >= 18) { skipped++; continue; }
+
 
           const op = { $addToSet: { [`downloads.${matchedIdx}.links`]: newDl.links[0] } };
           if (Object.keys(metaSet).length) op.$set = metaSet;
