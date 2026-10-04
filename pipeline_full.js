@@ -906,8 +906,8 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           const existLinks = dbRec.downloads[matchedIdx]?.links || [];
           // Skip: exact URL already present
           if (existLinks.some(l => l.url === finalUrl)) { skipped++; continue; }
-          // Cap: never more than 8 links per download group (safety valve against post spam)
-          const MAX_LINKS_PER_DL = 8;
+          // Cap: never more than 18 links per download group (safety valve against post spam)
+          const MAX_LINKS_PER_DL = 18;
           if (existLinks.length >= MAX_LINKS_PER_DL) { skipped++; continue; }
 
           const op = { $addToSet: { [`downloads.${matchedIdx}.links`]: newDl.links[0] } };
