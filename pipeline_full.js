@@ -916,11 +916,9 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
               metaSet[`downloads.${matchedIdx}.language`] = dbRec.downloads[matchedIdx].language;
           }
           const existLinks = dbRec.downloads[matchedIdx]?.links || [];
-          // Skip: exact URL already present
+          // Skip: exact same URL already stored
           if (existLinks.some(l => l.url === finalUrl)) { skipped++; continue; }
-          // Skip: same host already has a link in this download group (1 link per host per group)
-          if (existLinks.some(l => detectHost(l.url) === host)) { skipped++; continue; }
-          // Cap: max 18 total links per content (all quality groups combined, both Acc1 + Acc2)
+          // Cap: max 18 total links per content across all quality groups from both accounts
           const totalLinksInContent = dbRec.downloads.reduce((sum, d) => sum + (d.links?.length || 0), 0);
           if (totalLinksInContent >= 18) { skipped++; continue; }
 
