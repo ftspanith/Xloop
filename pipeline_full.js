@@ -1129,23 +1129,60 @@ async function main(opts = {}) {
       log('STEP 1 — No pre-extracted links found. Checking for telegram_export.json...');
       try {
         const PipelineCache = require('./models/PipelineCache');
-        if (fs.existsSync(EXPORT_FILE)) {
-          log('STEP 1 — Parsing telegram_export.json...');
-          await phaseExtract(_emitter);
-          ok('Extraction done → links_for_bypasser.json');
-        } else {
-          // Try loading raw export from MongoDB PipelineCache
+        // Load export from local file or MongoDB cache
+        if (!fs.existsSync(EXPORT_FILE)) {
           const cached = await PipelineCache.findOne({ key: 'telegram_export' }).lean();
           if (cached && cached.data) {
             fs.writeFileSync(EXPORT_FILE, JSON.stringify(cached.data));
-            log('STEP 1 — Parsing telegram_export.json from MongoDB cache...');
-            await phaseExtract(_emitter);
-            ok('Extraction done');
+            log('STEP 1 — Loaded telegram_export.json from MongoDB cache');
           } else {
             fail('No extracted links or telegram_export.json found. Upload your telegram_export.json first via the Dashboard.');
             throw new Error('No export data found');
           }
         }
+        // Inline extraction — replaces the deleted extract_links.js script
+        log('STEP 1 — Parsing telegram_export.json...');
+        const { parseMessageBlock, classifyUrl } = require('./utils/parser');
+        const rawExport = JSON.parse(fs.readFileSync(EXPORT_FILE, 'utf8'));
+        const messages  = Array.isArray(rawExport) ? rawExport
+          : (rawExport.messages || rawExport.data || []);
+        const extracted = [];
+        let msgIdx = 0;
+        for (const msg of messages) {
+          msgIdx++;
+          const text = (typeof msg === 'string') ? msg
+            : [msg.text, msg.caption, msg.message].filter(Boolean).join('\n');
+          if (!text || text.length < 10) continue;
+          try {
+            const parsed = parseMessageBlock(text);
+            if (!parsed || !parsed.downloads) continue;
+            for (const dl of parsed.downloads) {
+              for (const link of (dl.links || [])) {
+                if (!link.url) continue;
+                const kind = classifyUrl(link.url);
+                extracted.push({
+                  url:      link.url,
+                  host:     link.host || kind,
+                  title:    parsed.title,
+                  year:     parsed.year,
+                  quality:  dl.quality,
+                  size:     dl.size,
+                  language: dl.language,
+                  season:   dl.season ?? null,
+                  episode:  dl.episode ?? null,
+                  type:     parsed.type,
+                  filename: dl.filename,
+                  codec:    dl.codec,
+                  hdr:      dl.hdr,
+                  audio:    dl.audio,
+                });
+              }
+            }
+          } catch (_) { /* skip unparseable blocks */ }
+          if (msgIdx % 5000 === 0) log(`  Parsed ${msgIdx}/${messages.length} messages, ${extracted.length} links so far...`);
+        }
+        fs.writeFileSync(LINKS_FILE, JSON.stringify(extracted));
+        ok(`Extraction done — ${extracted.length} links from ${messages.length} messages → links_for_bypasser.json`);
       } catch (err) {
         if (err.message === 'No export data found') throw err;
         fail(`Pipeline step 1 failed: ${err.message}`);
