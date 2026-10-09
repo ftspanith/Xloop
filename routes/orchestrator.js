@@ -106,7 +106,7 @@ router.get('/status', async (req, res) => {
     }
     const flag = await PipelineCache.findOne({ key: '_pipeline_running' }).lean();
     const isRunning = flag && flag.running === true &&
-      (Date.now() - new Date(flag.updatedAt || 0).getTime() < 30 * 60 * 1000);
+      (Date.now() - new Date(flag.updatedAt || 0).getTime() < 10 * 60 * 1000); // 10-min stale timeout
     const progress = await PipelineCache.findOne({ key: '_pipeline_progress' }).lean();
     return res.json({
       running: !!isRunning,
@@ -240,9 +240,28 @@ router.get('/start', auth, async (req, res) => {
 // dashboard.html uses POST; orchestrator.html uses GET EventSource.
 // This POST version just kicks off via the shared broadcast channel.
 router.post('/start', auth, async (req, res) => {
+  // Check in-memory flag first (fast path — same serverless instance)
   if (pipelineRunning) {
     return res.status(400).json({ error: 'Pipeline is already running' });
   }
+  // Also check MongoDB flag — catches stale flags from crashed/timed-out runs on OTHER instances
+  try {
+    const PipelineCache = require('../models/PipelineCache');
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1) {
+      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+    }
+    const flag = await PipelineCache.findOne({ key: '_pipeline_running' }).lean();
+    const ageMs = Date.now() - new Date(flag?.updatedAt || 0).getTime();
+    const STALE_MS = 10 * 60 * 1000; // 10 minutes — if older, treat as stale/crashed
+    if (flag && flag.running === true && ageMs < STALE_MS) {
+      return res.status(400).json({ error: 'Pipeline is already running' });
+    }
+    // Stale flag — auto-clear it so we can start fresh
+    if (flag && flag.running === true) {
+      await PipelineCache.findOneAndUpdate({ key: '_pipeline_running' }, { $set: { running: false, updatedAt: new Date() } });
+    }
+  } catch (_) { /* non-critical — proceed */ }
 
   const { skipScraper, resume, skipBypass, scope = 'all', titleFilter = '' } = req.body || {};
   const scopeLabel = scope === 'daily' ? ' [Today\'s New]' : (scope === 'title' && titleFilter ? ` [Title: ${titleFilter}]` : '');
@@ -557,6 +576,17 @@ router.post('/stop', auth, (req, res) => {
   abortUpload(); // Also abort any in-progress chunked JSON upload
   broadcast('Stop requested by admin.');
   res.json({ message: 'Stop requested' });
+});
+
+// ── Force-reset stuck pipeline flag ──────────────────────────────────────────
+// Use this when the pipeline crashed mid-run and the dashboard is stuck on
+// "Pipeline is already running". Safe to call at any time.
+router.post('/reset-flag', auth, async (req, res) => {
+  _stopRequested = false;
+  pipelineRunning = false;
+  await setPipelineRunningFlag(false);
+  broadcast('[INFO] Pipeline flag force-reset by admin.');
+  res.json({ message: 'Pipeline flag reset. You can now start a new pipeline run.' });
 });
 
 // ── Wipe DB ───────────────────────────────────────────────────────────────────
