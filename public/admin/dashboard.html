@@ -927,7 +927,7 @@
   }
 
   function _dashDStep(n, state, detail='') {
-    const icons = { wait:'⬜', running:'🔄', done:'✅', skip:'⏭️', error:'❌' };
+    const icons = { wait:'[ ]', running:'[~]', done:'[OK]', skip:'[--]', error:'[!]' };
     const colors = { wait:'rgba(255,255,255,.55)', running:'#fff', done:'#22c55e', skip:'rgba(255,255,255,.35)', error:'#ef4444' };
     document.getElementById(`ds${n}icon`).textContent = icons[state]||'⬜';
     document.getElementById(`dBothStep${n}`).style.color = colors[state]||'';

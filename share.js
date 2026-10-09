@@ -78,16 +78,16 @@ function openTunnel() {
 
 function printBanner(publicUrl) {
   const config = JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8'));
-  console.log('\n🔗 ══════════════════════════════════════════ 🔗');
-  console.log('   🚀  XLOOP IS LIVE');
-  console.log('   🌍  Public URL:', publicUrl);
-  console.log('🔗 ══════════════════════════════════════════ 🔗');
-  console.log('\n  📨 Invite links (send one per member):\n');
+  console.log('\n══════════════════════════════════════════════');
+  console.log('   XLOOP IS LIVE');
+  console.log('   Public URL:', publicUrl);
+  console.log('══════════════════════════════════════════════');
+  console.log('\n  Invite links (send one per member):\n');
   config.members.forEach(m => {
     console.log(`  ${m.name}: ${publicUrl}/?invite=${m.token}`);
   });
-  console.log('\n  🛑 Stop sharing : Ctrl+C');
-  console.log('  🔒 Disable access: set "enabled": false in invite_tokens.json\n');
+  console.log('\n  Stop sharing : Ctrl+C');
+  console.log('  Disable access: set "enabled": false in invite_tokens.json\n');
 }
 
 async function main() {
@@ -95,12 +95,12 @@ async function main() {
   killAll('ssh.*serveo');
   await sleep(300);
 
-  console.log('⚡ Starting server...');
+  console.log('Starting server...');
   const srv = spawn('node', ['server.js'], { stdio: 'inherit' });
   srv.on('exit', code => { if (code) process.exit(code); });
 
   await waitForServer(PORT);
-  console.log('✅ Server ready');
+  console.log('[OK] Server ready');
 
   let tunnel = null;
   let currentUrl = '';
@@ -109,7 +109,7 @@ async function main() {
   async function connect() {
     if (reconnecting) return;
     reconnecting = true;
-    console.log('🌐 Opening SSH tunnel via localhost.run...');
+    console.log('Opening SSH tunnel via localhost.run...');
     try {
       tunnel = await openTunnel();
       currentUrl = tunnel.url;
@@ -117,7 +117,7 @@ async function main() {
 
       tunnel.proc.on('close', async () => {
         if (reconnecting) return;
-        console.log('\n⚠️  SSH process closed — reconnecting...');
+        console.log('\n[WARN] SSH process closed — reconnecting...');
         await sleep(1500);
         connect().catch(err => { console.error('Reconnect failed:', err.message); process.exit(1); });
       });
@@ -135,12 +135,12 @@ async function main() {
     const alive = await checkUrl(currentUrl);
     if (!alive && !reconnecting) {
       // Don't kill it immediately for lhr.life, just log it, as lhr.life might drop pings but keep websocket alive
-      console.log('\n⚠️  Health check ping failed, but keeping tunnel open...');
+      console.log('\n[WARN] Health check ping failed, but keeping tunnel open...');
     }
   }, 30000);
 
   process.on('SIGINT', () => {
-    console.log('\n👋 Shutting down...');
+    console.log('\nShutting down...');
     if (tunnel && tunnel.proc) tunnel.proc.kill();
     srv.kill();
     process.exit(0);

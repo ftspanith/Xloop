@@ -58,7 +58,7 @@ const C = {
 // emitter: function(line:string) — injected by orchestrator route for SSE streaming
 // When running as CLI, emitter simply prints to stdout
 let _emitter = line => process.stdout.write(line + '\n');
-const log  = msg => _emitter(`▶  ${msg}`);
+const log  = msg => _emitter(`[LOG] ${msg}`);
 const ok   = msg => _emitter(`[OK] ${msg}`);
 const warn = msg => _emitter(`[WARN]  ${msg}`);
 const fail = msg => _emitter(`[ERR] ${msg}`);

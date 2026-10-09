@@ -107,9 +107,9 @@ const c = {
   yellow: '\x1b[33m', cyan: '\x1b[36m', bold: '\x1b[1m',
 };
 const log  = (msg) => console.log(`${c.cyan}[xloop]${c.reset} ${msg}`);
-const ok   = (msg) => console.log(`${c.green}✅ ${msg}${c.reset}`);
-const fail = (msg) => console.log(`${c.red}❌ ${msg}${c.reset}`);
-const warn = (msg) => console.log(`${c.yellow}⚠️  ${msg}${c.reset}`);
+const ok   = (msg) => console.log(`${c.green}[OK] ${msg}${c.reset}`);
+const fail = (msg) => console.log(`${c.red}[ERR] ${msg}${c.reset}`);
+const warn = (msg) => console.log(`${c.yellow}[WARN] ${msg}${c.reset}`);
 
 function apiRequest(method, urlPath, body, token) {
   return new Promise((resolve, reject) => {
