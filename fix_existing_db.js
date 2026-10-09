@@ -5,7 +5,8 @@
  *   2. Dedup download groups: same quality + same host → merge
  *   3. Enforce 18-link total cap per movie
  *   4. Remove empty download groups
- *   5. Recompute aggregates
+ *   5. Clear identical sizes across different-quality groups (parser bug artefact)
+ *   6. Recompute aggregates
  */
 'use strict';
 require('dotenv').config();
@@ -35,6 +36,12 @@ function recompute(downloads = []) {
   ))];
   const codecs = [...new Set(downloads.map(d => d.codec).filter(c => c && c !== 'Other'))];
   return { formats, quality, languages, codecs };
+}
+
+function toMB(s) {
+  if (!s) return 0;
+  const n = parseFloat(s);
+  return /GB/i.test(s) ? n * 1024 : (n || 0);
 }
 
 async function run() {
@@ -114,9 +121,36 @@ async function run() {
       }).filter(dl => dl.links.length > 0);
     }
 
+    // 5. Clear identical sizes across DIFFERENT quality groups (parser bug artefact).
+    //    When the same size string is stored for both 1080p and 720p groups, that is
+    //    wrong — it was copied from the message header. Clear size on those groups
+    //    so the UI shows nothing instead of a misleading value.
+    //    Only runs when there are 2+ download groups with size values.
+    const groupsWithSize = downloads.filter(d => d.size && toMB(d.size) > 0);
+    if (groupsWithSize.length >= 2) {
+      // Index groups by normalized size key
+      const sizeMap = {};
+      for (const d of groupsWithSize) {
+        const key = (d.size || '').toLowerCase().replace(/\s+/g, '');
+        if (!sizeMap[key]) sizeMap[key] = [];
+        sizeMap[key].push(d);
+      }
+      // Any size shared across DIFFERENT qualities → clear it
+      for (const group of Object.values(sizeMap)) {
+        if (group.length < 2) continue;
+        const uniqueQualities = new Set(group.map(d => d.quality));
+        if (uniqueQualities.size > 1) {
+          for (const d of group) {
+            d.size = '';
+            changed = true;
+          }
+        }
+      }
+    }
+
     if (!changed) { skipped++; continue; }
 
-    // 5. Save with recomputed aggregates
+    // 6. Save with recomputed aggregates
     const agg = recompute(downloads);
     try {
       await Movie.findByIdAndUpdate(movie._id, {

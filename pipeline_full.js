@@ -860,23 +860,23 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           if (!seasOk) continue;
 
           // TIER 1 — Filename match: same .mkv/.mp4 name = definitely same file
-          // Handles all language/quality label variations between posts
           const exFn  = (ex.filename  || '').trim().toLowerCase();
           const newFn = (item.filename || '').trim().toLowerCase();
           if (exFn && newFn && exFn === newFn) {
             matchedIdx = j; break;
           }
 
-          // TIER 2 — Quality + size + codec match: same quality AND size within 1% AND same codec
-          const qualOk    = ex.quality === quality;
-          const exMB      = toMB(ex.size);
+          const qualOk  = ex.quality === quality;
+          const exMB    = toMB(ex.size);
           const bothKnown = newMB > 0 && exMB > 0;
           const pct       = bothKnown ? Math.abs(newMB - exMB) / Math.max(newMB, exMB) : 1;
-          const sizeClose = bothKnown && pct < 0.01;
-          const exCodec   = (ex.codec  || '').toLowerCase().trim();
-          const newCodec  = (codec     || '').toLowerCase().trim();
+          // Within 5%: definitely the same encode (was 3%, loosened further)
+          const sizeClose = bothKnown && pct < 0.05;
+          const exCodec   = (ex.codec || '').toLowerCase().trim();
+          const newCodec  = (codec    || '').toLowerCase().trim();
           const codecOk   = !exCodec || !newCodec || exCodec === newCodec;
 
+          // TIER 2 — Quality + size + codec: same quality, size within 5%, same codec
           if (qualOk && sizeClose && codecOk) {
             matchedIdx = j;
             if (language && language !== 'Multi' && (!ex.language || ex.language === 'Multi')) {
@@ -885,19 +885,32 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
             break;
           }
 
-          // TIER 3 — Quality + language (both sizes unknown): same quality + same language
+          // TIER 3 — Quality + language + both sizes unknown + filename prefix matches
+          // Requires 60%+ filename similarity so we don't collapse two different no-size rips
           const langNorm    = (s) => (s||'').toLowerCase().replace(/\s+/g,'');
           const langOk      = langNorm(ex.language) === langNorm(language);
           const bothUnknown = !size && !ex.size;
-          if (qualOk && langOk && bothUnknown) {
+          const fnPrefixOk  = (() => {
+            if (!exFn || !newFn) return false;
+            const shorter = Math.min(exFn.length, newFn.length);
+            if (shorter < 6) return false;
+            // Count matching leading characters
+            let common = 0;
+            while (common < shorter && exFn[common] === newFn[common]) common++;
+            return common / shorter >= 0.6;
+          })();
+          if (qualOk && langOk && bothUnknown && fnPrefixOk) {
             matchedIdx = j; break;
           }
 
-          // TIER 4 — Quality + host match: same quality on same host = same download group
-          // Prevents 73-link explosions when the same movie is posted by both channels
-          // with slightly different size strings (e.g. "1.4GB" vs "1.40 GB")
+          // TIER 4 — Quality + host + size bucket: same quality, same host, same size bracket
+          // "Same size bracket" = both sizes unknown OR sizes within 5%.
+          // This prevents 1080p GDFlix and 720p GDFlix from being collapsed.
+          // Also prevents two DIFFERENT 1080p GDFlix rips with different sizes from collapsing.
           const exHostsInGroup = (ex.links || []).map(l => detectHost(l.url));
-          if (qualOk && exHostsInGroup.includes(host)) {
+          const hostMatch = qualOk && exHostsInGroup.includes(host);
+          const sizeBracketOk = bothKnown ? sizeClose : (!size && !ex.size);
+          if (hostMatch && sizeBracketOk) {
             matchedIdx = j; break;
           }
         }
@@ -918,12 +931,23 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           const existLinks = dbRec.downloads[matchedIdx]?.links || [];
           // Skip: exact same URL already stored
           if (existLinks.some(l => l.url === finalUrl)) { skipped++; continue; }
-          // Skip: same host already has a link in this download group (prevents 5x GDFlix rows for same size)
-          if (existLinks.some(l => detectHost(l.url) === host)) { skipped++; continue; }
-          // Cap: max 18 total links per content across all quality groups from both accounts
+          // Skip: same host already in this group AND sizes also match (true duplicate mirror).
+          // If sizes differ, the new link is a different rip from the same host — keep it.
+          const sameHostInGroup = existLinks.some(l => detectHost(l.url) === host);
+          const sizesMatchExisting = existLinks.some(l => {
+            const lMB = toMB(dbRec.downloads[matchedIdx]?.size);
+            return detectHost(l.url) === host && bothKnownCheck(newMB, lMB);
+          });
+          function bothKnownCheck(a, b) {
+            if (a <= 0 || b <= 0) return false;
+            return Math.abs(a - b) / Math.max(a, b) < 0.05;
+          }
+          if (sameHostInGroup && sizesMatchExisting) { skipped++; continue; }
+          // Cap: max 8 links per individual quality group
+          if (existLinks.length >= 8) { skipped++; continue; }
+          // Cap: max 30 total links per content
           const totalLinksInContent = dbRec.downloads.reduce((sum, d) => sum + (d.links?.length || 0), 0);
-          if (totalLinksInContent >= 18) { skipped++; continue; }
-
+          if (totalLinksInContent >= 30) { skipped++; continue; }
 
           const op = { $addToSet: { [`downloads.${matchedIdx}.links`]: newDl.links[0] } };
           if (Object.keys(metaSet).length) op.$set = metaSet;
@@ -935,9 +959,9 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
             updated++;
           } else skipped++;
         } else {
-          // Cap: max 18 total links per content before adding new download group
+          // New download group — cap at 30 total links per content
           const totalLinksInContent2 = dbRec.downloads.reduce((sum, d) => sum + (d.links?.length || 0), 0);
-          if (totalLinksInContent2 >= 18) { skipped++; continue; }
+          if (totalLinksInContent2 >= 30) { skipped++; continue; }
           const op = { $push: { downloads: newDl } };
           if (Object.keys(metaSet).length) op.$set = metaSet;
           const res = await Movie.findByIdAndUpdate(dbRec._id, op, { new: true });

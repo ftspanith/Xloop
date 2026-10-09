@@ -918,14 +918,32 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   const fileMap={};
   for (const pair of pairs) {
     const rawFn=pair.rawFilename||masterTitle;
+    const hasDedicatedFn = rawFn !== masterTitle;
     let quality=normalizeQuality(rawFn);
+    // Size: only pull from rawFn itself (most accurate). Pair-extracted size is next.
+    // Do NOT fall back to masterTitle or fullText when we have per-link filenames,
+    // because that incorrectly assigns the same size to 1080p and 720p variants.
     let size=extractSize(rawFn);
+    if (!size && pair.size) size=pair.size;
+    // Only use fullText/masterTitle size when there's no dedicated filename at all
+    // (i.e. the parser couldn't find a filename line near the URL)
+    if (!size && !hasDedicatedFn) {
+      // Try to find size near this URL's quality token in the full text
+      // by searching for "quality … size" patterns in fullText
+      const qualMatch = quality !== 'HD' ? new RegExp(`${quality}[^\\n]{0,60}?(\\d+(?:\\.\\d+)?\\s*(?:GB|MB))`, 'i').exec(fullText) : null;
+      if (qualMatch) {
+        size = qualMatch[1].replace(/\s+/g, '').trim();
+      } else {
+        // Last resort: any size in fullText (only when there are no per-link filenames at all)
+        const anyPairHasFn = pairs.some(p => p.rawFilename && p.rawFilename !== masterTitle);
+        if (!anyPairHasFn) size = extractSize(fullText);
+      }
+    }
+
     const hdr=detectHDR(rawFn);
     const codec=detectCodec(rawFn);
 
-    if (!size&&rawFn!==masterTitle) size=extractSize(masterTitle);
-    if (!size) size=extractSize(fullText);
-    if (quality==='HD'&&rawFn!==masterTitle) { const mq=normalizeQuality(masterTitle); if(mq!=='HD') quality=mq; }
+    if (quality==='HD'&&hasDedicatedFn) { const mq=normalizeQuality(masterTitle); if(mq!=='HD') quality=mq; }
     if (quality==='HD') { const mq=normalizeQuality(fullText); if(mq!=='HD') quality=mq; }
 
     const fileLangs=detectAllLanguages(rawFn);
@@ -933,8 +951,6 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 
     const {season:ds,episode:de}=extractSeasonEpisode(rawFn);
     const fs=ds??season, fe=de??episode;
-    // Prefer size from inline filename; fall back to pair's extracted size
-    if (!size&&pair.size) size=pair.size;
     const key=`${quality}__${size||'nosize'}__S${fs??''}E${fe??''}`;
 
     const audio = extractAudio(rawFn) || extractAudio(fullText) || null;
