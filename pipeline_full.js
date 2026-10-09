@@ -1122,34 +1122,16 @@ async function main(opts = {}) {
   // STEP 1: Extract
   sep();
   if (!IMPORT_SRC) {
-    // Check if already-extracted links are in /tmp (same Lambda as upload)
+    // Check if already-extracted links are in /tmp (same Lambda invocation as upload)
     if (fs.existsSync(LINKS_FILE)) {
       warn('STEP 1 — Using pre-extracted links_for_bypasser.json from /tmp');
     } else {
-      // Try MongoDB cache (extracted_links saved during upload)
-      log('STEP 1 — Checking MongoDB for pre-extracted links...');
+      log('STEP 1 — No pre-extracted links found. Checking for telegram_export.json...');
       try {
-        const ExtractedLink = require('./models/ExtractedLink');
         const PipelineCache = require('./models/PipelineCache');
-
-        // Always check ExtractedLink collection directly (PipelineCache count can be stale after wipe)
-        const linkCount = await ExtractedLink.countDocuments({});
-        if (linkCount > 0) {
-          // Load all links from ExtractedLink collection
-          const links = await ExtractedLink.find({}).lean();
-          const clean = links.map(({_id, __v, uploadBatch, ...rest}) => rest);
-          fs.writeFileSync(LINKS_FILE, JSON.stringify(clean));
-          ok(`Loaded ${clean.length} pre-extracted links from MongoDB. Skipping extraction step.`);
-          // Re-sync the PipelineCache count in case it was reset by wipe
-          await PipelineCache.findOneAndUpdate(
-            { key: 'extracted_links' },
-            { $set: { count: clean.length, 'data.count': clean.length } },
-            { upsert: false }
-          );
-        } else if (fs.existsSync(EXPORT_FILE)) {
-          // Fall back: parse raw export file from /tmp
-          log('STEP 1 — Parsing telegram_export.json from /tmp...');
-          await runScript(path.join(ROOT, 'extract_links.js'));
+        if (fs.existsSync(EXPORT_FILE)) {
+          log('STEP 1 — Parsing telegram_export.json...');
+          await phaseExtract(_emitter);
           ok('Extraction done → links_for_bypasser.json');
         } else {
           // Try loading raw export from MongoDB PipelineCache
@@ -1157,7 +1139,7 @@ async function main(opts = {}) {
           if (cached && cached.data) {
             fs.writeFileSync(EXPORT_FILE, JSON.stringify(cached.data));
             log('STEP 1 — Parsing telegram_export.json from MongoDB cache...');
-            await runScript(path.join(ROOT, 'extract_links.js'));
+            await phaseExtract(_emitter);
             ok('Extraction done');
           } else {
             fail('No extracted links or telegram_export.json found. Upload your telegram_export.json first via the Dashboard.');
@@ -1166,7 +1148,7 @@ async function main(opts = {}) {
         }
       } catch (err) {
         if (err.message === 'No export data found') throw err;
-        fail(`MongoDB load failed: ${err.message}`);
+        fail(`Pipeline step 1 failed: ${err.message}`);
         throw err;
       }
     }
