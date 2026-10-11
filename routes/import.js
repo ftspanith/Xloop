@@ -11,6 +11,7 @@ const {
   detectHDR,
   extractAudio,
 } = require('../utils/parser');
+const { searchTMDB: _sharedSearchTMDB, searchOMDB: _sharedSearchOMDB } = require('../utils/tmdbSearch');
 
 
 // ── Server-side API keys (fallback when client doesn't pass them) ──
@@ -138,184 +139,32 @@ function scoreMatch(parsed, tmdbResult) {
 
 const TMDB_LANG_MAP = { te: 'Telugu', ta: 'Tamil', hi: 'Hindi', ml: 'Malayalam', kn: 'Kannada', en: 'English', mr: 'Marathi', bn: 'Bengali', pa: 'Punjabi' };
 
-async function fetchTMDB(parsed, tmdbKey, retries = 2) {
-  const cleanTitle = cleanTitleForApi(parsed.title);
-  const isShortTitle = cleanTitle.trim().split(/\s+/).filter(Boolean).length <= 2;
+// ═══════════════════════════════════════════════════════════════
+//  TMDB API  ── powered by shared 14-algorithm engine
+//  (same logic as pipeline_full.js auto-import)
+// ═══════════════════════════════════════════════════════════════
 
-  // ── FAST PATH: Direct lookup by IMDB or TMDB ID ────────────────────────────
-  // If the message contains tt\d{7} (IMDB ID) or a TMDB numeric ID,
-  // skip fuzzy search entirely — this gives a 100% guaranteed match.
-  if (parsed.tmdbIdHint || parsed.imdbId) {
-    try {
-      let directData = null;
-      let isTv = parsed.isSeries;
-
-      if (parsed.tmdbIdHint) {
-        // Try movie first, then tv
-        for (const mtype of (parsed.isSeries ? ['tv', 'movie'] : ['movie', 'tv'])) {
-          try {
-            const r = await axios.get(`https://api.themoviedb.org/3/${mtype}/${parsed.tmdbIdHint}`, {
-              params: { api_key: tmdbKey }, timeout: 30000
-            });
-            if (r.data && (r.data.title || r.data.name)) {
-              directData = r.data;
-              isTv = mtype === 'tv';
-              break;
-            }
-          } catch (_) {}
-        }
-      }
-
-      if (!directData && parsed.imdbId) {
-        // Use /find endpoint to resolve IMDB ID → TMDB
-        const findRes = await axios.get(`https://api.themoviedb.org/3/find/${parsed.imdbId}`, {
-          params: { api_key: tmdbKey, external_source: 'imdb_id' }, timeout: 30000
-        });
-        const movies = findRes.data?.movie_results || [];
-        const tvs    = findRes.data?.tv_results    || [];
-        if (movies.length) {
-          const r = await axios.get(`https://api.themoviedb.org/3/movie/${movies[0].id}`, {
-            params: { api_key: tmdbKey }, timeout: 30000
-          });
-          directData = r.data; isTv = false;
-        } else if (tvs.length) {
-          const r = await axios.get(`https://api.themoviedb.org/3/tv/${tvs[0].id}`, {
-            params: { api_key: tmdbKey }, timeout: 30000
-          });
-          directData = r.data; isTv = true;
-        }
-      }
-
-      if (directData) {
-        const d = directData;
-        // Fetch season poster if TV + known season
-        let seasonPoster = '', seasonOverview = '';
-        if (isTv && parsed.season) {
-          try {
-            const sr = await axios.get(`https://api.themoviedb.org/3/tv/${d.id}/season/${parsed.season}`, {
-              params: { api_key: tmdbKey }, timeout: 30000
-            });
-            if (sr.data.poster_path) seasonPoster = `https://image.tmdb.org/t/p/w500${sr.data.poster_path}`;
-            if (sr.data.overview)    seasonOverview = sr.data.overview;
-          } catch (_) {}
-        }
-
-                return {
-          tmdbId:            String(d.id),
-          type:              isTv ? 'series' : 'movie',
-          totalSeasons:      d.number_of_seasons || 0,
-          title:             d.title || d.name || parsed.title,
-          description:       seasonOverview || d.overview || '',
-          poster:            seasonPoster || (d.poster_path   ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : ''),
-          backdrop:          d.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : '',
-          rating:            Math.round((d.vote_average || 0) * 10) / 10,
-          year:              d.release_date   ? parseInt(d.release_date.substring(0, 4))
-                           : d.first_air_date ? parseInt(d.first_air_date.substring(0, 4)) : parsed.year,
-          genre:             (d.genres || []).map(g => g.name),
-          duration:          d.runtime
-            ? `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}m`
-            : (d.episode_run_time?.[0] ? `${Math.floor(d.episode_run_time[0] / 60)}h ${d.episode_run_time[0] % 60}m` : ''),
-          language:          TMDB_LANG_MAP[d.original_language] || '',
-          confidence:        100, // direct ID = perfect match
-          confidenceReasons: ['Direct IMDB/TMDB ID match'],
-          isAnime:           (d.genres || []).some(g => g.name === 'Animation') && (isTv || d.original_language === 'ja'),
-        };
-      }
-    } catch (e) {
-          }
-  }
-
-  // ── FUZZY SEARCH FALLBACK ────────────────────────────────────────────────────
-  const searchAttempts = [
-    // 1. With year (most specific)
-    ...(parsed.year ? [{ api_key: tmdbKey, query: cleanTitle, year: parsed.year }] : []),
-    // 2. Without year
-    { api_key: tmdbKey, query: cleanTitle },
-    // 3. Short-title trick: append the year as part of the query string
-    ...(isShortTitle && parsed.year ? [{ api_key: tmdbKey, query: `${cleanTitle} ${parsed.year}` }] : []),
-    // 4. Main title only (split on colon/dash for subtitle-heavy titles)
-    { api_key: tmdbKey, query: cleanTitle.split(/[:\-]/)[0].trim() },
-    // 5. First 3 words
-    { api_key: tmdbKey, query: cleanTitle.split(/\s+/).slice(0, 3).join(' ') },
-  ].filter(p => p.query && p.query.length >= 2);
-
-  for (const searchParams of searchAttempts) {
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        const searchRes = await axios.get('https://api.themoviedb.org/3/search/multi', { params: searchParams, timeout: 30000 });
-        let results = (searchRes.data.results || []).filter(r => r.media_type === 'movie' || r.media_type === 'tv');
-        if (results.length === 0) break; // try next search strategy
-
-        // Score top results
-        const scored = results.slice(0, 8).map(r => {
-          const isTv  = r.media_type === 'tv';
-          const rYear = r.release_date ? parseInt(r.release_date.substring(0, 4)) : (r.first_air_date ? parseInt(r.first_air_date.substring(0, 4)) : null);
-          const preview = { title: r.title || r.name || '', year: rYear, type: isTv ? 'series' : 'movie' };
-          const { score, reasons } = scoreMatch(parsed, preview);
-          return { r, score, reasons, isTv };
-        });
-        scored.sort((a, b) => b.score - a.score);
-        const best = scored[0];
-
-        // Confidence thresholds — STRICTER for short titles
-        const titleSim    = stringSimilarity(cleanTitleForApi(parsed.title), cleanTitleForApi(best.r.title || best.r.name || ''));
-        const minScore    = isShortTitle ? 65 : 55;
-        const minTitleSim = isShortTitle ? 0.70 : 0.50;
-
-        if (best.score < minScore || titleSim < minTitleSim) {
-                    break; // try next search strategy
-        }
-
-        // Fetch full details
-        const detailRes = await axios.get(`https://api.themoviedb.org/3/${best.isTv ? 'tv' : 'movie'}/${best.r.id}`, {
-          params: { api_key: tmdbKey }, timeout: 30000
-        });
-        const d = detailRes.data;
-
-        // Fetch season-specific poster if this is a TV series with a known season
-        let seasonPoster   = '';
-        let seasonOverview = '';
-        if (best.isTv && parsed.season) {
-          try {
-            const seasonRes = await axios.get(
-              `https://api.themoviedb.org/3/tv/${best.r.id}/season/${parsed.season}`,
-              { params: { api_key: tmdbKey }, timeout: 30000 }
-            );
-            if (seasonRes.data.poster_path)
-              seasonPoster = `https://image.tmdb.org/t/p/w500${seasonRes.data.poster_path}`;
-            if (seasonRes.data.overview)
-              seasonOverview = seasonRes.data.overview;
-          } catch (_) { /* season poster is optional */ }
-        }
-
-        return {
-          tmdbId:            String(d.id),
-          type:              best.isTv ? 'series' : 'movie',
-          totalSeasons:      d.number_of_seasons || 0,
-          title:             d.title || d.name || parsed.title,
-          description:       seasonOverview || d.overview || '',
-          // Prefer season-specific poster, fall back to show poster
-          poster:            seasonPoster || (d.poster_path   ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : ''),
-          backdrop:          d.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : '',
-          rating:            Math.round((d.vote_average || 0) * 10) / 10,
-          year:              d.release_date   ? parseInt(d.release_date.substring(0, 4))
-                           : d.first_air_date ? parseInt(d.first_air_date.substring(0, 4)) : parsed.year,
-          genre:             (d.genres || []).map(g => g.name),
-          duration:          d.runtime
-            ? `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}m`
-            : (d.episode_run_time?.[0] ? `${Math.floor(d.episode_run_time[0] / 60)}h ${d.episode_run_time[0] % 60}m` : ''),
-          language:          TMDB_LANG_MAP[d.original_language] || '',
-          confidence:        best.score,
-          confidenceReasons: best.reasons,
-          isAnime:           (d.genres || []).some(g => g.name === 'Animation') &&
-                             (best.isTv || d.original_language === 'ja'),
-        };
-      } catch (err) {
-        if (attempt < retries) await sleep(1000 * (attempt + 1));
-      }
-    }
-  }
-  return null;
+async function fetchTMDB(parsed, tmdbKey) {
+  // Delegate to the shared multi-algorithm TMDB search engine.
+  // Passes parsed.imdbId + parsed.tmdbIdHint for fast-path ID resolution.
+  const result = await _sharedSearchTMDB(
+    parsed.title,
+    parsed.year    || null,
+    parsed.isSeries || false,
+    parsed.season  || null,
+    null,           // msgDate — not available here, year hint is sufficient
+    parsed.imdbId  || null,
+    parsed.tmdbIdHint || null,
+    { tmdbKey }
+  );
+  if (!result) return null;
+  // Map shared result → import.js expected shape (adds confidenceReasons + isAnime)
+  return {
+    ...result,
+    language:          result.originalLanguage || '',
+    confidenceReasons: [`Matched via algorithm ${result._algo || 'A1'} (${result.confidence}pts)`],
+    isAnime:           false, // TMDB genre-based anime detection not needed here
+  };
 }
 
 
