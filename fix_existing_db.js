@@ -8,7 +8,7 @@
  *      - Preserves metadata (filename, size, codec, hdr, audio, source) when merging
  *      - Prioritizes specific languages over 'Multi'
  *   4. Backfill missing codecs from filename
- *   5. Enforce 18-link total cap per movie
+ *   5. Enforce 40-link total cap per movie
  *   6. Remove empty download groups
  *   7. Clear misleading identical sizes across different-quality groups (parser artifact)
  *   8. Recompute aggregates:
@@ -30,7 +30,7 @@ const { detectHost, toMB, detectCodec } = require('./utils/parser');
 const IS_DRY_RUN = process.argv.includes('--dry-run');
 
 const BLOCKED_RE    = [/vflix\./i, /vifix\./i, /gofile\.io/i, /dtflix\./i, /dotflix\./i];
-const MAX_LINKS     = 18;
+const MAX_LINKS     = 40;
 const QUALITY_ORDER = ['4K', '1080p', '720p', '480p', '360p', 'HD'];
 
 function recompute(downloads = [], currentMovie = {}) {
@@ -231,7 +231,7 @@ async function run() {
     if (merged.length !== downloads.length) changed = true;
     downloads = merged;
 
-    // 5. Enforce 18-link total cap per movie
+    // 5. Enforce 40-link total cap per movie
     const totalLinks = downloads.reduce((sum, d) => sum + d.links.length, 0);
     if (totalLinks > MAX_LINKS) {
       changed = true;
@@ -313,7 +313,7 @@ async function run() {
   console.log(`  • Blocked host links removed       : ${changesSummary.blockedLinksRemoved}`);
   console.log(`  • Empty download groups removed    : ${changesSummary.emptyGroupsRemoved}`);
   console.log(`  • Duplicate groups merged          : ${changesSummary.groupsMerged}`);
-  console.log(`  • Excess links capped (>18 links)  : ${changesSummary.cappedLinks}`);
+  console.log(`  • Excess links capped (>40 links)  : ${changesSummary.cappedLinks}`);
   console.log(`  • Misleading identical sizes cleared: ${changesSummary.clearedMisleadingSizes}`);
   console.log(`  • Missing codecs backfilled        : ${changesSummary.codecsBackfilled}`);
   console.log(`  • Movie quality tags corrected     : ${changesSummary.qualityCorrected}`);
