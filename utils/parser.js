@@ -35,8 +35,9 @@ function normalizeQuality(str) {
 function extractSize(str) {
   if (!str) return '';
   const pats = [
-    /[\[\(]\s*(\d+(?:\.\d+)?\s*(?:GB|MB))\s*[\]\)]/i,
-    /(\d+(?:\.\d+)?\s*(?:GB|MB))/i,
+    /[\/\[(\s]\s*(\d+(?:\.\d+)?\s*(?:GB|MB))\s*[\/\])]/i,  // [22.9GB], [ 22.9GB ], (22.9GB)
+    /[\u2014\u2013\-]\s*\[\s*(\d+(?:\.\d+)?\s*(?:GB|MB))\s*\]/i, // — [7.29 GB] em-dash format
+    /(\d+(?:\.\d+)?\s*(?:GB|MB))/i,                          // bare: 22.9GB anywhere
   ];
   for (const re of pats) {
     const m = str.match(re);
@@ -152,18 +153,47 @@ function detectHost(url) {
 function isMetadataLine(line) {
   const s = (line || '').trim();
   if (!s) return false;
-  // Pure hashtag-only lines: '#NF_WEBDL #MULTI_AUDIO', '#APPLETVPLUS #UHD'
+  // Pure hashtag-only lines: '#NF_WEBDL #MULTI_AUDIO'
   if (/^(#[A-Za-z0-9_]+(?:\s+#[A-Za-z0-9_]+)*)\s*$/.test(s)) return true;
-  // Mixed bullet+hashtag: '~.  #DUAL_AUDIO', '~  #MULTI_AUDIO'
+  // Mixed bullet+hashtag: '~.  #DUAL_AUDIO'
   if (/^[~\-•*._\s]+#[A-Za-z0-9_]+/i.test(s) && !/\.(mkv|mp4|avi|zip)\b/i.test(s)) return true;
-  // Section headers (case-insensitive): 'DRIVE LINKS: #HUBCLOUD', 'TELEGRAM FILES:', 'AVC', 'HEVC'
+  // Section headers: 'DRIVE LINKS:', 'TELEGRAM FILES:'
   if (/^(DRIVE\s+LINKS?|TELEGRAM\s+FILES?|HEVC\s*$|AVC\s*$)\s*[:#]?/i.test(s)) return true;
-  // Size / File Size lines: 'Size : 8.36 GB', 'File Size: 6.74 GB'
-  if (/^(?:File\s*)?Size\s*[:]\/?.*/i.test(s) && /\d/.test(s)) return true;
-  // 'Click Here', 'Join', 'Credits', etc. (not inline with real content)
-  if (/^(?:[[LINK][SAVE]\s]*)?(CLICK\s+HERE|JOIN\s+NOW|CREDITS?\s*:?|SUBSCRIBE|BACKUP\s+CHANNEL)\s*$/i.test(s)) return true;
-  // Quality/format lists without filename: 'DOLBY VISION 4K , SDR 4K , 1080P'
+  // Size / File Size lines
+  if (/^(?:File\s*)?Size\s*[:].*/i.test(s) && /\d/.test(s)) return true;
+  // Quality metadata: 'Quality: 2160p DV HDR'
+  if (/^Quality\s*:/i.test(s) && s.length < 80) return true;
+  // Audio track detail lines
+  if (/^(Audio\s*:|#?(Hindi|Tamil|Telugu|Malayalam|Kannada|Bengali|English)\s*:)/i.test(s)) return true;
+  if (/^@\d+Kbps|@\d+\s*KB/i.test(s)) return true;
+  // Subtitle/NOTE lines
+  if (/^Subtitles?\s*:/i.test(s)) return true;
+  if (/^NOTE[:\s-]/i.test(s) && s.length < 200) return true;
+  // Named link labels (Telegram text_link entities: sit between filename and URL)
+  if (/^(GDFLIX|HubCloud|FilePress|TMBCloud|DTFlix|DriveNext|FileBee|PixelDrain|StreamTape|MixDrop|DoodStream|BuzzHeavier|CatBox|1Fichier|mnmcloud)$/i.test(s)) return true;
+  if (/^(Cloud\s+Link|index\s+Link|Drive\s+Link|Backup\s+Link|Direct\s+Link|Main\s+Link|Alt\.?\s+Link|Mirror\s+Link|Fast\s+Link)$/i.test(s)) return true;
+  if (/^[\-\s]*(Download|Cloud|Drive|Backup|Mirror|Direct|Main|Alt)\s*[|\-\/]\s*(GDFLIX|HubCloud|FilePress|Drive|Cloud|Direct|Index)/i.test(s)) return true;
+  // Expandable section headers
+  if (/^(SHOTS?|MEDIAINFO|SCREENSHOTS?|SAMPLE|PREVIEW|TRAILER)\s*$/i.test(s)) return true;
+  // Credit/ripped-by lines
+  if (/^(Ripped\s+By|Encoded\s+By|Uploaded\s+By|Credits?\s+To|Source\s+Info)\s*[:\-]/i.test(s)) return true;
+  if (/^@[A-Za-z0-9_]{3,}$/.test(s)) return true;
+  // Click Here / Join etc.
+  if (/^(CLICK\s+HERE|JOIN\s+NOW|CREDITS?\s*:?|SUBSCRIBE|BACKUP\s+CHANNEL)\s*$/i.test(s)) return true;
+  // Quality-only format lines
   if (/^(DOLBY\s+VISION|SDR|HLG|HDR|AVC|HEVC)\b/i.test(s) && !/\.(mkv|mp4|avi|zip)\b/i.test(s) && s.length < 60) return true;
+  return false;
+}
+
+// ─── LINK LABEL DETECTOR ─────────────────────────────────────────────────────
+// Named link labels appear between filename and URL in Telegram text_link messages
+function isLinkLabel(line) {
+  const s = (line || '').trim();
+  if (!s || s.length > 100) return false;
+  if (/^(GDFLIX|HubCloud|FilePress|TMBCloud|DTFlix|DriveNext|FileBee|PixelDrain|StreamTape|MixDrop|DoodStream|BuzzHeavier|CatBox|1Fichier|mnmcloud)$/i.test(s)) return true;
+  if (/^[\-\s]*(Download|Cloud|Drive|Backup|Mirror|Direct|Main|Alt)\s*[|\-\/]\s*\S+$/i.test(s)) return true;
+  if (/^(Cloud|index|Drive|Backup|Mirror|Direct|Main|Alt|Fast|Slow)\s+(Link|Download|DL)$/i.test(s)) return true;
+  if (/^(SHOTS?|MEDIAINFO|SCREENSHOTS?|SAMPLE|PREVIEW)$/i.test(s)) return true;
   return false;
 }
 
@@ -677,7 +707,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 
   // ── Helper: is this line a real file descriptor? ──────────────────────────
   const isFileDesc=l=>{
-    if (!l||isUrl(l)||isMetadataLine(l)||isPromo(l)||isTgLink(l)) return false;
+    if (!l||isUrl(l)||isMetadataLine(l)||isPromo(l)||isTgLink(l)||isLinkLabel(l)) return false;
     return (
       /\.(mkv|mp4|avi|zip|rar|m2ts|mov)\b/i.test(l)||
       /\b(2160p|1080p|720p|480p|360p|4[Kk]\b|UHD)\b/i.test(l)||
@@ -709,43 +739,52 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const cls=classifyUrl(line);
     if (cls==='Ignore') continue;
 
-    // Walk backwards past consecutive URLs to find the owning filename
+    // Walk backwards past consecutive URLs / link labels to find the owning filename
     let fc=null, fsz='';
     let j=i-1;
-    // Skip consecutive URLs / TgLinks going backwards
-    while(j>=0&&(isUrl(lines[j])||isTgLink(lines[j])||isYtLink(lines[j]))) j--;
-    // Check for Size: line between filename and URL
-    if (j>=0&&/^(?:File\s*)?Size\s*[:\-]/i.test(lines[j])) {
-      fsz=extractSizeFromMeta(lines[j]);
-      j--;
+    // Skip consecutive URLs / TgLinks / named link labels going backwards
+    while(j>=0&&(isUrl(lines[j])||isTgLink(lines[j])||isYtLink(lines[j])||isLinkLabel(lines[j]))) j--;
+    // Check for Size: line or standalone [XGB] line
+    if (j>=0 && /^(?:File\s*)?Size\s*[:\-]/i.test(lines[j])) {
+      fsz=extractSizeFromMeta(lines[j]); j--;
     }
-    // Skip metadata / promo
-    while(j>=0&&(isMetadataLine(lines[j])||isPromo(lines[j]))) j--;
+    // Standalone size line: '[14.03GB]' on its own
+    if (j>=0 && /^\[\s*\d+(?:\.\d+)?\s*(?:GB|MB)\s*\]\s*$/i.test(lines[j])) {
+      fsz=fsz||extractSizeFromMeta(lines[j]); j--;
+    }
+    // Skip metadata / promo / link labels
+    while(j>=0&&(isMetadataLine(lines[j])||isPromo(lines[j])||isLinkLabel(lines[j]))) j--;
     // Grab file descriptor
     if (j>=0&&isFileDesc(lines[j])) {
       fc=lines[j];
-      // Merge if previous line is quality-only prefix like '1080p HEVC'
       if (/^(\d{3,4}p|4k|uhd)/i.test(fc)&&j>0&&isFileDesc(lines[j-1])) fc=lines[j-1]+' '+fc;
-      if (!fsz) fsz=extractSizeFromMeta(fc);
+      if (!fsz) fsz=extractSize(fc);
     }
-    // Reject 'CLICK HERE', 'TELEGRAM FILES' as filenames
+    // Pattern F: size on the line IMMEDIATELY after the filename (filename.mkv \n [14.03GB] \n URL)
+    if (fc && !fsz) {
+      const fnLineIdx = lines.indexOf(fc);
+      if (fnLineIdx >= 0 && fnLineIdx + 1 < i) {
+        const lineAfterFn = lines[fnLineIdx + 1];
+        if (/^\[?\s*\d+(?:\.\d+)?\s*(?:GB|MB)\s*\]?\s*$/i.test(lineAfterFn)) {
+          fsz = extractSize(lineAfterFn);
+        }
+      }
+    }
+    // Reject junk as filenames
     if (fc&&/\b(click\s+here|telegram\s+files?|drive\s+links?|join|credits?)\b/i.test(fc)) fc=null;
 
     // Collect this URL + any immediately following consecutive URLs (same file slot)
     pairs.push({url:line, rawFilename:fc||'', size:fsz, urlType:cls});
     processedUrlIdx.add(i);
     let k=i+1;
-    // URL-first format (Screenshot 2): URL on line N, filename on line N+1
-    // If we found no filename looking backwards, check the NEXT non-blank line
+    // URL-first format: URL on line N, filename on line N+1
     if (!fc && k < lines.length) {
-      // Skip any consecutive URLs first
       let fwdIdx = k;
-      while (fwdIdx < lines.length && isUrl(lines[fwdIdx])) fwdIdx++;
+      while (fwdIdx < lines.length && (isUrl(lines[fwdIdx])||isLinkLabel(lines[fwdIdx]))) fwdIdx++;
       if (fwdIdx < lines.length && isFileDesc(lines[fwdIdx])) {
-        // Found a filename line AFTER the URL — this is URL-first format
         const fwdFc = lines[fwdIdx];
         pairs[pairs.length - 1].rawFilename = fwdFc;
-        if (!pairs[pairs.length - 1].size) pairs[pairs.length - 1].size = extractSizeFromMeta(fwdFc);
+        if (!pairs[pairs.length - 1].size) pairs[pairs.length - 1].size = extractSize(fwdFc);
       }
     }
     while(k<lines.length&&isUrl(lines[k])&&!isTgLink(lines[k])&&!isYtLink(lines[k])) {
