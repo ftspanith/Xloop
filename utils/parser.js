@@ -255,7 +255,8 @@ function detectAllLanguages(str) {
 function inferLanguageFromPlatform(text) {
   if (!text) return '';
   // Telugu OTTs and release groups
-  if (/\b(SUNNXT|SUN\s*NXT|NaMovies|Benzmovies|TeluguDrives|MoviesWorld|Malli4U|DS4K|4KDVS|APTV|LIONS)\b/i.test(text)) return 'Telugu';
+  // DS4K, APTV, LIONS, MKV4K are watermarks/encode-groups, NOT Telugu OTTs — excluded
+  if (/\b(SUNNXT|SUN\s*NXT|NaMovies|Benzmovies|TeluguDrives|MoviesWorld|Malli4U)\b/i.test(text)) return 'Telugu';
   // Tamil OTTs and release groups
   if (/\b(TamilBlasters|Isaimini|Kuttymovies|TamilRockers|Movierulz|Tamilgun|Cinemavilla|Tamilyogi)\b/i.test(text)) return 'Tamil';
   // Malayalam OTTs
@@ -711,7 +712,39 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     .replace(/(?<![:/])\b(filepress\.in\/\S+)/gi,'https://$1')
     .replace(/(?<![:/])\b(drivehub\.(?:dev|to|in)\/\S+)/gi,'https://$1');
 
-  const lines=normalized.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+  // Expand inline markdown hyperlinks: [Label](URL) → URL (discard host-name labels)
+  // Telegram sends hyperlinks in this format when exported/forwarded.
+  // If label is a known download host (GDFlix, HubCloud…) → discard label, keep URL only.
+  // If label looks like a real title/filename → keep label, then URL on next line.
+  const HOST_LABEL_RE = /^(GDFlix|HubCloud|GDLink|TeraBox|GoFile|PixelDrain|Google\s*Drive|1Fichier|FilePress|StreamTape|Download|Link\s*\d*|Mirror\s*\d*|Server\s*\d*|Click\s*Here|Direct\s*Link|Backup\s*Link|CDN\s*\d*)$/i;
+  const expandedLines = [];
+  for (const rawLine of normalized.split('\n').map(l => l.trim()).filter(l => l.length > 0)) {
+    const hyperlinkRe = /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g;
+    let hadLink = false;
+    // Collect all hyperlinks in this line + any surrounding text
+    let pos = 0, parts = [];
+    let m;
+    const re2 = /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g;
+    while ((m = re2.exec(rawLine)) !== null) {
+      hadLink = true;
+      const before = rawLine.slice(pos, m.index).trim();
+      if (before) parts.push({ type: 'text', val: before });
+      const label = m[1].trim();
+      const url   = m[2].trim();
+      if (!HOST_LABEL_RE.test(label)) parts.push({ type: 'text', val: label });
+      parts.push({ type: 'url', val: url });
+      pos = m.index + m[0].length;
+    }
+    const after = rawLine.slice(pos).trim();
+    if (after) parts.push({ type: 'text', val: after });
+
+    if (hadLink) {
+      for (const p of parts) expandedLines.push(p.val);
+    } else {
+      expandedLines.push(rawLine);
+    }
+  }
+  const lines = expandedLines;
   if (!lines.length) return null;
 
   const isUrl=l=>/^https?:\/\//i.test(l);
@@ -955,7 +988,13 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     .replace(/\b(Combined|Complete|Pack|Collection|Boxset|Trilogy|4K\.REMUX|COMPLETE)\b/gi,'')
     .replace(/\.(mkv|mp4|avi|mov|ts|m2ts|zip|rar)\b/gi,'')
     .replace(/[\[\(][^\]\)]*[\]\)]/g,'').replace(/#[a-zA-Z0-9_]+/g,'')
-    .replace(/[._\-]+/g,' ').replace(/\s+/g,' ')
+    // Replace dots/underscores with space, but preserve hyphens BETWEEN proper-case words
+    // e.g. "Hanu-Man" keeps hyphen; "WEB-DL", "H.265" become spaces
+    .replace(/[._]+/g,' ')                              // dots and underscores → space
+    .replace(/(?<=[A-Z]{2,})-(?=[A-Z])/g,' ')          // UPPER-UPPER: WEB-DL → space
+    .replace(/(?<=[0-9])-(?=[A-Z0-9])/g,' ')           // digit-UPPER: H264-NaMovies → space
+    .replace(/(?<=[A-Z])-(?=[0-9])/g,' ')              // UPPER-digit: x265-3 → space
+    .replace(/\s+/g,' ')
     // ── Stray standalone digits left from season ranges like "1-5" → "5" ──────────
     // ── Generic release-group trailer (final pass) ─────────────────────────
     .replace(/\s+[A-Z][a-z]{1,3}[A-Z][a-zA-Z0-9]{2,14}$/, '')   // CamelCase: "TamilMV"
