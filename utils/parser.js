@@ -119,15 +119,24 @@ const IGNORE_RE = [
 function classifyUrl(url) {
   if (!url) return 'Ignore';
   if (IGNORE_RE.some(r=>r.test(url)))    return 'Ignore';
-  // Mediainfo links are never download links — always filter
   if (/mediainfo|media\.info|mfinfo/i.test(url)) return 'Ignore';
   if (PASTE_RE.some(r=>r.test(url)))     return 'Paste';
   if (SHORTLINK_RE.some(r=>r.test(url))) return 'Shortlink';
   if (/gdflix\.|gdlink\.dev|gdtot\./i.test(url))   return 'GDFlix';
   if (/hubcloud\.|drivehub\./i.test(url))           return 'HubCloud';
   if (/filepress\.|fpgo\.xyz/i.test(url))           return 'FilePress';
-  if (/tmbcloud\./i.test(url))                       return 'TMBCloud';
-  if (/drivenext\./i.test(url))                      return 'DriveNext';
+  if (/tmbcloud\./i.test(url))                      return 'TMBCloud';
+  if (/drivenext\./i.test(url))                     return 'DriveNext';
+  if (/dtflix\.ink|dotflix\.wtf/i.test(url))        return 'DTFlix';
+  if (/extralink\.cfd|neolinks\.sbs|gtlinks\.me/i.test(url)) return 'GDFlix'; // GDFlix mirror links
+  if (/filebee\.xyz/i.test(url))                    return 'FileBee';
+  if (/streamtape\.(com|co)/i.test(url))            return 'StreamTape';
+  if (/mixdrop\.(co|to|ag)/i.test(url))             return 'MixDrop';
+  if (/dood\.(la|so|pm|to|watch|re)/i.test(url))   return 'DoodStream';
+  if (/buzzheavier\.com/i.test(url))                return 'BuzzHeavier';
+  if (/pixeldrain\.com\/u\//i.test(url))            return 'PixelDrain';
+  if (/1fichier\.com/i.test(url))                   return '1Fichier';
+  if (/files\.catbox\.moe/i.test(url))              return 'CatBox';
   if (DIRECT_RE.some(r=>r.test(url)))   return 'Direct';
   if (/\/(file|download|d|dl|f)\/[a-zA-Z0-9_\-]{4,}/i.test(url)) return 'Direct';
   if (/\.(mkv|mp4|avi|zip|rar|m2ts|ts|mov)(\?.*)?$/i.test(url))  return 'Direct';

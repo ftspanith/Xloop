@@ -721,14 +721,30 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
     return e.bypassedUrl && DIRECT_HOST_RE.test(e.bypassedUrl);
   });
   const stillShort = allEntries.length - valid.length;
+
+  // PRE-DEDUP: collapse entries that resolve to the same final URL.
+  // This catches the case where a direct GDFlix entry AND a shortlink-bypassed-to-GDFlix
+  // entry both exist in the list — they'd produce identical finalUrls and cause duplicates.
+  const seenFinalUrls = new Set();
+  const deduped = valid.filter(e => {
+    const resolved = normalizeUrl(
+      (e.bypassedUrl || e.url || '').replace(/^http:\/\//i,'https://').replace(/\/$/, '')
+    );
+    if (!resolved || seenFinalUrls.has(resolved)) return false;
+    seenFinalUrls.add(resolved);
+    return true;
+  });
+  const preDedupRemoved = valid.length - deduped.length;
+
   _emitter(`\n  Importable entries : ${C.green}${valid.length}${C.reset}`);
-  if (stillShort > 0) _emitter(`  Skipped (no bypass): ${C.yellow}${stillShort}${C.reset}`);
+  if (preDedupRemoved > 0) _emitter(`  Pre-dedup removed  : ${C.yellow}${preDedupRemoved}${C.reset} (same URL from direct+bypass)`);
+  if (stillShort > 0)      _emitter(`  Skipped (no bypass): ${C.yellow}${stillShort}${C.reset}`);
 
   let added = 0, updated = 0, skipped = 0, noMeta = 0;
 
   // ── Group by title+year for TMDB efficiency ───────────────────────────────────────
   const groups = {};
-  for (const item of valid) {
+  for (const item of deduped) {
     const key = `${(item.title || '').toLowerCase().trim()}__${item.year || ''}`;
     if (!groups[key]) groups[key] = { items: [], msgDate: item.date || null };
     if (item.date && (!groups[key].msgDate || item.date < groups[key].msgDate)) groups[key].msgDate = item.date;
@@ -969,7 +985,14 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           const res = await Movie.findOneAndUpdate({ _id: dbRec._id, [`downloads.${matchedIdx}.links.url`]: { $ne: finalUrl } }, op, { new: true });
           if (res) {
             recomputeAggregates(res);
-            existing = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, {new: true});
+            // ACTUALLY save the sorted downloads array + aggregates back to DB
+            existing = await Movie.findByIdAndUpdate(dbRec._id, {
+              $set: {
+                downloads: res.downloads,
+                formats: res.formats, quality: res.quality,
+                languages: res.languages, codecs: res.codecs,
+              }
+            }, { new: true });
             _emitter(`[MERGED] ${dbRec.title} | ${quality} -> ${host}`);
             updated++;
           } else skipped++;
@@ -982,7 +1005,14 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           const res = await Movie.findByIdAndUpdate(dbRec._id, op, { new: true });
           if (res) {
             recomputeAggregates(res);
-            existing = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, {new: true});
+            // ACTUALLY save the sorted downloads array + aggregates back to DB
+            existing = await Movie.findByIdAndUpdate(dbRec._id, {
+              $set: {
+                downloads: res.downloads,
+                formats: res.formats, quality: res.quality,
+                languages: res.languages, codecs: res.codecs,
+              }
+            }, { new: true });
             _emitter(`[UPDATED] ${dbRec.title} | ${quality} -> ${host}`);
             updated++;
           }

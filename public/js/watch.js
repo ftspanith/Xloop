@@ -239,7 +239,12 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
   // Filename is displayed on each row so different file variants are distinguishable.
   const rows = [];
   const seenUrls = new Set();
-  const HOST_RANK = {'GDFlix':0,'HubCloud':1,'FilePress':2,'DTFlix':3,'TMBCloud':4,'Direct':5,'Download':6};
+  const HOST_RANK = {
+    'GDFlix':0,'HubCloud':1,'FilePress':2,'DTFlix':3,'TMBCloud':4,
+    'DriveNext':5,'FileBee':6,'BuzzHeavier':7,'PixelDrain':8,
+    'StreamTape':9,'MixDrop':10,'DoodStream':11,'1Fichier':12,'CatBox':13,
+    'Direct':14,'Download':99
+  };
 
   rawDownloads.forEach(dl => {
     if (!dl.links || dl.links.length === 0) return;
