@@ -255,11 +255,13 @@ function detectAllLanguages(str) {
 function inferLanguageFromPlatform(text) {
   if (!text) return '';
   // Telugu OTTs and release groups
-  // DS4K, APTV, LIONS, MKV4K are watermarks/encode-groups, NOT Telugu OTTs — excluded
+  // Telugu OTT platforms (source) + Telugu rip/release groups
+  // SUNNXT  = Sun NXT (Telugu/Tamil OTT platform)
+  // NaMovies, Benzmovies, TeluguDrives, MoviesWorld, Malli4U = Telugu rip groups
   if (/\b(SUNNXT|SUN\s*NXT|NaMovies|Benzmovies|TeluguDrives|MoviesWorld|Malli4U)\b/i.test(text)) return 'Telugu';
-  // Tamil OTTs and release groups
+  // Tamil rip groups + OTTs
   if (/\b(TamilBlasters|Isaimini|Kuttymovies|TamilRockers|Movierulz|Tamilgun|Cinemavilla|Tamilyogi)\b/i.test(text)) return 'Tamil';
-  // Malayalam OTTs
+  // Malayalam OTT platforms
   if (/\b(ManoramaMAX|ManoramaMax|EtvWin)\b/i.test(text)) return 'Malayalam';
   return '';
 }
