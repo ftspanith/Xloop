@@ -349,23 +349,11 @@
   el.innerHTML = `<span class="status-dot"></span> ${label}`;
  }
 
- // - SSE stream helpers -
- function connectStream(onMessage) {
-  if (eventSource) { eventSource.close(); eventSource = null; }
-  eventSource = new EventSource('/api/orchestrator/stream?token=' + encodeURIComponent(getToken()));
-  eventSource.onmessage = (e) => {
-   try {
-    const ev = JSON.parse(e.data);
-    const text = ev.text || '';
-    if (text) onMessage(text);
-   } catch(_) {}
-  };
-  eventSource.onerror = () => {
-   if (isRunning) appendLog('[WARN] Connection lost — attempting to reconnect...');
-  };
- }
 
  // - Start pipeline -
+ // Uses POST to start (returns immediately, pipeline detaches from request)
+ // then connects to /stream for live log viewing.
+ // This way closing the tab does NOT kill the pipeline on Vercel.
  async function startPipeline(resume = false) {
   if (isRunning) return;
   isRunning = true; cAdded = 0; cUpdated = 0; pipelineStarted = true;
@@ -386,30 +374,64 @@
    });
   } catch(_) {}
 
+  // ── STEP 1: Fire pipeline via POST (responds immediately, pipeline keeps running) ──
+  try {
+   const res = await fetch('/api/orchestrator/start', {
+    method: 'POST',
+    headers: {
+     'Content-Type': 'application/json',
+     'Authorization': `Bearer ${getToken()}`
+    },
+    body: JSON.stringify({ skipScraper, resume })
+   });
+   if (!res.ok) {
+    appendLog('[ERROR] Failed to start pipeline: ' + res.status);
+    onFinished('', true); return;
+   }
+  } catch(err) {
+   appendLog('[ERROR] Network error starting pipeline: ' + err.message);
+   onFinished('', true); return;
+  }
+
+  // ── STEP 2: Connect to /stream for live logs (separate from pipeline lifecycle) ──
+  // Even if this connection drops, the pipeline keeps running server-side.
+  connectStream();
+ }
+
+ let _streamRetries = 0;
+ // connectStream — connects to /stream SSE for live logs.
+ // Optional cb: called for each log line (defaults to appendLog + done/error detection)
+ function connectStream(cb) {
   if (eventSource) { eventSource.close(); eventSource = null; }
-  
-  const qs = `?skipScraper=${skipScraper}&resume=${resume}&token=${encodeURIComponent(getToken())}`;
-  eventSource = new EventSource('/api/orchestrator/start' + qs);
-  
+  eventSource = new EventSource('/api/orchestrator/stream?token=' + encodeURIComponent(getToken()));
+  const defaultCb = (text) => {
+    appendLog(text);
+    if (/Pipeline finished|DONE.*Pipeline/i.test(text)) onFinished(text);
+    if (/Pipeline stopped|Pipeline error/i.test(text)) onFinished(text, true);
+  };
+  const handler = cb || defaultCb;
   eventSource.onmessage = (e) => {
+   _streamRetries = 0;
    try {
     const ev = JSON.parse(e.data);
     const text = ev.text || '';
-    if (text) {
-      appendLog(text);
-      if (/ Pipeline complete|Pipeline finished/i.test(text)) onFinished(text);
-      if (/ Pipeline stopped|exit code [^0]/i.test(text)) onFinished(text, true);
-    }
+    if (text) handler(text);
    } catch(_) {}
   };
-  
   eventSource.onerror = () => {
-   if (isRunning) {
-     appendLog('[WARN] Connection closed or Vercel timeout reached (max 10s-60s). Check DB manually.');
-     onFinished('', true);
+   if (!isRunning) return;
+   eventSource.close(); eventSource = null;
+   _streamRetries++;
+   if (_streamRetries <= 10) {
+    const delay = Math.min(2000 * _streamRetries, 15000);
+    appendLog(`[INFO] Stream disconnected — reconnecting in ${delay/1000}s... (pipeline still running server-side)`);
+    setTimeout(() => connectStream(cb), delay);
+   } else {
+    appendLog('[WARN] Could not reconnect. Pipeline may still be running — reopen this page to check.');
    }
   };
  }
+
 
  // - Stop pipeline -
  async function stopPipeline() {
