@@ -332,7 +332,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
 
   // ── Strip common language/dub suffixes that confuse TMDB ─────────────────
   // e.g. "Kanguva Telugu" → "Kanguva", "Leo Hindi Dubbed" → "Leo"
-  const LANG_SUFFIX_RE = /\s+(telugu|tamil|hindi|malayalam|kannada|bengali|english|korean|japanese|chinese|arabic|turkish|spanish|french|german|dubbed|dub|dual\s*audio|multi\s*audio)\s*$/i;
+  const LANG_SUFFIX_RE = /\s+(telugu|tamil|hindi|malayalam|kannada|bengali|english|korean|japanese|chinese|arabic|turkish|spanish|french|german|dubbed|dub|dual\s*audio|multi\s*audio|4k|uhd|hdr|1080p|720p|480p|web-?dl|webrip|bluray|hevc|x265|x264|avc|av1|remux|hdcam|cam|proper|repack)\s*$/i;
   const strippedTitle = title.replace(LANG_SUFFIX_RE, '').trim() || title;
 
   const cleanTitle = cleanTitleForApi(strippedTitle);
@@ -682,6 +682,8 @@ async function searchGoogleImage(title, year, isSeries) {
 // Returns the url if valid, null otherwise.
 async function validatePoster(url) {
   if (!url) return null;
+  // TMDB CDN images are always reachable — skip expensive HEAD round-trip
+  if (/image\.tmdb\.org/i.test(url)) return url;
   try {
     const r = await axios.head(url, { timeout: 6000, maxRedirects: 3 });
     return r.status >= 200 && r.status < 400 ? url : null;
@@ -1021,7 +1023,14 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       }
 
       try {
-        const origLang2 = meta.originalLanguage || meta.language || '';
+        const origLang2 = meta.originalLanguage || '';
+        // Prefer the download's detected language (e.g. 'Telugu') over TMDB original_language
+        // so dubbed movies show the right language, not the source film's language.
+        const displayLang = language || origLang2;
+        const allLangsSet = [...new Set(
+          [...(language||'').split(','), ...(origLang2||'').split(',')]
+            .map(l => l.trim()).filter(Boolean)
+        )];
         const newDoc = await Movie.create({
           title: meta.title, tmdbId: meta.tmdbId || '', imdbId: meta.imdbId || '',
           type: finalType, totalSeasons: meta.totalSeasons || 0,
@@ -1029,9 +1038,9 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           poster: meta.poster || '', posterFallback: meta.posterFallback || '',
           backdrop: meta.backdrop || '',
           rating: meta.rating || 0, year: meta.year || item.year || new Date().getFullYear(),
-          genre: meta.genre || [], duration: meta.duration || '', quality, language: origLang2,
+          genre: meta.genre || [], duration: meta.duration || '', quality, language: displayLang,
           formats: [quality].filter(Boolean), codecs: [codec].filter(c => c !== 'Other'),
-          languages: (language || origLang2).split(',').map(l => l.trim()).filter(Boolean),
+          languages: allLangsSet,
           telegramMessageIds: item.messageId ? [item.messageId] : [],
           downloads: [newDl],
         });

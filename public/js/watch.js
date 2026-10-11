@@ -173,41 +173,59 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     const langLabel = isMulti ? 'Multi' : (detectedLangs[0] || '');
 
     let res = dl.quality || 'HD';
+    // Override from filename if filename has explicit quality token
     if (/2160p|\b4k\b|\buhd\b/i.test(fn) || /\b4k\b/i.test(tags)) res = '4K';
     else if (/1080p/i.test(fn)) res = '1080p';
     else if (/720p/i.test(fn))  res = '720p';
     else if (/480p/i.test(fn))  res = '480p';
     else if (/360p/i.test(fn))  res = '360p';
+    // dl.quality already set above as fallback when filename has no quality
 
-    let hdr = '';
-    if (/dolby.?vision|\.dv\b|dovi/i.test(fn)) hdr = 'DV';
-    else if (/ dv /i.test(fn))   hdr = 'DV';
-    else if (/hdr10\+/i.test(fn)) hdr = 'HDR10+';
-    else if (/hdr10\b/i.test(fn)) hdr = 'HDR10';
-    else if (/\bhdr\b/i.test(fn)) hdr = 'HDR';
-    else if (/\bsdr\b/i.test(fn)) hdr = 'SDR';
+    // HDR: DB-stored field first, then detect from filename
+    let hdr = dl.hdr || '';
+    if (!hdr) {
+      if (/dolby.?vision|\.dv\b|dovi/i.test(fn)) hdr = 'DV';
+      else if (/ dv /i.test(fn))   hdr = 'DV';
+      else if (/hdr10\+/i.test(fn)) hdr = 'HDR10+';
+      else if (/hdr10\b/i.test(fn)) hdr = 'HDR10';
+      else if (/\bhdr\b/i.test(fn)) hdr = 'HDR';
+      else if (/\bsdr\b/i.test(fn)) hdr = 'SDR';
+    }
 
-    let codec = '';
-    if      (/\bav1\b/i.test(fn))           codec = 'AV1';
-    else if (/hevc|h\.265|x265/i.test(fn))  codec = 'HEVC';
-    else if (/\bavc\b|h\.264|x264/i.test(fn)) codec = 'AVC';
+    // Codec: DB-stored field first, then detect from filename
+    let codec = dl.codec || '';
+    if (!codec || codec === 'Other') {
+      codec = '';
+      if      (/\bav1\b/i.test(fn))             codec = 'AV1';
+      else if (/hevc|h\.265|x265/i.test(fn))    codec = 'HEVC';
+      else if (/\bavc\b|h\.264|x264/i.test(fn)) codec = 'AVC';
+    }
+    // Normalize stored codec values
+    if (codec && /hevc|h\.265|x265/i.test(codec))      codec = 'HEVC';
+    else if (codec && /avc|h\.264|x264/i.test(codec))  codec = 'AVC';
+    else if (codec && /av1/i.test(codec))               codec = 'AV1';
 
-    let source = '';
-    if      (/remux/i.test(fn))                              source = 'REMUX';
-    else if (/web-dl|webdl/i.test(fn)||/web.?dl/i.test(tags)) source = 'WEB-DL';
-    else if (/webrip/i.test(fn))                             source = 'WEBRip';
-    else if (/bluray|blu-ray|bdrip|brrip/i.test(fn))         source = 'BluRay';
-    else if (/hdrip/i.test(fn))                              source = 'HDRip';
-    else if (/dvdrip|dvd/i.test(fn))                         source = 'DVD';
+    // Source: DB-stored field first, then detect from filename
+    let source = dl.source || '';
+    if (!source) {
+      if      (/remux/i.test(fn))                              source = 'REMUX';
+      else if (/web-dl|webdl/i.test(fn)||/web.?dl/i.test(tags)) source = 'WEB-DL';
+      else if (/webrip/i.test(fn))                             source = 'WEBRip';
+      else if (/bluray|blu-ray|bdrip|brrip/i.test(fn))         source = 'BluRay';
+      else if (/hdrip/i.test(fn))                              source = 'HDRip';
+      else if (/dvdrip|dvd/i.test(fn))                         source = 'DVD';
+    }
 
-    let audio = '';
-    if      (/\batmos\b/i.test(fn))           audio = 'ATMOS';
-    else if (/dts-hdma?/i.test(fn))           audio = 'DTS-HD';
-    else if (/\bdts\b/i.test(fn))             audio = 'DTS';
-    else if (/ddp5\.1|eac3|dd\+5\.1/i.test(fn)) audio = 'DDP5.1';
-    else if (/ddp2\.0|dd\+2/i.test(fn))      audio = 'DDP2.0';
-    else if (/dd5\.1|ac3/i.test(fn))         audio = 'DD5.1';
-    else if (/\baac\b/i.test(fn))            audio = 'AAC';
+    // Audio: DB-stored field first, then detect from filename
+    let audio = dl.audio || '';
+    if (!audio) {
+      if      (/\batmos\b/i.test(fn))           audio = 'ATMOS';
+      else if (/dts-hdma?/i.test(fn))           audio = 'DTS-HD';
+      else if (/\bdts\b/i.test(fn))             audio = 'DTS';
+      else if (/ddp5\.1|eac3|dd\+5\.1/i.test(fn)) audio = 'DDP5.1';
+      else if (/ddp2\.0|dd\+2/i.test(fn))      audio = 'DDP2.0';
+      else if (/dd5\.1|ac3/i.test(fn))         audio = 'DD5.1';
+      else if (/\baac\b/i.test(fn))            audio = 'AAC';
     else if (/\bflac\b/i.test(fn))           audio = 'FLAC';
 
     let platform = '';
@@ -266,10 +284,30 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       const url = (link.url || '').replace(/^http:\/\//i, 'https://').replace(/\/$/, '');
       if (!url || seenUrls.has(url)) return;
       seenUrls.add(url);
+      // Resolve host from stored field or classify from URL
+      let hostLabel = link.host || '';
+      if (!hostLabel || hostLabel === 'Direct') {
+        try {
+          const hn = new URL(url).hostname.toLowerCase();
+          if (/gdflix/.test(hn))      hostLabel = 'GDFlix';
+          else if (/hubcloud/.test(hn)) hostLabel = 'HubCloud';
+          else if (/filepress/.test(hn)) hostLabel = 'FilePress';
+          else if (/drivehub/.test(hn)) hostLabel = 'DriveHub';
+          else if (/pixeldrain/.test(hn)) hostLabel = 'PixelDrain';
+          else if (/streamtape/.test(hn)) hostLabel = 'StreamTape';
+          else if (/mixdrop/.test(hn)) hostLabel = 'MixDrop';
+          else if (/doodstream|dood\./.test(hn)) hostLabel = 'DoodStream';
+          else if (/buzzheavier/.test(hn)) hostLabel = 'BuzzHeavier';
+          else if (/1fichier/.test(hn)) hostLabel = '1Fichier';
+          else if (/catbox/.test(hn)) hostLabel = 'CatBox';
+          else if (/krakenfiles/.test(hn)) hostLabel = 'KrakenFiles';
+          else hostLabel = hostLabel || 'Direct';
+        } catch(_) { hostLabel = hostLabel || 'Direct'; }
+      }
       rows.push({
         quality:     info.res,
         size:        dl.size || '',
-        host:        link.host || 'Direct',
+        host:        hostLabel,
         url,
         filename:    dl.filename || '',
         displayName,
@@ -277,7 +315,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
         hdr:         info.hdr,
         lang:        info.lang,
         isMulti:     info.isMulti,
-        rank:        HOST_RANK[link.host] ?? 99,
+        rank:        HOST_RANK[hostLabel] ?? 99,
         season:      dl.season,
         episode:     dl.episode,
       });

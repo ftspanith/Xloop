@@ -708,11 +708,12 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   // ── Helper: is this line a real file descriptor? ──────────────────────────
   const isFileDesc=l=>{
     if (!l||isUrl(l)||isMetadataLine(l)||isPromo(l)||isTgLink(l)||isLinkLabel(l)) return false;
+    const _fl = l.trim();
     return (
-      /\.(mkv|mp4|avi|zip|rar|m2ts|mov)\b/i.test(l)||
-      /\b(2160p|1080p|720p|480p|360p|4[Kk]\b|UHD)\b/i.test(l)||
-      /\b\d+(?:\.\d+)?\s*(?:GB|MB)\b/i.test(l)
-    ) && l.length > 8;
+      /\.(mkv|mp4|avi|zip|rar|m2ts|mov)\b/i.test(_fl)||
+      /\b(2160p|1080p|720p|480p|360p|4[Kk]\b|UHD)\b/i.test(_fl)||
+      /\b\d+(?:\.\d+)?\s*(?:GB|MB)\b/i.test(_fl)
+    ) && _fl.length > 3;
   };
 
   // ── Helper: extract size from a 'Size :' or 'File Size:' line ─────────────
@@ -1006,7 +1007,19 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const codec=detectCodec(rawFn);
 
     if (quality==='HD'&&hasDedicatedFn) { const mq=normalizeQuality(masterTitle); if(mq!=='HD') quality=mq; }
-    if (quality==='HD') { const mq=normalizeQuality(fullText); if(mq!=='HD') quality=mq; }
+    // When still HD: scan lines near this URL (within ±5 lines) for quality token
+    // so different quality blocks in the same message don't bleed into each other.
+    if (quality==='HD') {
+      const urlLineIdx = lines.indexOf(pair.url);
+      if (urlLineIdx >= 0) {
+        const start = Math.max(0, urlLineIdx - 8);
+        const nearby = lines.slice(start, urlLineIdx + 1).join(' ');
+        const mq = normalizeQuality(nearby);
+        if (mq !== 'HD') quality = mq;
+      }
+      // Last resort: fullText (only when no nearby quality found)
+      if (quality==='HD') { const mq=normalizeQuality(fullText); if(mq!=='HD') quality=mq; }
+    }
 
     const fileLangs=detectAllLanguages(rawFn);
     const fileLang=fileLangs.length?(fileLangs.filter(l=>l!=='Multi').join(', ')||'Multi'):language;
