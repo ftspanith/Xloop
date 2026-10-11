@@ -9,8 +9,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   try {
-    const res  = await fetch(`/api/${type === 'movie' ? 'movies' : 'series'}/${id}`);
-    const data = await res.json();
+    let res  = await fetch(`/api/${type === 'movie' ? 'movies' : 'series'}/${id}`);
+    let data = await res.json();
+    if (!res.ok || !data || data.message || !data.title) {
+      // Fallback: try the alternate endpoint in case type parameter was mismatched
+      const altType = type === 'movie' ? 'series' : 'movies';
+      try {
+        const altRes = await fetch(`/api/${altType}/${id}`);
+        if (altRes.ok) {
+          const altData = await altRes.json();
+          if (altData && altData.title) data = altData;
+        }
+      } catch (_) {}
+    }
+    if (!data || !data.title) {
+      document.getElementById('wpCard').innerHTML = '<h2 style="text-align:center;padding:60px;">Content not found</h2>';
+      const sp = document.getElementById('wpSpinner');
+      if (sp) sp.remove();
+      return;
+    }
     document.title = `${data.title} — XLOOP`;
 
     // ── Backdrop ─────────────────────────────────────────────────
@@ -226,7 +243,8 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       else if (/ddp2\.0|dd\+2/i.test(fn))      audio = 'DDP2.0';
       else if (/dd5\.1|ac3/i.test(fn))         audio = 'DD5.1';
       else if (/\baac\b/i.test(fn))            audio = 'AAC';
-    else if (/\bflac\b/i.test(fn))           audio = 'FLAC';
+      else if (/\bflac\b/i.test(fn))           audio = 'FLAC';
+    }
 
     let platform = '';
     if      (/ nf[.\- ]|netflix/i.test(fn))                  platform = 'NF';

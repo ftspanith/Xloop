@@ -28,6 +28,26 @@
       "dest": "server.js"
     },
     {
+      "src": "/watch",
+      "dest": "public/watch.html"
+    },
+    {
+      "src": "/movies",
+      "dest": "public/movies.html"
+    },
+    {
+      "src": "/shows",
+      "dest": "public/shows.html"
+    },
+    {
+      "src": "/anime",
+      "dest": "public/anime.html"
+    },
+    {
+      "src": "/search",
+      "dest": "public/search.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "public/$1"
     }
