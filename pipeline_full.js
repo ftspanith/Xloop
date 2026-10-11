@@ -489,14 +489,31 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
 
   // ── Checkpoint: load already-processed groups for --resume ────────────────────────
   let processedKeys = new Set();
-  if (RESUME && fs.existsSync(CHECKPOINT_FILE)) {
-    try {
-      processedKeys = new Set(JSON.parse(fs.readFileSync(CHECKPOINT_FILE, 'utf8')));
+  if (RESUME) {
+    if (fs.existsSync(CHECKPOINT_FILE)) {
+      try {
+        processedKeys = new Set(JSON.parse(fs.readFileSync(CHECKPOINT_FILE, 'utf8')));
+      } catch(_) {}
+    }
+    if (processedKeys.size === 0) {
+      try {
+        const PipelineCache = require('./models/PipelineCache');
+        const cpDoc = await PipelineCache.findOne({ key: '_import_checkpoint' }).lean();
+        if (cpDoc && Array.isArray(cpDoc.data)) {
+          processedKeys = new Set(cpDoc.data);
+        }
+      } catch(_) {}
+    }
+    if (processedKeys.size > 0) {
       _emitter(`  [SKIP]  Resuming: ${processedKeys.size} groups already done — skipping them`);
-    } catch(_) { warn('Could not read checkpoint file — starting fresh'); }
-  } else if (!RESUME && fs.existsSync(CHECKPOINT_FILE)) {
+    }
+  } else {
     // Clean checkpoint on fresh run
-    try { fs.unlinkSync(CHECKPOINT_FILE); } catch(_) {}
+    try { if (fs.existsSync(CHECKPOINT_FILE)) fs.unlinkSync(CHECKPOINT_FILE); } catch(_) {}
+    try {
+      const PipelineCache = require('./models/PipelineCache');
+      PipelineCache.deleteOne({ key: '_import_checkpoint' }).exec().catch(() => {});
+    } catch(_) {}
   }
 
   const groupEntries = Object.entries(groups).filter(([key]) => !processedKeys.has(key));
@@ -505,8 +522,17 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
   // Save checkpoint every N groups so crashes can resume from near where they stopped
   const CHECKPOINT_EVERY = 50;
   function saveCheckpoint(processedSoFar) {
-    try { fs.writeFileSync(CHECKPOINT_FILE, JSON.stringify([...processedKeys, ...processedSoFar])); }
+    const allDone = [...processedKeys, ...processedSoFar];
+    try { fs.writeFileSync(CHECKPOINT_FILE, JSON.stringify(allDone)); }
     catch(_) {}
+    try {
+      const PipelineCache = require('./models/PipelineCache');
+      PipelineCache.findOneAndUpdate(
+        { key: '_import_checkpoint' },
+        { $set: { data: allDone, count: allDone.length, updatedAt: new Date() } },
+        { upsert: true }
+      ).exec().catch(() => {});
+    } catch(_) {}
   }
 
   async function processGroup([, group]) {
@@ -813,6 +839,10 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
   if (noMeta) _emitter(`  ${C.yellow}[?] No meta : ${noMeta}${C.reset}`);
   // Clean checkpoint on full success
   try { if (fs.existsSync(CHECKPOINT_FILE)) fs.unlinkSync(CHECKPOINT_FILE); } catch(_) {}
+  try {
+    const PipelineCache = require('./models/PipelineCache');
+    PipelineCache.deleteOne({ key: '_import_checkpoint' }).exec().catch(() => {});
+  } catch(_) {}
 }
 
 // ─── Spawn child script — pipe output through _emitter for SSE streaming ──────
