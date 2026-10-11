@@ -61,7 +61,7 @@ function broadcast(message) {
 }
 
 // ── SSE stream endpoint ───────────────────────────────────────────────────────
-router.get('/stream', auth, (req, res) => {
+router.get('/stream', auth, async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -71,18 +71,73 @@ router.get('/stream', auth, (req, res) => {
   const clientId = Date.now() + Math.random();
   clients.push({ id: clientId, res });
 
-  // Replay in-memory log buffer so reconnecting clients see recent history
-  if (logBuffer.length > 0) {
-    const replay = logBuffer.slice(-100); // last 100 lines
-    for (const line of replay) {
+  // ── Replay logs to reconnecting client ──────────────────────────────────────
+  // Priority: in-memory logBuffer (same Lambda) → MongoDB (different Lambda/phone)
+  let replayLines = logBuffer.slice(-150);
+
+  if (replayLines.length === 0) {
+    // This Lambda has no logs — we're on a different instance (phone, new tab, etc.)
+    // Load persisted logs from MongoDB so the client sees the live history
+    try {
+      const PipelineCache = require('../models/PipelineCache');
+      const mongoose = require('mongoose');
+      if (mongoose.connection.readyState !== 1)
+        await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+      const doc = await PipelineCache.findOne({ key: '_pipeline_logs' }).lean();
+      if (doc?.data?.length) {
+        replayLines = doc.data.slice(-150);
+        // Also seed local logBuffer so subsequent broadcasts work correctly
+        logBuffer = [...replayLines];
+      }
+    } catch (_) { /* non-critical — proceed without logs */ }
+  }
+
+  if (replayLines.length > 0) {
+    for (const line of replayLines) {
       try { res.write(`data: ${JSON.stringify({ text: line })}\n\n`); } catch(_) { break; }
     }
   } else {
     res.write(`data: ${JSON.stringify({ text: '[INFO] Connected to live stream.' })}\n\n`);
-    if (pipelineRunning) {
-      res.write(`data: ${JSON.stringify({ text: '[INFO] Pipeline is currently running — logs will appear below.' })}\n\n`);
-    }
+    // Also load pipeline status from MongoDB so phone knows if it's still running
+    try {
+      const PipelineCache = require('../models/PipelineCache');
+      const mongoose = require('mongoose');
+      if (mongoose.connection.readyState !== 1)
+        await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+      const flag = await PipelineCache.findOne({ key: '_pipeline_running' }).lean();
+      if (flag?.running) {
+        res.write(`data: ${JSON.stringify({ text: '[INFO] Pipeline is currently running — logs will appear below.' })}\n\n`);
+        pipelineRunning = true; // sync local flag
+      }
+    } catch (_) {}
   }
+
+  // ── Poll MongoDB for new logs every 3s when this is a cross-instance client ──
+  // This ensures the phone gets live updates even from a different Lambda.
+  let lastLogCount = replayLines.length;
+  const pollInterval = setInterval(async () => {
+    // If we have local clients broadcasting, no need to poll
+    if (clients.length > 1 || logBuffer.length > lastLogCount) {
+      lastLogCount = logBuffer.length;
+      return;
+    }
+    // No local pipeline running — poll MongoDB for new logs
+    try {
+      const PipelineCache = require('../models/PipelineCache');
+      const doc = await PipelineCache.findOne({ key: '_pipeline_logs' }).lean();
+      const dbLines = doc?.data || [];
+      if (dbLines.length > lastLogCount) {
+        // Send only the new lines
+        const newLines = dbLines.slice(lastLogCount);
+        for (const line of newLines) {
+          try { res.write(`data: ${JSON.stringify({ text: line })}\n\n`); } catch(_) { break; }
+        }
+        lastLogCount = dbLines.length;
+        // Sync into local buffer
+        logBuffer = dbLines.slice(-500);
+      }
+    } catch (_) {}
+  }, 3000);
 
   const heartbeat = setInterval(() => {
     try { res.write(': heartbeat\n\n'); }
@@ -91,9 +146,11 @@ router.get('/stream', auth, (req, res) => {
 
   req.on('close', () => {
     clearInterval(heartbeat);
+    clearInterval(pollInterval);
     clients = clients.filter(c => c.id !== clientId);
   });
 });
+
 
 // ── Status ────────────────────────────────────────────────────────────────────
 router.get('/status', async (req, res) => {
