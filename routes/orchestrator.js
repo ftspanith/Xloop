@@ -201,6 +201,27 @@ async function setPipelineRunningFlag(running, progressData = null) {
 
 // ── Start pipeline (auth via ?token= since EventSource cannot send headers) ──
 router.get('/start', auth, async (req, res) => {
+  // Check MongoDB flag first — catches stale flags from crashed/timed-out runs
+  try {
+    const PipelineCache = require('../models/PipelineCache');
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1) {
+      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+    }
+    const flag = await PipelineCache.findOne({ key: '_pipeline_running' }).lean();
+    const ageMs = Date.now() - new Date(flag?.updatedAt || 0).getTime();
+    const STALE_MS = 10 * 60 * 1000;
+    if (flag && flag.running === true) {
+      if (ageMs < STALE_MS) {
+        return res.status(400).json({ error: 'Pipeline is already running' });
+      }
+      pipelineRunning = false;
+      await PipelineCache.findOneAndUpdate({ key: '_pipeline_running' }, { $set: { running: false, updatedAt: new Date() } });
+    } else {
+      pipelineRunning = false;
+    }
+  } catch (_) {}
+
   if (pipelineRunning) {
     return res.status(400).json({ error: 'Pipeline is already running' });
   }
@@ -303,11 +324,7 @@ router.get('/start', auth, async (req, res) => {
 // dashboard.html uses POST; orchestrator.html uses GET EventSource.
 // This POST version just kicks off via the shared broadcast channel.
 router.post('/start', auth, async (req, res) => {
-  // Check in-memory flag first (fast path — same serverless instance)
-  if (pipelineRunning) {
-    return res.status(400).json({ error: 'Pipeline is already running' });
-  }
-  // Also check MongoDB flag — catches stale flags from crashed/timed-out runs on OTHER instances
+  // Check MongoDB flag first — catches stale flags from crashed/timed-out runs on ANY instance
   try {
     const PipelineCache = require('../models/PipelineCache');
     const mongoose = require('mongoose');
@@ -317,14 +334,21 @@ router.post('/start', auth, async (req, res) => {
     const flag = await PipelineCache.findOne({ key: '_pipeline_running' }).lean();
     const ageMs = Date.now() - new Date(flag?.updatedAt || 0).getTime();
     const STALE_MS = 10 * 60 * 1000; // 10 minutes — if older, treat as stale/crashed
-    if (flag && flag.running === true && ageMs < STALE_MS) {
-      return res.status(400).json({ error: 'Pipeline is already running' });
-    }
-    // Stale flag — auto-clear it so we can start fresh
     if (flag && flag.running === true) {
+      if (ageMs < STALE_MS) {
+        return res.status(400).json({ error: 'Pipeline is already running' });
+      }
+      // Stale flag (>10 min) — auto-clear it so we can start fresh
+      pipelineRunning = false;
       await PipelineCache.findOneAndUpdate({ key: '_pipeline_running' }, { $set: { running: false, updatedAt: new Date() } });
+    } else {
+      pipelineRunning = false;
     }
   } catch (_) { /* non-critical — proceed */ }
+
+  if (pipelineRunning) {
+    return res.status(400).json({ error: 'Pipeline is already running' });
+  }
 
   const { skipScraper, resume, skipBypass, scope = 'all', titleFilter = '' } = req.body || {};
   const scopeLabel = scope === 'daily' ? ' [Today\'s New]' : (scope === 'title' && titleFilter ? ` [Title: ${titleFilter}]` : '');
