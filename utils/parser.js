@@ -23,7 +23,10 @@ function stripEmojis(str) {
 function normalizeQuality(str) {
   if (!str) return 'HD';
   const s = str.toUpperCase();
-  if (/2160P|4K\b|UHD/.test(s)) return '4K';
+  // Use negative lookbehind: 4K must NOT be preceded by a letter
+  // This prevents "Rahul4K", "MKV4K", "DS4K" (watermarks) from being detected as quality
+  // Valid: "4K", ".4K.", " 4K", "2160P", "UHD"
+  if (/2160P|(?<![A-Z])4K\b|\bUHD\b/.test(s)) return '4K';
   if (/1080P/.test(s))           return '1080p';
   if (/720P/.test(s))            return '720p';
   if (/480P/.test(s))            return '480p';
@@ -245,6 +248,21 @@ function detectAllLanguages(str) {
   }
   return Array.from(found);
 }
+
+// ─── Platform/release-group → language inference ────────────────────────────
+// Infers language from known OTT platform names and release group tags
+// embedded in filenames where no explicit language word is present.
+function inferLanguageFromPlatform(text) {
+  if (!text) return '';
+  // Telugu OTTs and release groups
+  if (/\b(SUNNXT|SUN\s*NXT|NaMovies|Benzmovies|TeluguDrives|MoviesWorld|Malli4U|DS4K|4KDVS|APTV|LIONS)\b/i.test(text)) return 'Telugu';
+  // Tamil OTTs and release groups
+  if (/\b(TamilBlasters|Isaimini|Kuttymovies|TamilRockers|Movierulz|Tamilgun|Cinemavilla|Tamilyogi)\b/i.test(text)) return 'Tamil';
+  // Malayalam OTTs
+  if (/\b(ManoramaMAX|ManoramaMax|EtvWin)\b/i.test(text)) return 'Malayalam';
+  return '';
+}
+
 function detectLanguage(str) {
   const langs = detectAllLanguages(str);
   if (!langs.length) return '';
@@ -973,7 +991,9 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   // Language detection — multi-source
   const audioLang=extractAudioTracks(emojiStripped);
   const inlineLang=detectLanguage(fullText);
-  let language=audioLang||inlineLang||'';
+  // Platform/release-group inference (e.g. SUNNXT → Telugu, TamilBlasters → Tamil)
+  const platformLang=inferLanguageFromPlatform(fullText);
+  let language=audioLang||inlineLang||platformLang||'';
   if (!language&&/\bDUAL\b/i.test(fullText)) language='Multi';
   const allLanguages=detectAllLanguages(fullText);
 

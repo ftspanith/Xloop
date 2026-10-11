@@ -329,43 +329,43 @@ router.post('/bulk', auth, async (req, res) => {
     return res.status(400).json({ message: 'Messages array required' });
   }
 
-  // ── Expand each message into individual per-movie blocks ──────────────────
-  // Strategy A: split on double newlines (standard channel post format)
-  // Strategy B: split on numbered-list boundaries (batch post format)
-  //   e.g. "1. Movie A (2022)\nhttps://...\n2. Movie B (2023)\nhttps://..."
-  const NUMBERED_SPLIT_RE = /(?=\n\d+[\.\)]\s+.{5,})/;
-  const isUrlOnlyBlock = b => b.split('\n').every(l => !l.trim() || /^https?:\/\//i.test(l.trim()));
+  // ── Smart block segmenter ──────────────────────────────────────────────────
+  // Handles all common paste formats from users:
+  //  A. Blank-line separated:     filename\nURL\n\nfilename\nURL
+  //  B. Dense no-blank:           filename\nURL\nfilename\nURL
+  //  C. Numbered list:            1. filename\nURL\n2. filename\nURL
+  //  D. Orphan URL (blank+link):  filename\n\nURL\n\nfilename
+  const isUrl = (l) => /^https?:\/\//i.test((l||'').trim());
+  const isFilename = (l) => {
+    const t = (l||'').trim();
+    return t.length > 5 && (
+      /\.(mkv|mp4|avi|zip|rar|m2ts|mov)\b/i.test(t) ||
+      /\b(2160p|1080p|720p|480p|4K|UHD|WEB[-\s]?DL|WEBRip|BluRay|HEVC|x265|x264)\b/i.test(t) ||
+      /\b\d+(?:\.\d+)?\s*(?:GB|MB)\b/i.test(t)
+    ) && !isUrl(t);
+  };
+  const isUrlOnlyBlock = (b) => b.split('\n').every(l => !l.trim() || isUrl(l));
+  const NUMBERED_SPLIT_RE = /(?=\n\d+\.\s+.{5,})/;
   const expandedMessages = [];
 
   for (const msgObj of messages) {
     if (!msgObj?.text) continue;
-    // Normalize CRLF → LF
-    const normText = msgObj.text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const normText = msgObj.text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
 
-    // Quick pre-check: is this a numbered-list batch post?
-    const numberedMatches = normText.match(/^\d+[\.\)]\s+/mg) || [];
-    const isNumberedBatch = numberedMatches.length >= 2;
-
-    if (isNumberedBatch) {
-      // Split into per-item chunks on numbered list boundaries
-      const numberedChunks = normText.split(NUMBERED_SPLIT_RE)
-        .map(b => b.replace(/^\n/, '').trim())
+    // Strategy C: numbered list
+    const numberedMatches = normText.match(/^\d+\.\s+/mg) || [];
+    if (numberedMatches.length >= 2) {
+      const chunks = normText.split(NUMBERED_SPLIT_RE)
+        .map(b => b.replace(/^\n/, '').replace(/^\d+\.\s+/, '').trim())
         .filter(Boolean);
-      for (const chunk of numberedChunks) {
-        // Strip the leading "1. " / "2) " numbering
-        const cleaned = chunk.replace(/^\d+[\.\)]\s+/, '');
-        if (cleaned) expandedMessages.push({ ...msgObj, text: cleaned });
-      }
+      for (const c of chunks) expandedMessages.push({ ...msgObj, text: c });
       continue;
     }
 
-    // Standard double-newline split
-    const rawBlocks = normText.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
-    if (rawBlocks.length <= 1) {
-      expandedMessages.push({ ...msgObj, text: normText });
-    } else {
-      // Merge orphan URL-only blocks back into the preceding filename block
-      // (handles case where user has blank line between filename and link)
+    // Strategy A/D: double-newline split
+    let rawBlocks = normText.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
+    if (rawBlocks.length > 1) {
+      // Merge orphan URL-only blocks back into preceding block
       const merged = [];
       for (const block of rawBlocks) {
         if (merged.length > 0 && isUrlOnlyBlock(block)) {
@@ -374,13 +374,73 @@ router.post('/bulk', auth, async (req, res) => {
           merged.push(block);
         }
       }
+      // Sub-split each merged block in case it still has multiple filename+URL pairs
       for (const block of merged) {
-        expandedMessages.push({ ...msgObj, text: block });
+        const bLines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        const urlCount = bLines.filter(isUrl).length;
+        if (urlCount <= 1) {
+          expandedMessages.push({ ...msgObj, text: block });
+          continue;
+        }
+        // Multiple URLs in one block — split on URL→filename boundary
+        const subBlocks = [];
+        let cur = [];
+        let seenUrl = false;
+        for (const line of bLines) {
+          if (isUrl(line)) {
+            cur.push(line);
+            seenUrl = true;
+          } else if (seenUrl && isFilename(line)) {
+            if (cur.length) subBlocks.push(cur.join('\n'));
+            cur = [line];
+            seenUrl = false;
+          } else {
+            cur.push(line);
+          }
+        }
+        if (cur.length) subBlocks.push(cur.join('\n'));
+        for (const sb of (subBlocks.length > 1 ? subBlocks : [block])) {
+          if (sb.trim()) expandedMessages.push({ ...msgObj, text: sb.trim() });
+        }
+      }
+      continue;
+    }
+
+    // Strategy B: dense single-newline, multiple URLs → split on URL→filename boundary
+    const lines = normText.split('\n').map(l => l.trim()).filter(Boolean);
+    const urlCount = lines.filter(isUrl).length;
+    if (urlCount >= 2) {
+      const subBlocks = [];
+      let cur = [];
+      let seenUrl = false;
+      for (const line of lines) {
+        if (isUrl(line)) {
+          cur.push(line);
+          seenUrl = true;
+        } else if (seenUrl) {
+          // Any non-URL line after URL = next movie
+          if (cur.length) subBlocks.push(cur.join('\n'));
+          cur = [line];
+          seenUrl = false;
+        } else {
+          cur.push(line);
+        }
+      }
+      if (cur.length) subBlocks.push(cur.join('\n'));
+      if (subBlocks.length > 1) {
+        for (const sb of subBlocks) {
+          if (sb.trim()) expandedMessages.push({ ...msgObj, text: sb.trim() });
+        }
+        continue;
       }
     }
+
+    // Single movie — push as-is
+    expandedMessages.push({ ...msgObj, text: normText });
   }
 
 
+  // ── Smart block segmenter ──────────────────────────────────────────────────
   let successCount = 0, updatedCount = 0, skippedCount = 0, lowConfidence = 0, duplicateCount = 0;
   const errors = [];
 
