@@ -214,7 +214,8 @@ router.get('/start', auth, async (req, res) => {
     try {
       const runPipeline = await getRunPipeline();
       await runPipeline({
-        noBypass: skipBypass !== undefined ? skipBypass : !!skipScraper,
+        // skipBypass is always defined here (line 156), so just use it directly
+        noBypass: !!skipBypass,
         noWipe: !!skipScraper,
         resume: !!resume,
         importSrc,
@@ -289,7 +290,9 @@ router.post('/start', auth, async (req, res) => {
     try {
       const runPipeline = await getRunPipeline();
       await runPipeline({
-        noBypass: skipBypass,
+        // If skipBypass not explicitly set, default to skipScraper
+        // (Skip Scraper = import-only = no bypass needed)
+        noBypass: skipBypass !== undefined ? !!skipBypass : !!skipScraper,
         noWipe: !!skipScraper,
         resume: !!resume,
         scope,
