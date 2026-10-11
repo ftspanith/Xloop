@@ -220,6 +220,16 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     else if (/ sny[.\- ]|sonyliv/i.test(fn))                  platform = 'Sony';
     else if (/ atv[.\- ]|appletv|apple/i.test(fn))            platform = 'ATV';
 
+    // ── DB-stored field fallbacks (when filename is absent or too short to parse) ─
+    if (!codec  && dl.codec)  codec  = dl.codec;
+    if (!audio  && dl.audio)  audio  = dl.audio;
+    if (!hdr    && dl.hdr)    hdr    = dl.hdr;
+    if (!source && dl.source) source = dl.source;
+    // Normalize codec stored values
+    if (codec && /hevc|h\.265|x265/i.test(codec))      codec = 'HEVC';
+    else if (codec && /avc|h\.264|x264/i.test(codec))  codec = 'AVC';
+    else if (codec && /av1/i.test(codec))               codec = 'AV1';
+
     return { lang: langLabel, res, hdr, codec, source, audio, platform, isMulti,
              season: dl.season || null, episode: dl.episode || null };
   }
@@ -311,8 +321,10 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     return a.rank - b.rank;
   });
 
-  // ─ Filter pills (only qualities that actually exist) ─────────────────────
-  const quals = [...new Set(rows.map(r => r.quality))];
+  // ─ Filter pills (quality order: 4K > 1080p > 720p > 480p > 360p > HD) ──────
+  const Q_PILL_ORDER = ['4K','1080p','720p','480p','360p','HD'];
+  const quals = [...new Set(rows.map(r => r.quality))]
+    .sort((a, b) => (Q_PILL_ORDER.indexOf(a) < 0 ? 99 : Q_PILL_ORDER.indexOf(a)) - (Q_PILL_ORDER.indexOf(b) < 0 ? 99 : Q_PILL_ORDER.indexOf(b)));
   const pillsHtml = quals.length > 1
     ? `<div class="dl-filter-pills">
         <button class="dl-pill active" data-filter="all" onclick="dlFilter(this,'all')">All</button>

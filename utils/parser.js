@@ -234,6 +234,20 @@ function detectHDR(fn) {
   return null;
 }
 
+// ─── SOURCE ───────────────────────────────────────────────────────────────────
+function detectSource(fn) {
+  const s = (fn || '').toUpperCase();
+  if (/REMUX/.test(s))                                    return 'REMUX';
+  if (/WEB[.\s_-]?DL|WEBDL/.test(s))                     return 'WEB-DL';
+  if (/WEB[.\s_-]?RIP|WEBRIP/.test(s))                   return 'WEBRip';
+  if (/BLU[.\s_-]?RAY|BLURAY|BDRIP|BRRIP/.test(s))       return 'BluRay';
+  if (/HDTV/.test(s))                                    return 'HDTV';
+  if (/HDRIP|HD[.\s_-]?RIP/.test(s))                     return 'HDRip';
+  if (/DVDRIP|DVD/.test(s))                              return 'DVD';
+  if (/CAM|HDCAM/.test(s))                               return 'CAM';
+  return null;
+}
+
 // ─── AUDIO ───────────────────────────────────────────────────────────────────
 // Detects audio codec/format from a filename or message text.
 // Returns a short label string or null.
@@ -954,7 +968,8 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const key=`${quality}__${size||'nosize'}__S${fs??''}E${fe??''}`;
 
     const audio = extractAudio(rawFn) || extractAudio(fullText) || null;
-    if (!fileMap[key]) fileMap[key]={quality,size,hdr,codec,audio,filename:stripEmojis(rawFn).trim()||cleanedTitle,language:fileLang,season:fs,episode:fe,links:[]};
+    const source = detectSource(rawFn) || detectSource(fullText) || null;
+    if (!fileMap[key]) fileMap[key]={quality,size,hdr,codec,audio,source,filename:stripEmojis(rawFn).trim()||cleanedTitle,language:fileLang,season:fs,episode:fe,links:[]};
     if (!fileMap[key].links.find(l=>l.url===pair.url)) {
       fileMap[key].links.push({host:detectHost(pair.url),url:pair.url,isFast:/gdflix|hubcloud|gdlink/i.test(pair.url)});
     }

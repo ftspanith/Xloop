@@ -460,8 +460,9 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
 
       scored.sort((a, b) => b.score - a.score);
       const best = scored[0];
-      const simThresh  = isShort ? 0.65 : 0.40;
-      const scoreThresh = isShort ? 62  : 52;
+      // Stricter thresholds: short titles need 70% similarity, longer need 55%
+      const simThresh  = isShort ? 0.70 : 0.55;
+      const scoreThresh = isShort ? 65  : 55;
       if (best.score < scoreThresh || best.simMain < simThresh) return null;
 
       const isTv = ep === 'tv' || best.r.media_type === 'tv';
@@ -689,12 +690,23 @@ async function validatePoster(url) {
 
 function recomputeAggregates(doc) {
   const dls = doc.downloads || [];
+
+  // Sort downloads: quality order first, then size descending within each quality
+  const QUALITY_ORDER = ['4K', '1080p', '720p', '480p', '360p', 'HD'];
+  dls.sort((a, b) => {
+    const qa = QUALITY_ORDER.indexOf(a.quality); 
+    const qb = QUALITY_ORDER.indexOf(b.quality);
+    const qi = (qa < 0 ? 99 : qa) - (qb < 0 ? 99 : qb);
+    if (qi !== 0) return qi;
+    // Within same quality: sort by size descending (largest first)
+    return toMB(b.size) - toMB(a.size);
+  });
+
   doc.formats = [...new Set(dls.map(d => d.quality))].filter(Boolean);
   doc.codecs  = [...new Set(dls.map(d => d.codec || detectCodecLocal(d.filename)))].filter(c => c && c !== 'Other');
   const allLangs = [];
   dls.forEach(d => { if (d.language) d.language.split(',').forEach(l => { const c = l.trim(); allLangs.push(c.charAt(0).toUpperCase() + c.slice(1).toLowerCase()); }); });
   doc.languages = [...new Set(allLangs)].filter(Boolean);
-  const QUALITY_ORDER = ['4K', '1080p', '720p', '480p', '360p', 'HD'];
   const best = QUALITY_ORDER.find(q => doc.formats.includes(q));
   if (best) doc.quality = best;
 }
@@ -814,11 +826,13 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
     else finalType = 'movie';
 
     for (const item of group.items) {
-      // KEY FIX: use bypassedUrl for shortlinks, direct url otherwise
+      // KEY FIX: use bypassedUrl for shortlinks, direct url otherwise.
+      // DEDUP FIX: if bypass produced a *different* URL, only store the bypassed URL —
+      // never store both the shortlink AND the direct URL as separate entries.
       let finalUrl = item.bypassedUrl || item.url;
       finalUrl = finalUrl.replace(/^http:\/\//i, 'https://').replace(/\/$/, '');
       finalUrl = normalizeUrl(finalUrl);  // Canonicalize GDFlix → gdflix.dev, HubCloud → hubcloud.one
-      const host     = detectHost(finalUrl);
+      const host = detectHost(finalUrl);
 
       // If we skipped the bypasser, do NOT insert unresolved shortlinks!
       if (host === 'Shortlink' && !item.bypassedUrl) {
@@ -831,6 +845,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       const codec    = item.codec    || detectCodecLocal(item.filename);
       const hdr      = item.hdr      || null;
       const audio    = item.audio    || null;
+      const source   = item.source   || null;
       const correctSeason = seasonFromFilename(item.filename) ?? item.season ?? null;
 
       let dbRec = existing;
@@ -841,7 +856,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       if (!dbRec && cleanTitle) dbRec = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' } });
 
       const newDl = {
-        quality, size, filename: item.filename || '', language, codec, hdr, audio,
+        quality, size, filename: item.filename || '', language, codec, hdr, audio, source,
         season: correctSeason, episode: item.episode ?? null,
         links: [{ host, url: finalUrl, isFast: /gdflix|hubcloud|gdlink/i.test(finalUrl) }],
       };
