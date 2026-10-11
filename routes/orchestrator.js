@@ -174,19 +174,24 @@ router.get('/start', auth, async (req, res) => {
   const emit = (msg) => {
     const clean = msg.replace(/\x1b\[[0-9;]*m/g, '');
     // Parse [PROGRESS] lines — update in-memory AND persist to MongoDB
-    // so any device polling /status can see real-time % without SSE
     const progMatch = clean.match(/\[PROGRESS\]\s+(\d+)\s*\/\s*(\d+)/);
     if (progMatch) {
       pipelineProgress.offset = parseInt(progMatch[1]);
       pipelineProgress.total  = parseInt(progMatch[2]);
-      // Persist to DB (fire-and-forget — don't block the emit)
       setPipelineRunningFlag(true, {
         offset: pipelineProgress.offset,
         total:  pipelineProgress.total,
         label,
       }).catch(() => {});
     }
-    try { res.write(`data: ${JSON.stringify({ text: clean })}\n\n`); } catch (e) { }
+    // ALWAYS broadcast to ALL connected SSE clients (including /stream subscribers
+    // on other devices/tabs). This also fills logBuffer so reconnecting clients
+    // get full history even after the original tab that started the pipeline closes.
+    broadcast(clean);
+    // Also write directly to this SSE response while it's still alive
+    // (broadcast above handles the general case; this ensures zero latency for
+    // the starting tab before it's added to clients[] via /stream).
+    try { res.write(`data: ${JSON.stringify({ text: clean })}\n\n`); } catch (_) { }
   };
 
   emit(`[START] ${label}...`);
