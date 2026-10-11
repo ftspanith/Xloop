@@ -1334,4 +1334,264 @@ if (IS_MAIN) {
 }
 
 // ── When require()'d by orchestrator route ────────────────────────────────────
-module.exports = { runPipeline: main, searchTMDB, searchOMDB, searchGoogleImage, fetchWithRetry, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates };
+module.exports = { runPipeline: main, searchTMDB, searchOMDB, searchGoogleImage, fetchWithRetry, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates };// ═════════════════════════════════════════════════════════════════════════
+// TMDB SEARCH  —  Multi-Algorithm Title-Candidate Cascade
+// ═════════════════════════════════════════════════════════════════════════
+// Each of the 12 algorithms produces a different title variant.
+// TMDB is tried with each variant in order until a confident match is found.
+// Phase 1 = strict thresholds. Phase 2 = relaxed thresholds (same candidates).
+// ═════════════════════════════════════════════════════════════════════════
+function buildTitleCandidates(rawTitle, cleanedTitle, year) {
+  const seen   = new Set();
+  const result = [];
+  const add = (t) => {
+    const s = (t || '').replace(/\s+/g, ' ').trim();
+    if (!s || s.length < 2) return;
+    const key = s.toLowerCase();
+    if (!seen.has(key)) { seen.add(key); result.push(s); }
+  };
+
+  // Algorithm 1: Standard clean title (current approach)
+  add(cleanedTitle);
+
+  // Algorithm 2: Strip residual language/quality suffixes
+  const suf2 = cleanedTitle
+    .replace(/\s+(telugu|tamil|hindi|malayalam|kannada|bengali|english|korean|japanese|dubbed|dub|dual|multi|4k|uhd|hdr|1080p|720p|480p|360p|web[-\s]?dl|webrip|bluray|hevc|x265|x264|avc|av1|remux|hdcam|cam|proper|repack)\s*$/gi, '')
+    .trim();
+  add(suf2);
+
+  // Algorithm 3: Hyphen/dash → space  ("Hanu-Man" → "Hanu Man")
+  add(cleanedTitle.replace(/[-–—]/g, ' ').replace(/\s+/g, ' ').trim());
+
+  // Algorithm 4: Remove colon subtitle  ("Dune: Part Two" → "Dune")
+  const colonIdx = cleanedTitle.search(/[:\u2013\u2014]/);
+  if (colonIdx > 2) add(cleanedTitle.substring(0, colonIdx).trim());
+
+  // Algorithm 5: Remove trailing sequel number  ("Pushpa 2" → "Pushpa")
+  add(cleanedTitle.replace(/\s+\d+\s*$/, '').trim());
+
+  // Algorithm 6: Arabic → Roman numerals at end  ("Baahubali 2" → "Baahubali II")
+  const ROMAN = {'1':'I','2':'II','3':'III','4':'IV','5':'V','6':'VI','7':'VII','8':'VIII','9':'IX','10':'X'};
+  const romanized = cleanedTitle.replace(/\s+(\d{1,2})\s*$/, (_, n) => ROMAN[n] ? ' ' + ROMAN[n] : ' ' + n);
+  if (romanized !== cleanedTitle) add(romanized);
+
+  // Algorithm 7: Roman → Arabic at end  ("Baahubali II" → "Baahubali 2")
+  const ARABIC = {'I':'1','II':'2','III':'3','IV':'4','V':'5','VI':'6','VII':'7','VIII':'8','IX':'9','X':'10'};
+  const arabicized = cleanedTitle.replace(/\s+(X{0,3}(?:IX|IV|V?I{0,3}))\s*$/i, (_, r) => {
+    const a = ARABIC[r.toUpperCase()]; return a ? ' ' + a : ' ' + r;
+  });
+  if (arabicized !== cleanedTitle) add(arabicized);
+
+  // Algorithm 8: "The" prefix toggle  ("The Batman" → "Batman" or "Batman" → "The Batman")
+  if (/^The\s+/i.test(cleanedTitle)) add(cleanedTitle.replace(/^The\s+/i, '').trim());
+  else add('The ' + cleanedTitle);
+
+  // Algorithm 9: Number-word → digit  ("Baahubali Two" → "Baahubali 2")
+  const NUM_WORDS = { one:'1', two:'2', three:'3', four:'4', five:'5', six:'6', seven:'7', eight:'8', nine:'9', ten:'10' };
+  const numWrds = cleanedTitle.replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\b/gi, m => NUM_WORDS[m.toLowerCase()] || m);
+  if (numWrds.toLowerCase() !== cleanedTitle.toLowerCase()) add(numWrds);
+
+  // Algorithm 10: First 3 / first 2 words  (long title prefix reduction)
+  const words = cleanedTitle.split(/\s+/).filter(Boolean);
+  if (words.length > 4) { add(words.slice(0, 3).join(' ')); add(words.slice(0, 2).join(' ')); }
+  else if (words.length > 3) { add(words.slice(0, 2).join(' ')); }
+
+  // Algorithm 11: Ampersand / "and" toggle
+  if (/&/.test(cleanedTitle))        add(cleanedTitle.replace(/\s*&\s*/g, ' and '));
+  if (/ and /i.test(cleanedTitle))   add(cleanedTitle.replace(/\s+and\s+/gi, ' & '));
+
+  // Algorithm 11b: Roman numeral in MIDDLE of title  ("Baahubali II The Conclusion" → "Baahubali 2 The Conclusion")
+  const midArabic = cleanedTitle.replace(/\b(IX|IV|VIII|VII|VI|V|III|II|I|X)\b/gi, r => ARABIC[r.toUpperCase()] || r);
+  if (midArabic.toLowerCase() !== cleanedTitle.toLowerCase()) add(midArabic);
+
+  // Algorithm 11c: Sequel number removal from middle  ("Pushpa 2 The Rule" → "Pushpa The Rule")
+  const midNumRemoved = cleanedTitle.replace(/\s+\d+(?=\s+[A-Z])/g, '').trim();
+  if (midNumRemoved.toLowerCase() !== cleanedTitle.toLowerCase()) add(midNumRemoved);
+
+  // Algorithm 12: Raw unclean title (when cleanTitleForApi over-strips)
+  const rawC = (rawTitle || '').replace(/\s+/g, ' ').trim();
+  if (rawC && rawC.toLowerCase() !== cleanedTitle.toLowerCase()) add(rawC);
+
+  return result;
+}
+
+async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbIdHint) {
+  if (!TMDB_KEY) return null;
+
+  // Strip language/quality suffixes that confuse TMDB
+  const LANG_SUFFIX_RE = /\s+(telugu|tamil|hindi|malayalam|kannada|bengali|english|korean|japanese|chinese|arabic|turkish|spanish|french|german|dubbed|dub|dual\s*audio|multi\s*audio|4k|uhd|hdr|1080p|720p|480p|web-?dl|webrip|bluray|hevc|x265|x264|avc|av1|remux|hdcam|cam|proper|repack)\s*$/i;
+  const strippedTitle = title.replace(LANG_SUFFIX_RE, '').trim() || title;
+
+  const cleanTitle = cleanTitleForApi(strippedTitle);
+  if (!cleanTitle || cleanTitle.length < 2) return null;
+  const BASE = 'https://api.themoviedb.org/3';
+  const langMap = { en:'English',te:'Telugu',ta:'Tamil',hi:'Hindi',ml:'Malayalam',kn:'Kannada',ja:'Japanese',ko:'Korean',fr:'French',es:'Spanish',de:'German',it:'Italian',zh:'Chinese',ru:'Russian',pt:'Portuguese',ar:'Arabic',tr:'Turkish',id:'Indonesian',th:'Thai',bn:'Bengali' };
+
+  function buildResult(d, isTv, extra = {}) {
+    return {
+      tmdbId: String(d.id), type: isTv ? 'series' : 'movie', totalSeasons: d.number_of_seasons || 0,
+      title: d.title || d.name || title,
+      description: extra.seasonOverview || d.overview || '',
+      poster: extra.seasonPoster || (d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : ''),
+      backdrop: d.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : '',
+      rating: Math.round((d.vote_average || 0) * 10) / 10,
+      year: d.release_date ? parseInt(d.release_date, 10) : d.first_air_date ? parseInt(d.first_air_date, 10) : year,
+      releaseDate: d.release_date || d.first_air_date || '',
+      genre: (d.genres || []).map(g => g.name),
+      duration: d.runtime ? `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}m`
+        : (d.episode_run_time?.[0] ? `${Math.floor(d.episode_run_time[0] / 60)}h ${d.episode_run_time[0] % 60}m` : ''),
+      originalLanguage: langMap[d.original_language] || d.original_language || '',
+      confidence: 100,
+    };
+  }
+
+  async function fetchSeasonData(tmdbId, sn, isTv) {
+    if (!isTv || !sn) return {};
+    const sr = await fetchWithRetry(() => axios.get(`${BASE}/tv/${tmdbId}/season/${sn}`, { params: { api_key: TMDB_KEY }, timeout: 8000 }));
+    return { seasonPoster: sr?.data?.poster_path ? `https://image.tmdb.org/t/p/w500${sr.data.poster_path}` : '', seasonOverview: sr?.data?.overview || '' };
+  }
+
+  // ── Fast-path: TMDB ID hint ─────────────────────────────────────────────────────────
+  if (tmdbIdHint) {
+    for (const mt of (isSeries ? ['tv','movie'] : ['movie','tv'])) {
+      const r = await fetchWithRetry(() => axios.get(`${BASE}/${mt}/${tmdbIdHint}`, { params: { api_key: TMDB_KEY }, timeout: 8000 }));
+      if (r?.data && (r.data.title || r.data.name)) {
+        const isTv = mt === 'tv';
+        return buildResult(r.data, isTv, await fetchSeasonData(r.data.id, season, isTv));
+      }
+    }
+  }
+  // ── Fast-path: IMDB ID ─────────────────────────────────────────────────────────────
+  if (imdbId && /^tt\d{7,}$/.test(imdbId)) {
+    const fr = await fetchWithRetry(() => axios.get(`${BASE}/find/${imdbId}`, { params: { api_key: TMDB_KEY, external_source: 'imdb_id' }, timeout: 8000 }));
+    if (fr) {
+      const hit = (fr.data?.movie_results || [])[0] || (fr.data?.tv_results || [])[0];
+      const mt  = (fr.data?.movie_results || [])[0] ? 'movie' : 'tv';
+      if (hit) {
+        const r = await fetchWithRetry(() => axios.get(`${BASE}/${mt}/${hit.id}`, { params: { api_key: TMDB_KEY }, timeout: 10000 }));
+        if (r?.data && (r.data.title || r.data.name)) {
+          const isTv = mt === 'tv';
+          return buildResult(r.data, isTv, await fetchSeasonData(r.data.id, season, isTv));
+        }
+      }
+    }
+  }
+
+  const hintYear = year || (msgDate ? new Date(msgDate).getFullYear() : null);
+  const isShort  = cleanTitle.trim().split(/\s+/).length <= 2;
+  const typeEp   = isSeries ? 'tv' : 'movie';
+  const otherEp  = isSeries ? 'movie' : 'tv';
+
+  // Build candidate list using all 12 algorithms
+  const candidates = buildTitleCandidates(strippedTitle, cleanTitle, hintYear);
+
+  // ── Core scorer ─────────────────────────────────────────────────────────────────────────
+  async function runStrategy(ep, params, strict) {
+    return fetchWithRetry(async () => {
+      const url2 = ep === 'multi' ? `${BASE}/search/multi` : `${BASE}/search/${ep}`;
+      const res  = await axios.get(url2, { params: { api_key: TMDB_KEY, ...params }, timeout: 10000 });
+      let results = res.data.results || [];
+      if (ep === 'multi') results = results.filter(r => r.media_type === 'movie' || r.media_type === 'tv');
+      if (!results.length) return null;
+
+      const queryTitle = params.query;
+      const scored = results.slice(0, 10).map(r => {
+        const rTitle = r.title || r.name || '';
+        const rOrig  = r.original_title || r.original_name || '';
+        const rYear  = r.release_date ? parseInt(r.release_date, 10) : r.first_air_date ? parseInt(r.first_air_date, 10) : null;
+        const rType  = ep === 'multi' ? (r.media_type === 'tv' ? 'series' : 'movie') : (ep === 'tv' ? 'series' : 'movie');
+        const origLang = r.original_language || '';
+        const simMain = Math.max(
+          stringSimilarity(cleanTitleForApi(rTitle), queryTitle),
+          stringSimilarity(cleanTitleForApi(rOrig),  queryTitle)
+        );
+        let score = simMain * 60;
+        if (hintYear && rYear) {
+          const d = Math.abs(hintYear - rYear);
+          score += d === 0 ? 30 : d === 1 ? 15 : d <= 2 ? 5 : -20;
+        } else if (!hintYear && !rYear) score += 5;
+        if ((isSeries ? 'series' : 'movie') === rType) score += 15; else score -= 10;
+        if (r.popularity > 50)  score += 5;
+        if (r.popularity > 200) score += 5;
+        if (origLang && origLang !== 'en' && /^(en|English)$/i.test(origLang)) score -= 5;
+        return { r, score, rTitle, rOrig, rYear, simMain };
+      });
+
+      scored.sort((a, b) => b.score - a.score);
+      const best = scored[0];
+      const simThresh   = strict ? (isShort ? 0.70 : 0.55) : (isShort ? 0.45 : 0.30);
+      const scoreThresh = strict ? (isShort ? 65  : 55)    : (isShort ? 47   : 37);
+      if (best.score < scoreThresh || best.simMain < simThresh) return null;
+
+      const isTv = ep === 'tv' || best.r.media_type === 'tv';
+      const dr = await fetchWithRetry(() =>
+        axios.get(`${BASE}/${isTv ? 'tv' : 'movie'}/${best.r.id}`, { params: { api_key: TMDB_KEY }, timeout: 10000 })
+      );
+      if (!dr) return null;
+      const sd = await fetchSeasonData(best.r.id, season, isTv);
+      const d  = dr.data;
+      const tmdbTitle  = d.title || d.name || title;
+      const queryClean = cleanTitleForApi(queryTitle) || queryTitle;
+      const tmdbClean  = cleanTitleForApi(tmdbTitle)  || tmdbTitle;
+      const titleSim   = stringSimilarity(queryClean.toLowerCase(), tmdbClean.toLowerCase());
+      const displayTitle = titleSim >= 0.5 ? tmdbTitle : (cleanTitleForApi(title) || title);
+      return {
+        tmdbId: String(d.id), type: isTv ? 'series' : 'movie', totalSeasons: d.number_of_seasons || 0,
+        title: displayTitle,
+        description: sd.seasonOverview || d.overview || '',
+        poster: sd.seasonPoster || (d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : ''),
+        backdrop: d.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : '',
+        rating: Math.round((d.vote_average || 0) * 10) / 10,
+        year: d.release_date ? parseInt(d.release_date, 10) : d.first_air_date ? parseInt(d.first_air_date, 10) : hintYear,
+        releaseDate: d.release_date || d.first_air_date || '',
+        genre: (d.genres || []).map(g => g.name),
+        duration: d.runtime
+          ? `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}m`
+          : (d.episode_run_time?.[0] ? `${Math.floor(d.episode_run_time[0] / 60)}h ${d.episode_run_time[0] % 60}m` : ''),
+        originalLanguage: langMap[d.original_language] || d.original_language || '',
+        confidence: Math.round(best.score),
+        _algo: params._algo || 'A1',
+      };
+    });
+  }
+
+  // ── Phase 1: Strict thresholds — try every candidate (all 12 algorithms) ─────────────────────
+  for (let i = 0; i < candidates.length; i++) {
+    const q = candidates[i];
+    const label = `A${i + 1}`;
+    const strats = [];
+    if (hintYear) strats.push({ ep: typeEp,  params: { query: q, year: hintYear, _algo: label } });
+    strats.push(          { ep: typeEp,  params: { query: q, _algo: label } });
+    strats.push(          { ep: 'multi', params: { query: q, _algo: label } });
+    if (hintYear) strats.push({ ep: otherEp, params: { query: q, year: hintYear, _algo: label } });
+    strats.push(          { ep: otherEp, params: { query: q, _algo: label } });
+    for (const { ep, params } of strats) {
+      const result = await runStrategy(ep, params, true);
+      if (result) {
+        if (i > 0) _emitter(`[TMDB] Algorithm ${label} matched: "${q}" → ${result.title} (${result.confidence}pts)`);
+        return result;
+      }
+    }
+  }
+
+  // ── Phase 2: Relaxed thresholds — same candidates, lower bar ────────────────────────────
+  for (let i = 0; i < candidates.length; i++) {
+    const q = candidates[i];
+    const label = `R${i + 1}`;
+    const strats = [
+      { ep: typeEp,  params: { query: q, ...(hintYear ? { year: hintYear } : {}), _algo: label } },
+      { ep: typeEp,  params: { query: q, _algo: label } },
+      { ep: 'multi', params: { query: q, _algo: label } },
+    ];
+    for (const { ep, params } of strats) {
+      const result = await runStrategy(ep, params, false);
+      if (result) {
+        _emitter(`[TMDB] Relaxed ${label} matched: "${q}" → ${result.title} (${result.confidence}pts)`);
+        return result;
+      }
+    }
+  }
+
+  return null;
+}
+
