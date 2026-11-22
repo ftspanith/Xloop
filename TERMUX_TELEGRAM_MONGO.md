@@ -16,17 +16,28 @@ cp .env.example .env
 nano .env
 ```
 
-Fill the local `.env` with your own Telegram API credentials and session strings for both accounts, plus `MONGODB_URI`. Account 2 must have `TG_CHANNELS_2` set to its comma-separated channel IDs. Account 1 uses the scraper's built-in channel list unless `TG_CHANNELS_1` is configured.
+First fill only the Telegram API ID and API hash values in the local `.env` for both accounts. Get those credentials from `https://my.telegram.org/apps`. Account 2 must also have `TG_CHANNELS_2` set to its comma-separated numeric channel IDs. Account 1 uses the scraper's built-in channel list unless `TG_CHANNELS_1` is configured.
 
-Do not paste API hashes, Telegram session strings, OTPs, or MongoDB connection strings into chat or commit them to Git.
+Do not paste API hashes, Telegram session strings, OTPs, 2-step passwords, or MongoDB connection strings into chat or commit them to Git.
 
-Install the project dependencies without downloading Puppeteer's browser (this workflow does not use Puppeteer):
+Install dependencies (Puppeteer's browser download is disabled; normal package install scripts remain enabled):
 
 ```bash
-PUPPETEER_SKIP_DOWNLOAD=1 npm ci --ignore-scripts
+PUPPETEER_SKIP_DOWNLOAD=1 npm ci
 ```
 
-## 2. Full scrape — both accounts
+## 2. Authenticate both Telegram accounts locally
+
+Run these one at a time:
+
+```bash
+npm run telegram:login:1
+npm run telegram:login:2
+```
+
+Enter each account's phone number, Telegram login code and (if enabled) 2-step verification password in Termux. The helper stores each StringSession in the local `.env` with restricted file permissions and never prints the session string. Do not share that file.
+
+## 3. Full scrape — both accounts
 
 Run:
 
@@ -43,7 +54,7 @@ The scraper also writes dated human-readable copies into Termux's home Downloads
 
 If Telegram returns FloodWait, leave the process running; the scraper waits for Telegram's requested interval and has per-channel recovery checkpoints.
 
-## 3. Validate first — no database writes
+## 4. Validate first — no database writes
 
 ```bash
 npm run import:telegram-json
@@ -53,7 +64,7 @@ This is a dry run. It checks that both exports exist, are full scrapes, have con
 
 Review the counts. If either account has zero messages or zero extracted links, stop and investigate rather than applying.
 
-## 4. Direct MongoDB import
+## 5. Direct MongoDB import
 
 Only after reviewing the dry-run output:
 
@@ -71,7 +82,7 @@ Import behavior:
 
 The importer never drops the collection. Keep the generated backup file until the database and Xloop admin views are verified.
 
-## 5. Verify
+## 6. Verify
 
 After import, check the printed MongoDB total and the backup filename. Then verify Xloop's Content Manager and Skip Scraper path after a deployment is available. The JSON files and backup remain local to Termux unless you manually copy them elsewhere.
 
