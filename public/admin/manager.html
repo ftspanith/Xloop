@@ -804,7 +804,7 @@ function addNewDownload() {
 
 function detectHostJS(url) {
   if (/^(?:https?:\/\/)?(?:[^/]+\.)?gdflix\.dev(?:[/:?#]|$)/i.test(url)) return 'GDFlix';
-  if (/hubcloud/i.test(url)) return 'HubCloud';
+  if (/^(?:https?:\\/\\/)?(?:[^/]+\\.)?hubcloud\\.one(?:[/:?#]|$)/i.test(url) || /hubcloud/i.test(url)) return 'HubCloud';
   if (/gdlink/i.test(url)) return 'GDLink';
   if (/terabox/i.test(url)) return 'TeraBox';
   if (/drive\.google/i.test(url)) return 'Google Drive';
