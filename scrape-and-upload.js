@@ -403,11 +403,47 @@ function printSyncSummary() {
   console.log(`${c.cyan}━━━━━━━━━━━━━━━━━━━━━${c.reset}\n`);
 }
 
+// Run both Telegram accounts sequentially. Acc 1 replaces its own batch first;
+// Acc 2 then merges unique links. The full pipeline runs once after both uploads.
+function runAccountChild(profile) {
+  const childArgs = [
+    __filename,
+    `--mode=${mode}`,
+    `--account=${profile}`,
+    '--no-pipeline',
+  ];
+  if (channels !== 'all') childArgs.push(`--channels=${channels}`);
+  if (mode === '3') {
+    if (startDate) {
+      childArgs.push(`--start-date=${startDate}`);
+      if (endDate) childArgs.push(`--end-date=${endDate}`);
+    } else childArgs.push(`--days=${days}`);
+  }
+  if (uploadOnly) childArgs.push('--upload-only');
+  return new Promise((resolve, reject) => {
+    log(`Starting Account ${profile} child workflow...`);
+    const child = spawn(process.execPath, childArgs, { cwd: __dirname, stdio: 'inherit', env: { ...process.env } });
+    child.on('close', code => code === 0 ? resolve() : reject(new Error(`Account ${profile} workflow exited with code ${code}`)));
+    child.on('error', reject);
+  });
+}
+
+async function runBothAccounts() {
+  await runAccountChild('1');
+  await runAccountChild('2');
+  if (!noPipeline) {
+    const token = await login();
+    await triggerPipeline(token);
+  } else {
+    warn('Both account uploads completed; pipeline trigger skipped by --no-pipeline.');
+  }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
   console.log(`\n${c.bold}${c.cyan}━━━ XLOOP ─ Scrape & Upload ━━━${c.reset}\n`);
   console.log(`  Site:     ${SITE_URL}`);
-  console.log(`  Account:  ${account === '2' ? 'Account 2 (rare channels, merge mode)' : 'Account 1 (primary)'}`);
+  console.log(`  Account:  ${account === 'both' ? 'Both accounts (Acc 1 replace, then Acc 2 merge)' : account === '2' ? 'Account 2 (rare channels, merge mode)' : 'Account 1 (primary)'}`);
   console.log(`  Mode:     ${uploadOnly ? 'Upload Only (skip scraper)' : MODE_LABELS[mode] || `Mode ${mode}`}`);
   console.log(`  Upload:   ${mergeMode ? 'MERGE (keeps existing account 1 data)' : 'REPLACE (wipes old data)'}`);
   console.log(`  Pipeline: ${noPipeline ? 'Manual (go to dashboard)' : 'Auto-trigger after upload'}\n`);
