@@ -34,6 +34,10 @@ function asString(value) {
   if (typeof value === 'string') return value;
   if (typeof value === 'bigint') return value.toString();
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value.toString === 'function') {
+    const rendered = value.toString();
+    if (rendered && rendered !== '[object Object]') return rendered;
+  }
   return '';
 }
 
@@ -219,7 +223,7 @@ function getPeerId(peer) {
 function getForwardInfo(forward) {
   if (!forward) return null;
   return {
-    date: forward.date != null ? new Date(Number(forward.date) * 1000).toISOString() : null,
+    date: forward.date != null ? safeIsoDate(forward.date) : null,
     from_name: asString(forward.fromName) || null,
     from_id: getPeerId(forward.fromId),
     channel_post: forward.channelPost != null ? Number(forward.channelPost) : null,
@@ -240,7 +244,7 @@ function detectPromotion(text, buttons, links) {
   const buttonText = (buttons || []).map(button => button.text || '').join('\n');
   const combined = [text || '', buttonText].join('\n');
   const matched = PROMOTION_PATTERNS.filter(pattern => pattern.re.test(combined)).map(pattern => pattern.key);
-  const hasTelegramChannelLink = (links || []).some(link => TELEGRAM_HOST_RE.test(link.host || '') && /(^|\/)(\+|joinchat\/)/i.test(link.url));
+  const hasTelegramChannelLink = (links || []).some(link => TELEGRAM_HOST_RE.test(link.host || ''));
   const hasPromoButton = (buttons || []).some(button => /^(join|subscribe|follow)(?:\s|$)|join\s+(?:channel|group)|subscribe\s+(?:now|here)/i.test(button.text || ''));
   if (hasTelegramChannelLink && (matched.length || hasPromoButton)) matched.push('telegram_invite_link');
   return { detected: matched.length > 0, matched_terms: Array.from(new Set(matched)) };
