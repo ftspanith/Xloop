@@ -40,11 +40,11 @@ function extractSize(str) {
   const pats = [
     /[\/\[(\s]\s*(\d+(?:\.\d+)?\s*(?:GB|MB))\s*[\/\])]/i,  // [22.9GB], [ 22.9GB ], (22.9GB)
     /[\u2014\u2013\-]\s*\[\s*(\d+(?:\.\d+)?\s*(?:GB|MB))\s*\]/i, // — [7.29 GB] em-dash format
-    /(\d+(?:\.\d+)?\s*(?:GB|MB))/i,                          // bare: 22.9GB anywhere
+    /(\d[\d,]*(?:\.\d+)?\s*(?:GB|MB))/i,                          // bare: 22.9GB anywhere
   ];
   for (const re of pats) {
     const m = str.match(re);
-    if (m) return m[1].replace(/\s+/g,'').trim();
+    if (m) return m[1].replace(/[\s,]+/g,'').trim();
   }
   return '';
 }
@@ -73,7 +73,7 @@ function extractTitleFromStreamingUrl(url) {
 
 // ─── URL CLASSIFIER ──────────────────────────────────────────────────────────
 const DIRECT_RE = [
-  /gdflix\.(dev|to|one|link|net|dad|cfd)/i, /gdlink\.dev/i,
+  /gdflix\.(dev|to|one|link|net|dad|cfd|io)/i, /gdlink\.dev/i,
   /hubcloud\.(foo|one|art|cx|lol|bz|club|in|to|work|zone|dev|me|best)/i,
   /drivehub\.(dev|to|in|online)/i,
   /filepress\.(store|wiki|in|me|xyz)/i, /fpgo\.xyz/i,
@@ -285,7 +285,7 @@ function detectCodec(fn) {
 // ─── HDR ─────────────────────────────────────────────────────────────────────
 function detectHDR(fn) {
   const s=(fn||'').toUpperCase();
-  if (/DOLBY\s*VISION|\.DV\.|\bDV\b/.test(s)) return 'Dolby Vision';
+  if (/DOLBY\s*VISION|\bDOVI\b|\.DV\.|\bDV\b/.test(s)) return 'Dolby Vision';
   if (/HDR10\+|HDR10P/.test(s))               return 'HDR10+';
   if (/HDR10/.test(s))                         return 'HDR10';
   if (/\bHDR\b/.test(s))                       return 'HDR';
@@ -710,6 +710,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     .replace(/^[A-Z0-9 _\-]{1,15}:\s*(https?:\/\/)/gim,'$1')
     .replace(/(?<![:/])\b(hubcloud\.(?:foo|lol|work|in|to|club|me|best|one)[^\/]*\/\S+)/gi,'https://$1')
     .replace(/(?<![:/])\b(gdflix\.(?:dev|to|one|link)\/\S+)/gi,'https://$1')
+    .replace(/(?<![:/])\b(new5\.gdflix\.io\/\S+)/gi,'https://$1')
     .replace(/(?<![:/])\b(dtflix\.ink\/\S*)/gi,'https://$1')
     .replace(/(?<![:/])\b(filepress\.in\/\S+)/gi,'https://$1')
     .replace(/(?<![:/])\b(drivehub\.(?:dev|to|in)\/\S+)/gi,'https://$1');
@@ -1087,10 +1088,11 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 
     const {season:ds,episode:de}=extractSeasonEpisode(rawFn);
     const fs=ds??season, fe=de??episode;
-    const key=`${quality}__${size||'nosize'}__S${fs??''}E${fe??''}`;
+    const fileIdentity = stripEmojis(rawFn).toLowerCase().replace(/\s+/g, ' ').trim();
+    const key=`${quality}__${size||'nosize'}__S${fs??''}E${fe??''}__${fileIdentity||pair.url}`;
 
-    const audio = extractAudio(rawFn) || extractAudio(fullText) || null;
-    const source = detectSource(rawFn) || detectSource(fullText) || null;
+    const audio = extractAudio(rawFn) || null;
+    const source = detectSource(rawFn) || null;
     if (!fileMap[key]) fileMap[key]={quality,size,hdr,codec,audio,source,filename:stripEmojis(rawFn).trim()||cleanedTitle,language:fileLang,season:fs,episode:fe,links:[]};
     if (!fileMap[key].links.find(l=>l.url===pair.url)) {
       fileMap[key].links.push({host:detectHost(pair.url),url:pair.url,isFast:/gdflix|hubcloud|gdlink/i.test(pair.url)});
