@@ -778,6 +778,24 @@ async function submitQuickPaste() {
 }
 
 //  Edit Modal 
+function normalizeGdflixUrl(value) {
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'gdflix.dev' || host.endsWith('.gdflix.dev')) {
+      parsed.hostname = 'gdflix.dev';
+      return parsed.toString();
+    }
+    if (host === 'hubcloud.one' || host.endsWith('.hubcloud.one')) {
+      parsed.hostname = 'hubcloud.one';
+      return parsed.toString();
+    }
+    return value;
+  } catch (_) {
+    return value;
+  }
+}
+
 function openEdit(movie) {
   editMovieData = movie;
   // Display existing GDFlix subdomain URLs in canonical base-domain form.
@@ -846,21 +864,23 @@ function removeDlLink(di, li) {
   openEdit(editMovieData);
 }
 function addExtraLink(di) {
-  const url = document.getElementById(`extra-url-${di}`).value.trim();
-  if (!/^https?:\/\//i.test(url)) return showStatus('edit-status', 'Enter a valid http(s) URL.', 'error');
+  const rawUrl = document.getElementById(`extra-url-${di}`).value.trim();
+  if (!/^https?:\/\//i.test(rawUrl)) return showStatus('edit-status', 'Enter a valid http(s) URL.', 'error');
+  const url = normalizeGdflixUrl(rawUrl);
   if (!editMovieData.downloads[di].links) editMovieData.downloads[di].links = [];
-  editMovieData.downloads[di].links.push({ host: detectHostJS(url), url, isFast: /gdfilx\.dev|gdflix|hubcloud|gdlink/i.test(url) });
+  editMovieData.downloads[di].links.push({ host: detectHostJS(url), url, isFast: /gdflix|hubcloud|gdlink/i.test(url) });
   openEdit(editMovieData);
 }
 function addNewDownload() {
-  const url      = document.getElementById('new-link-url').value.trim();
+  const rawUrl   = document.getElementById('new-link-url').value.trim();
   const filename = document.getElementById('new-link-filename').value.trim();
   const size     = document.getElementById('new-link-size').value.trim();
   const quality  = document.getElementById('new-link-quality').value;
   const language = document.getElementById('new-link-lang').value.trim() || 'Telugu';
-  if (!/^https?:\/\//i.test(url)) return showStatus('edit-status', 'Enter a valid http(s) URL.', 'error');
+  if (!/^https?:\/\//i.test(rawUrl)) return showStatus('edit-status', 'Enter a valid http(s) URL.', 'error');
+  const url = normalizeGdflixUrl(rawUrl);
   if (!editMovieData.downloads) editMovieData.downloads = [];
-  editMovieData.downloads.push({ filename, size, quality, language, links: [{ host: detectHostJS(url), url, isFast: /gdfilx\.dev|gdflix|hubcloud|gdlink/i.test(url) }] });
+  editMovieData.downloads.push({ filename, size, quality, language, links: [{ host: detectHostJS(url), url, isFast: /gdflix|hubcloud|gdlink/i.test(url) }] });
   // Clear fields
   ['new-link-url','new-link-filename','new-link-size','new-link-lang'].forEach(id => document.getElementById(id).value='');
   openEdit(editMovieData);
@@ -882,7 +902,7 @@ async function saveEdit() {
     const li = Number(input.dataset.linkIndex);
     const link = editMovieData?.downloads?.[di]?.links?.[li];
     if (link) {
-      link.url = input.value.trim();
+      link.url = normalizeGdflixUrl(input.value.trim());
       link.host = detectHostJS(link.url);
       link.isFast = /gdfilx\.dev|gdflix|hubcloud|gdlink/i.test(link.url);
     }
