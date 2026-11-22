@@ -627,6 +627,10 @@
       cmd  += ' --account=2';
       desc += ' Uses Account 2 — merges automatically, outputs to telegram_export_2.json.';
     }
+    else if (acc === 'both') {
+      cmd += ' --account=both';
+      desc += ' Runs Acc 1 first (replace), then Acc 2 (merge), removes duplicate URLs, and triggers the pipeline once.';
+    }
 
     // Update UI
     var cmdEl  = document.getElementById('generatedCmd');
