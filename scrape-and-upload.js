@@ -278,7 +278,7 @@ async function uploadExport(token, mergeMode = false) {
           season: dl.season??parsed.season, episode: dl.episode??parsed.episode,
           language: lang, quality: dl.quality, size: dl.size, filename: dl.filename,
           codec: dl.codec || '', hdr: dl.hdr || '', audio: dl.audio || '', bitDepth: dl.bitDepth || '', audioChannels: dl.audioChannels || '',
-          host: urlType, url, bypassedUrl: null,
+          host: urlType, url, bypassedUrl: null, sourceAccount: account,
           isFast: /gdflix|hubcloud|gdlink|tmbcloud|fpgo|filebee/i.test(url),
           imdbId: parsed.imdbId||null, tmdbIdHint: parsed.tmdbIdHint||null };
         const sk = `${dl.quality||''}|${(dl.size||'').replace(/\s/g,'')}|${(dl.filename||'').slice(0,80)}|${lang}`;
