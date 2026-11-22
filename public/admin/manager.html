@@ -593,17 +593,21 @@ function renderPagination() {
 function goPage(p) { currentPage = p; loadSearch(); window.scrollTo(0,0); }
 
 //  Manual Add 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>\"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[ch]));
+}
+
 function addLinkRow(url='', filename='', size='', lang='Telugu') {
   const c = document.getElementById('links-container');
   const div = document.createElement('div');
   div.className = 'link-row';
   div.innerHTML = `
     <div><label style="display:${c.children.length>0?'none':'block'}">Download URL *</label>
-      <input type="text" placeholder="https://gdflix.dev/file/..." value="${url}"></div>
+      <input type="text" placeholder="https://gdflix.dev/file/..." value="${escapeHtml(url)}"></div>
     <div><label style="display:${c.children.length>0?'none':'block'}">Filename</label>
-      <input type="text" placeholder="Movie.1080p.mkv" value="${filename}"></div>
+      <input type="text" placeholder="Movie.1080p.mkv" value="${escapeHtml(filename)}"></div>
     <div><label style="display:${c.children.length>0?'none':'block'}">Size</label>
-      <input type="text" placeholder="2.1 GB" value="${size}" style="width:100px;"></div>
+      <input type="text" placeholder="2.1 GB" value="${escapeHtml(size)}" style="width:100px;"></div>
     <div style="padding-top:${c.children.length>0?0:22}px">
       <button class="btn btn-danger btn-sm" onclick="this.closest('.link-row').remove()"></button>
     </div>
@@ -740,9 +744,9 @@ function openEdit(movie) {
       <div class="dl-link-list">
         ${(d.links||[]).map((l,li) => `
           <div class="dl-link-row">
-            <span class="badge badge-yellow">${l.host||'Link'}</span>
-            <div class="dl-link-url" title="${l.url}">${l.url}</div>
-            <button class="btn btn-danger btn-sm" onclick="removeDlLink(${di},${li})"></button>
+            <span class="badge badge-yellow">${escapeHtml(l.host||'Link')}</span>
+            <input class="dl-link-url-input" type="url" data-download-index="${di}" data-link-index="${li}" value="${escapeHtml(l.url||'')}" placeholder="https://..." style="min-width:0;flex:1;width:100%;">
+            <button class="btn btn-danger btn-sm" onclick="removeDlLink(${di},${li})">Remove</button>
           </div>
         `).join('')}
       </div>
@@ -806,6 +810,12 @@ function detectHostJS(url) {
 
 async function saveEdit() {
   const id = document.getElementById('edit-id').value;
+  document.querySelectorAll('.dl-link-url-input').forEach(input => {
+    const di = Number(input.dataset.downloadIndex);
+    const li = Number(input.dataset.linkIndex);
+    const link = editMovieData?.downloads?.[di]?.links?.[li];
+    if (link) link.url = input.value.trim();
+  });
   const body = {
     title:       document.getElementById('edit-title').value.trim(),
     year:        parseInt(document.getElementById('edit-year').value) || undefined,
