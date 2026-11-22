@@ -47,10 +47,13 @@ function normalizeGdflixUrl(value) {
     const host = parsed.hostname.toLowerCase();
     if (host === 'gdflix.dev' || host.endsWith('.gdflix.dev')) {
       parsed.hostname = 'gdflix.dev';
-    } else if (host === 'hubcloud.one' || host.endsWith('.hubcloud.one')) {
-      parsed.hostname = 'hubcloud.one';
+      return parsed.toString();
     }
-    return parsed.toString();
+    if (host === 'hubcloud.one' || host.endsWith('.hubcloud.one')) {
+      parsed.hostname = 'hubcloud.one';
+      return parsed.toString();
+    }
+    return value;
   } catch (_) {
     return value;
   }
