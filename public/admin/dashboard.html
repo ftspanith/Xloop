@@ -1625,6 +1625,7 @@
       document.getElementById('doneBanner2').classList.add('visible');
       document.getElementById('doneSummary2').textContent = 'Added ' + _cAdded2.toLocaleString() + ' new · Updated ' + _cUpdated2.toLocaleString() + ' records';
     }
+    updateOrchestratorButtonLabel();
   }
 
   function continueFromOffset2() { if (_isRunning2) return; selectMode2(true); document.getElementById('continueBtn2').classList.remove('visible'); startPipeline2(true); }
