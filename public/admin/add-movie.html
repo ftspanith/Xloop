@@ -226,7 +226,7 @@
               const episode = f.season != null ? `S${String(f.season).padStart(2,'0')}${f.episode != null ? 'E'+String(f.episode).padStart(2,'0') : ''}` : '';
               const meta = [episode, f.quality, f.size, f.codec, f.hdr, f.language, f.audio, f.source].filter(Boolean).join(' · ');
               return `${index + 1}. ${f.filename || f.title} — ${meta}`;
-            }).join('\\n');
+            }).join('\n');
           }
             statusEl.textContent = added > 0
               ? ` Added "${data.addedTitle || 'movie'}" successfully!`
