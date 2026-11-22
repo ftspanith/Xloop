@@ -96,3 +96,18 @@ test('Inline JavaScript on every admin page parses without syntax errors', () =>
 
   assert.ok(checked > 0, 'inline scripts should be checked');
 });
+
+test('Skip Scraper reuses MongoDB extracted links and preserves existing Movies data', () => {
+  const dashboard = read('public/admin/dashboard.html');
+  const orchestratorUi = read('public/admin/orchestrator.html');
+  const route = read('routes/orchestrator.js');
+  const pipeline = read('pipeline_full.js');
+
+  assert.match(dashboard, /Reuse saved MongoDB links — no Telegram scrape/);
+  assert.match(orchestratorUi, /Reuse extracted links already saved in MongoDB/);
+  assert.match(route, /noWipe:\s*!!skipScraper/);
+  assert.match(pipeline, /ExtractedLink\.countDocuments\(\{\}\)/);
+  assert.match(pipeline, /ExtractedLink\.find\(\{\}\)\.lean\(\)/);
+  assert.match(pipeline, /Loaded \$\{clean\.length\} pre-extracted links from MongoDB/);
+  assert.match(pipeline, /else if \(fs\.existsSync\(EXPORT_FILE\)\)/);
+});
