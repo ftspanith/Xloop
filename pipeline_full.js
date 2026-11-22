@@ -949,17 +949,22 @@ async function main(opts = {}) {
         const links = await ExtractedLink.find({}).lean();
         const clean = links.map(({ _id, __v, uploadBatch, createdAt, updatedAt, ...rest }) => rest);
         fs.writeFileSync(LINKS_FILE, JSON.stringify(clean));
+        // The persistent collection already contains every extracted link;
+        // discard a warm-instance shortlink sidecar so it cannot add stale URLs.
+        try { fs.unlinkSync(SHORTLINKS_FILE); } catch (_) {}
         ok(`Loaded ${clean.length} pre-extracted links from MongoDB — refreshed local cache.`);
         await PipelineCache.findOneAndUpdate(
           { key: 'extracted_links' },
           { $set: { count: clean.length, 'data.count': clean.length } },
           { upsert: false }
         );
-      } else if (IS_VERCEL && fs.existsSync(LINKS_FILE)) {
-        // A warm serverless instance can retain an obsolete /tmp file after
-        // the persistent collection has been cleared. Never import that file.
-        fs.unlinkSync(LINKS_FILE);
-        warn('STEP 1 — Ignoring stale links_for_bypasser.json from an earlier serverless run.');
+      } else if (IS_VERCEL) {
+        // A warm serverless instance can retain obsolete /tmp files after
+        // the persistent collection has been cleared. Never import those files.
+        for (const staleFile of [LINKS_FILE, EXPORT_FILE, SHORTLINKS_FILE]) {
+          try { fs.unlinkSync(staleFile); } catch (_) {}
+        }
+        warn('STEP 1 — Ignoring stale scraper files from an earlier serverless run.');
       }
     } catch (err) {
       fail(`Could not verify MongoDB extracted links: ${err.message}`);
