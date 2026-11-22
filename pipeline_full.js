@@ -939,6 +939,28 @@ async function main(opts = {}) {
   // STEP 1: Extract
   sep();
   if (!IMPORT_SRC) {
+    // MongoDB is the persistent source of truth. Refresh /tmp first because
+    // Vercel may reuse a warm instance whose /tmp file belongs to an older run.
+    try {
+      const ExtractedLink = require('./models/ExtractedLink');
+      const PipelineCache = require('./models/PipelineCache');
+      const linkCount = await ExtractedLink.countDocuments({});
+      if (linkCount > 0) {
+        const links = await ExtractedLink.find({}).lean();
+        const clean = links.map(({ _id, __v, uploadBatch, createdAt, updatedAt, ...rest }) => rest);
+        fs.writeFileSync(LINKS_FILE, JSON.stringify(clean));
+        ok(`Loaded ${clean.length} pre-extracted links from MongoDB — refreshed local cache.`);
+        await PipelineCache.findOneAndUpdate(
+          { key: 'extracted_links' },
+          { $set: { count: clean.length, 'data.count': clean.length } },
+          { upsert: false }
+        );
+      }
+    } catch (err) {
+      fail(`Could not verify MongoDB extracted links: ${err.message}`);
+      throw err;
+    }
+    // If MongoDB has no links, retain the existing local-file fallback below.
     // Check if already-extracted links are in /tmp (same Lambda invocation as upload)
     if (fs.existsSync(LINKS_FILE)) {
       warn('STEP 1 — Using pre-extracted links_for_bypasser.json from /tmp');
