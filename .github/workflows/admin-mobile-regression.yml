@@ -11,6 +11,8 @@ on:
       - 'routes/orchestrator.js'
       - 'pipeline_full.js'
       - 'scrape_api.js'
+      - 'login-telegram.js'
+      - 'login-telegram.js'
       - 'import-telegram-json-to-mongodb.js'
       - 'utils/parser.js'
       - 'test/telegram-mongodb-import.test.js'
