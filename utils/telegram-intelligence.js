@@ -663,11 +663,48 @@ function createExportArtifacts(messages, options) {
     note: 'Original shortlinks only. No redirect resolution or bypass is performed.',
     links: shortlinks,
   };
+  // Review is an index into the canonical main export, not a second copy of
+  // every full Telegram message. Keep the original message in main.messages
+  // and retain only the fields needed to triage unresolved links.
+  const reviewMessages = review.map(message => {
+    const classification = message.classification || {};
+    const reviewLinks = (message.links || [])
+      .filter(link => link && ['review', 'unknown'].includes(link.purpose))
+      .map(link => ({
+        url: link.url,
+        host: link.host,
+        host_class: link.host_class,
+        sources: link.sources,
+        labels: link.labels,
+        button_positions: link.button_positions,
+        entity_types: link.entity_types,
+        is_shortlink: !!link.is_shortlink,
+        purpose: link.purpose,
+      }));
+    const reviewReasons = [];
+    if (classification.needs_review) reviewReasons.push('classification_needs_review');
+    if (reviewLinks.length) reviewReasons.push('unresolved_or_unknown_link');
+    if (reviewLinks.some(link => link.is_shortlink)) reviewReasons.push('shortlink_requires_review');
+
+    return {
+      id: message.id,
+      channel_id: message.channel_id,
+      channel_name: message.channel_name,
+      date: message.date,
+      account: message.account || account,
+      text: message.text || '',
+      review_reasons: reviewReasons,
+      classification,
+      links: reviewLinks,
+    };
+  });
   const reviewExport = {
     exported_at: exportedAt,
     account,
-    total_review_messages: review.length,
-    messages: review,
+    schema_version: 2,
+    total_review_messages: reviewMessages.length,
+    note: 'Compact review index. Use account + channel_id + message id to find the complete original message in telegram_export.json.',
+    messages: reviewMessages,
   };
   const report = {
     exported_at: exportedAt,
