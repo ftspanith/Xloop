@@ -39,6 +39,7 @@
         <div style="margin-top:12px; display:flex; align-items:center; gap:15px;">
           <button type="button" class="btn-primary" onclick="submitQuickPaste()"> Auto Process & Publish</button>
           <span id="quick-paste-status" style="font-size:0.85rem; font-weight:600;"></span>
+          <div id="quick-paste-details" style="flex-basis:100%; width:100%; margin-top:10px; font-size:0.82rem; color:var(--text2); white-space:pre-wrap; overflow-wrap:anywhere;"></div>
         </div>
       </div>
 
@@ -199,6 +200,8 @@
 
         const btn = document.querySelector('button[onclick="submitQuickPaste()"]');
         btn.disabled = true;
+      const detailsEl = document.getElementById('quick-paste-details');
+      if (detailsEl) detailsEl.textContent = '';
         statusEl.textContent = ' Fetching from TMDB...';
         statusEl.style.color = 'var(--text2)';
 
@@ -218,6 +221,13 @@
             statusEl.textContent = ' ' + data.errors[0];
             statusEl.style.color = 'var(--red)';
           } else if (added > 0 || updated > 0) {
+          if (detailsEl && Array.isArray(data.detectedFiles)) {
+            detailsEl.textContent = data.detectedFiles.map((f, index) => {
+              const episode = f.season != null ? `S${String(f.season).padStart(2,'0')}${f.episode != null ? 'E'+String(f.episode).padStart(2,'0') : ''}` : '';
+              const meta = [episode, f.quality, f.size, f.codec, f.hdr, f.language, f.audio, f.source].filter(Boolean).join(' · ');
+              return `${index + 1}. ${f.filename || f.title} — ${meta}`;
+            }).join('\\n');
+          }
             statusEl.textContent = added > 0
               ? ` Added "${data.addedTitle || 'movie'}" successfully!`
               : ` Updated existing entry with new download link!`;
