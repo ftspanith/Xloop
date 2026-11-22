@@ -321,17 +321,20 @@ function saveOutput(newMessages, modeLabel, existingMessages = []) {
   // ── Human-readable filename → saved to ~/Downloads for easy access
   const dateStr      = exportedAt.slice(0, 10); // YYYY-MM-DD
   const fileName     = `xloop_${modeLabel}_${ACCOUNT_NAME}_${dateStr}_${merged.length}msgs.json`;
-  const downloadsDir = path.join(os.homedir(), 'Downloads');
+  // Termux shared-storage path maps to Android's visible Download folder.
+  const downloadsDir = path.join(os.homedir(), 'storage', 'downloads');
   const readableFile = path.join(downloadsDir, fileName);
 
-  // Write to ~/Downloads/ (easy to find + upload)
   try {
+    if (!fs.existsSync(downloadsDir)) {
+      throw new Error('Android shared Downloads is unavailable; run termux-setup-storage first.');
+    }
     fs.writeFileSync(readableFile, json);
-    logFn(`   Saved to       : ~/Downloads/${fileName}`);
-  } catch(_) {
-    // Fallback to project root if Downloads not writable
+    logFn(`   Saved to       : ~/storage/downloads/${fileName} (Android Download)`);
+  } catch(error) {
+    // Keep the export safe in the project folder if Android storage is not mounted.
     fs.writeFileSync(path.join(__dirname, fileName), json);
-    logFn(`   Saved to       : ${fileName} (project folder)`);
+    logFn(`   Android Download unavailable (${error.message}); saved in Xloop folder: ${fileName}`);
   }
   // Also write telegram_export.json in project root for pipeline compatibility
   const exportTmp = `${EXPORT_FILE}.tmp`;
