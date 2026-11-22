@@ -407,7 +407,7 @@
       <div class="form-group" style="margin-bottom:0">
         <label>Type</label>
         <select id="edit-type">
-          <option value="movie">Movie</option><option value="series">Series</option>
+          <option value="movie">Movie</option><option value="series">Series</option><option value="anime">Anime</option>
         </select>
       </div>
     </div>
@@ -780,9 +780,9 @@ function removeDlLink(di, li) {
 }
 function addExtraLink(di) {
   const url = document.getElementById(`extra-url-${di}`).value.trim();
-  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) return showStatus('edit-status', 'Enter a valid http(s) URL.', 'error');
   if (!editMovieData.downloads[di].links) editMovieData.downloads[di].links = [];
-  editMovieData.downloads[di].links.push({ host: detectHostJS(url), url, isFast: /gdflix|hubcloud|gdlink/i.test(url) });
+  editMovieData.downloads[di].links.push({ host: detectHostJS(url), url, isFast: /gdfilx\.dev|gdflix|hubcloud|gdlink/i.test(url) });
   openEdit(editMovieData);
 }
 function addNewDownload() {
@@ -791,9 +791,9 @@ function addNewDownload() {
   const size     = document.getElementById('new-link-size').value.trim();
   const quality  = document.getElementById('new-link-quality').value;
   const language = document.getElementById('new-link-lang').value.trim() || 'Telugu';
-  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) return showStatus('edit-status', 'Enter a valid http(s) URL.', 'error');
   if (!editMovieData.downloads) editMovieData.downloads = [];
-  editMovieData.downloads.push({ filename, size, quality, language, links: [{ host: detectHostJS(url), url, isFast: /gdflix|hubcloud|gdlink/i.test(url) }] });
+  editMovieData.downloads.push({ filename, size, quality, language, links: [{ host: detectHostJS(url), url, isFast: /gdfilx\.dev|gdflix|hubcloud|gdlink/i.test(url) }] });
   // Clear fields
   ['new-link-url','new-link-filename','new-link-size','new-link-lang'].forEach(id => document.getElementById(id).value='');
   openEdit(editMovieData);
@@ -814,8 +814,14 @@ async function saveEdit() {
     const di = Number(input.dataset.downloadIndex);
     const li = Number(input.dataset.linkIndex);
     const link = editMovieData?.downloads?.[di]?.links?.[li];
-    if (link) link.url = input.value.trim();
+    if (link) {
+      link.url = input.value.trim();
+      link.host = detectHostJS(link.url);
+      link.isFast = /gdfilx\.dev|gdflix|hubcloud|gdlink/i.test(link.url);
+    }
   });
+  const invalidLink = (editMovieData.downloads || []).some(d => (d.links || []).some(l => !/^https?:\/\//i.test((l.url || '').trim())));
+  if (invalidLink) return showStatus('edit-status', 'Every download link must be a valid http(s) URL.', 'error');
   const body = {
     title:       document.getElementById('edit-title').value.trim(),
     year:        parseInt(document.getElementById('edit-year').value) || undefined,
