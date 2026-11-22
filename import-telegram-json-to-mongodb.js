@@ -24,7 +24,6 @@ const hostRank = host => {
 const CDN_RE = [
   /\.(m3u8|ts|m4s)(\?|$)/i,
   /\/(image|img|thumbnail|poster|banner|cover)\//i,
-  /\/(uploads?|wp-content|static|assets?)\//i,
   /cdn\.(hotstar|zee5|sonyliv)/i,
   /vod\d*\./i, /img\d*\./i, /thumbs?\./i,
   /akamaized\.net/i, /cloudfront\.net/i,
