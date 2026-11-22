@@ -130,7 +130,7 @@ test('download plus channel promotion is classified as mixed, never discarded', 
   const record = buildTelegramMessageRecord({
     id: 13,
     date: 1795305600,
-    message: 'Example Film (2026) 1080p WEB-DL [1.4GB]\nhttps://gdflix.dev/file/film-123\nJoin our Telegram channel',
+    message: 'Example Film (2026) 1080p WEB-DL [1.4GB]\nhttps://gdflix.dev/file/film-123\nhttps://unknown.example/possible-mirror\nJoin our Telegram channel',
     replyMarkup: {
       rows: [{ buttons: [
         { className: 'KeyboardButtonUrl', text: 'Join Channel', url: 'https://t.me/xloop_backup' },
@@ -143,6 +143,8 @@ test('download plus channel promotion is classified as mixed, never discarded', 
   assert.equal(record.classification.is_promotion, true);
   assert.ok(record.links.some(link => link.purpose === 'download'));
   assert.ok(record.links.some(link => link.purpose === 'promotion'));
+  assert.ok(record.links.some(link => link.url.includes('unknown.example') && link.purpose === 'review'));
+  assert.equal(record.classification.needs_review, true);
 });
 
 test('extracts Telegram document and video/audio metadata without BigInt JSON failures', () => {
