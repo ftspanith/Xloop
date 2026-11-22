@@ -126,6 +126,26 @@ test('promotion-only Join/Subscribe post is retained and classified as promotion
   assert.ok(record.links.every(link => link.purpose === 'promotion'));
 });
 
+test('detects social, website and Telugu channel promotion language', () => {
+  const cases = [
+    'Follow us on Instagram for updates',
+    'Visit our official website for more information',
+    'మా టెలిగ్రామ్ ఛానల్‌లో జాయిన్ అవ్వండి',
+    'Subscribe cheyandi for daily updates',
+  ];
+
+  for (let index = 0; index < cases.length; index++) {
+    const record = buildTelegramMessageRecord({
+      id: 130 + index,
+      date: 1795305600,
+      message: cases[index],
+    }, baseContext());
+    assert.equal(record.classification.is_promotion, true, cases[index]);
+    assert.equal(record.classification.is_download, false, cases[index]);
+    assert.equal(record.classification.type, 'promotion', cases[index]);
+  }
+});
+
 test('download plus channel promotion is classified as mixed, never discarded', () => {
   const record = buildTelegramMessageRecord({
     id: 13,
