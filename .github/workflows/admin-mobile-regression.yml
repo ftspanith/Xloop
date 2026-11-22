@@ -1,0 +1,36 @@
+name: Admin Mobile UI Regression
+
+on:
+  push:
+    branches:
+      - test/mobile-dual-upload
+    paths:
+      - 'public/admin/**'
+      - 'routes/scrape.js'
+      - 'models/ExtractedLink.js'
+      - 'package.json'
+      - 'test/admin-mobile-regression.test.js'
+      - '.github/workflows/admin-mobile-regression.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'public/admin/**'
+      - 'routes/scrape.js'
+      - 'models/ExtractedLink.js'
+      - 'package.json'
+      - 'test/admin-mobile-regression.test.js'
+      - '.github/workflows/admin-mobile-regression.yml'
+
+jobs:
+  admin-mobile-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run admin UI regression tests
+        run: npm run test:admin-ui
