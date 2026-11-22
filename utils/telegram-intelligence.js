@@ -519,6 +519,56 @@ function mergeRelatedMetadata(target, source, relation) {
 
 // Only explicit Telegram relationships are used. Titles/language/season data can
 // flow through reply and album links; file-specific fields and download URLs never do.
+function deriveRelatedTextMetadata(message) {
+  if (!message) return null;
+  const current = message.content_metadata || {};
+  if (hasMetadataValue(current.title)) return current;
+
+  const rawText = asString(message.raw_text) || asString(message.text);
+  if (!rawText || (message.classification && message.classification.is_promotion && !message.classification.is_download)) return null;
+  const hintRe = /\b(?:19\d{2}|20\d{2}|S\d{1,2}E\d{1,3}|Season\s*\d+|Episode\s*\d+|4320p|2160p|1440p|1080p|720p|576p|540p|480p|360p|4K|UHD|WEB[- .]?DL|WEBRip|BluRay|REMUX)\b/i;
+  if (!hintRe.test(rawText)) return null;
+
+  const lines = rawText.split(/\r?\n/).map(line => line.trim()).filter(line =>
+    line && !/^https?:\/\//i.test(line) && hintRe.test(line)
+  );
+  for (const line of lines) {
+    let parsed = null;
+    try { parsed = parseManualInput(line); } catch (_) {}
+    if (!parsed || !parsed.title || parsed.title.length < 2) continue;
+
+    const metadata = {
+      title: hasMetadataValue(current.title) ? current.title : parsed.title,
+      raw_title: hasMetadataValue(current.raw_title) ? current.raw_title : parsed.raw,
+      year: hasMetadataValue(current.year) ? current.year : parsed.year,
+      language: hasMetadataValue(current.language) ? current.language : (parsed.language || ''),
+      languages: hasMetadataValue(current.languages) ? current.languages.slice() : (parsed.language ? parsed.language.split(',').map(value => value.trim()).filter(Boolean) : []),
+      quality: hasMetadataValue(current.quality) ? current.quality : (parsed.quality && parsed.quality !== 'HD' ? parsed.quality : null),
+      content_type: hasMetadataValue(current.content_type) ? current.content_type : parsed.type,
+      is_series: hasMetadataValue(current.is_series) ? current.is_series : (parsed.type === 'series' ? true : parsed.type === 'movie' ? false : null),
+      season: hasMetadataValue(current.season) ? current.season : parsed.season,
+      episode: hasMetadataValue(current.episode) ? current.episode : parsed.episode,
+      imdb_id: current.imdb_id || null,
+      tmdb_id_hint: current.tmdb_id_hint || null,
+      downloads: Array.isArray(current.downloads) ? current.downloads : [],
+      file: current.file || {
+        filename: message.media && message.media.file_name ? message.media.file_name : null,
+        codec: parsed.codec || null,
+        container: parsed.container || null,
+        hdr: parsed.hdr || null,
+        audio: parsed.audio || null,
+        audio_channels: null,
+        bit_depth: null,
+        size: parsed.size || null,
+      },
+      derived_from_text: true,
+    };
+    message.content_metadata = { ...current, ...metadata };
+    return message.content_metadata;
+  }
+  return current;
+}
+
 function enrichRelatedMessageMetadata(messages) {
   if (!Array.isArray(messages) || !messages.length) return 0;
   const byChannelAndId = new Map();
@@ -537,13 +587,19 @@ function enrichRelatedMessageMetadata(messages) {
   let enriched = 0;
   messages.forEach(message => {
     if (!message || !message.reply_to || message.reply_to.message_id == null) return;
-    const parent = byChannelAndId.get(String(message.channel_id) + ':' + String(message.reply_to.message_id));
+    const replyPeer = message.reply_to.peer;
+    const targetChannelId = replyPeer && replyPeer.type === 'channel' && replyPeer.id != null
+      ? replyPeer.id
+      : message.channel_id;
+    const parent = byChannelAndId.get(String(targetChannelId) + ':' + String(message.reply_to.message_id)) ||
+      byChannelAndId.get(String(message.channel_id) + ':' + String(message.reply_to.message_id));
+    if (parent) deriveRelatedTextMetadata(parent);
     if (mergeRelatedMetadata(message, parent, 'reply')) enriched++;
   });
 
   albums.forEach(group => {
     if (group.length < 2) return;
-    const sources = group.filter(message => message.content_metadata && message.content_metadata.title);
+    const sources = group.filter(message => hasMetadataValue(deriveRelatedTextMetadata(message) && deriveRelatedTextMetadata(message).title));
     if (!sources.length) return;
     // Use the first captioned/title-bearing item as the album metadata source.
     const source = sources[0];
