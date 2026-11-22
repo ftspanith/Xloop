@@ -254,7 +254,8 @@ function detectPromotion(text, buttons, links) {
   const matched = PROMOTION_PATTERNS.filter(pattern => pattern.re.test(combined)).map(pattern => pattern.key);
   const hasTelegramChannelLink = (links || []).some(link => TELEGRAM_HOST_RE.test(link.host || ''));
   const hasPromoButton = (buttons || []).some(button => /^(join|subscribe|follow)(?:\s|$)|join\s+(?:channel|group)|subscribe\s+(?:now|here)/i.test(button.text || ''));
-  if (hasTelegramChannelLink && (matched.length || hasPromoButton)) matched.push('telegram_invite_link');
+  if (hasPromoButton) matched.push('promotion_button');
+  if (hasTelegramChannelLink && matched.length) matched.push('telegram_invite_link');
   return { detected: matched.length > 0, matched_terms: Array.from(new Set(matched)) };
 }
 
