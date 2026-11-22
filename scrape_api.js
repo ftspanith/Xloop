@@ -42,14 +42,13 @@ const INTER_BATCH_DELAY  = 300;   // ms between batches in same channel
 const INTER_CHAN_DELAY   = 1500;  // ms between parallel groups
 const AUTOSAVE_EVERY     = 5;     // save to disk every N channels
 
+// Keep the CLI primary-account defaults aligned with /api/scrape/channels.
 const ALL_CHANNEL_IDS = [
   2121685058, 1460307412, 3854487392, 3649684713,
   2676653332, 4234578006, 3619204173, 2785355990,
   3374719986, 2271910467, 3927502894, 3354192797,
   3579217190, 3952255152, 2640824484, 4355201143,
-  2252012526, 4372491493, 3881216988, 4430701213,
-  3846639915, 2307327392, 2417537485, 656335909,
-  3426472755, 3898563246, 2656335909, 713791653
+  2252012526, 4372491493, 3881216988, 4430701213
 ];
 
 // ── Download relevance indicators ────────────────────────────
