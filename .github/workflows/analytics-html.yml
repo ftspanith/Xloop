@@ -1,0 +1,22 @@
+name: Vercel Analytics HTML Tests
+
+on:
+  push:
+    branches:
+      - vercel/install-vercel-web-analytics-cvh3fv
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  analytics-html-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Validate analytics on all HTML pages
+        run: npm run test:analytics-html
