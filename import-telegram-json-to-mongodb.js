@@ -71,6 +71,13 @@ function extractLinksFromMessages(messages, account) {
   let skipped = 0;
 
   for (const msg of uniqueMessages) {
+    // Promotion-only posts stay in telegram_export.json but are not imported as download records.
+    // Mixed posts remain eligible so a Join/Subscribe CTA cannot hide valid download links.
+    if (msg.classification && msg.classification.is_promotion && !msg.classification.is_download) {
+      skipped++;
+      continue;
+    }
+
     let rawText = '';
     if (typeof msg.text === 'string') rawText = msg.text;
     else if (Array.isArray(msg.text)) {
