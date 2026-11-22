@@ -442,9 +442,15 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
     // Use provided batchId (subsequent chunks) or create new one (first chunk)
     const batchId = incomingBatchId || `batch_${Date.now()}`;
     const mergeMode = req.query.merge === 'true';
+    const sourceAccount = ['1', '2'].includes(String(req.query.account || ''))
+      ? String(req.query.account)
+      : '';
 
-    // Tag and insert this chunk
-    links.forEach(e => { e.uploadBatch = batchId; });
+    // Tag and insert this chunk. Account labels help audit dual-account imports.
+    links.forEach(e => {
+      e.uploadBatch = batchId;
+      if (sourceAccount) e.sourceAccount = sourceAccount;
+    });
     if (links.length > 0) {
       const CHUNK = 500;
       for (let i = 0; i < links.length; i += CHUNK) {
