@@ -59,6 +59,11 @@ function normalizeGdflixUrl(value) {
   }
 }
 
+function hasDownloadUrl(downloads, url) {
+  const target = normalizeGdflixUrl(String(url || ''));
+  return (downloads || []).some(d => (d.links || []).some(l => normalizeGdflixUrl(String(l.url || '')) === target));
+}
+
 // Host detector
 function detectHost(url) {
   if (/^(?:https?:\/\/)?(?:[^/]+\.)?gdflix\.dev(?:[/:?#]|$)/i.test(url)) return 'GDFlix';
@@ -465,9 +470,11 @@ router.post('/bulk', auth, async (req, res) => {
 
   // fetchMeta with 12s timeout — if TMDB hangs, fall back to empty meta
   async function fetchMetaSafe(parsed) {
-    const timeout = new Promise(resolve => setTimeout(() => resolve({}), 12000));
-    try { return await Promise.race([fetchMeta(parsed, tmdbKey, omdbKey), timeout]); }
-    catch (_) { return {}; }
+    let timer;
+    try {
+      return await Promise.race([fetchMeta(parsed, tmdbKey, omdbKey), new Promise(resolve => { timer = setTimeout(() => resolve({}), 12000); })]);
+    } catch (_) { return {}; }
+    finally { clearTimeout(timer); }
   }
 
   // Phase 1: Parse + fetch meta in parallel
@@ -481,6 +488,9 @@ router.post('/bulk', auth, async (req, res) => {
 
   // Phase 2: Sequential DB ops
   let lastAddedTitle = '';
+  // Multiple parsed blocks can originate from one Telegram message ID.
+  // Count a repeated source message once, not once per file variant.
+  const countedDuplicateMessageIds = new Set();
   for (const item of processedItems) {
     if (item.skip) {
       skippedCount++;
@@ -511,13 +521,15 @@ router.post('/bulk', auth, async (req, res) => {
     }
 
     if (existing) {
-      if (msgObj.id && existing.telegramMessageIds?.includes(msgObj.id)) { duplicateCount++; skippedCount++; continue; }
+      // A Telegram message may contain several file variants. Do not skip the
+      // remaining variants just because this message ID was already processed.
 
       let updated = false;
       for (const newDl of downloads) {
         // 1. Check if the URL already exists anywhere in this movie
+        newDl.links = (newDl.links || []).map(link => ({ ...link, url: normalizeGdflixUrl(link.url) }));
         const newUrl = newDl.links[0]?.url;
-        const hasUrl = existing.downloads.some(d => d.links?.some(l => l.url === newUrl));
+        const hasUrl = hasDownloadUrl(existing.downloads, newUrl);
         
         if (hasUrl) {
           // Link already exists, skip it entirely
@@ -525,15 +537,28 @@ router.post('/bulk', auth, async (req, res) => {
         }
 
         // 2. If it's a new URL, try to group it with an existing download by filename/size
-        const existingDl = existing.downloads.find(d => 
-          (d.filename && newDl.filename && d.filename === newDl.filename) || 
-          (d.size && newDl.size && d.size === newDl.size) ||
-          (d.quality === newDl.quality && d.language === newDl.language)
-        );
+        // Never merge distinct file variants merely because quality/language match.
+        // Prefer exact filename identity; only use a strict metadata signature when
+        // one or both legacy records have no filename.
+        const existingDl = existing.downloads.find(d => {
+          const oldName = String(d.filename || '').trim().toLowerCase();
+          const newName = String(newDl.filename || '').trim().toLowerCase();
+          if (oldName && newName) return oldName === newName;
+          return (
+            d.quality === newDl.quality &&
+            String(d.size || '') === String(newDl.size || '') &&
+            String(d.codec || '') === String(newDl.codec || '') &&
+            String(d.hdr || '') === String(newDl.hdr || '') &&
+            String(d.audio || '') === String(newDl.audio || '') &&
+            String(d.language || '') === String(newDl.language || '') &&
+            (d.season ?? null) === (newDl.season ?? null) &&
+            (d.episode ?? null) === (newDl.episode ?? null)
+          );
+        });
 
         if (existingDl) {
           for (const link of newDl.links) {
-            if (!existingDl.links.find(l => l.url === link.url)) {
+            if (!hasDownloadUrl([{ links: existingDl.links }], link.url)) {
               existingDl.links.push(link);
               updated = true;
             }
@@ -543,13 +568,25 @@ router.post('/bulk', auth, async (req, res) => {
           updated = true;
         }
       }
-      if (msgObj.id) {
+      if (msgObj.id && !existing.telegramMessageIds?.includes(msgObj.id)) {
         if (!existing.telegramMessageIds) existing.telegramMessageIds = [];
         existing.telegramMessageIds.push(msgObj.id);
         updated = true;
       }
-      if (updated) { await existing.save(); updatedCount++; }
-      else { duplicateCount++; skippedCount++; }
+      if (updated) {
+        // Keep movie-level aggregate fields in sync with newly added variants.
+        const { recomputeAggregates } = require('../pipeline_full');
+        recomputeAggregates(existing);
+        await existing.save();
+        updatedCount++;
+      } else {
+        const duplicateMessageId = msgObj.id != null ? String(msgObj.id) : null;
+        if (!duplicateMessageId || !countedDuplicateMessageIds.has(duplicateMessageId)) {
+          duplicateCount++;
+        }
+        if (duplicateMessageId) countedDuplicateMessageIds.add(duplicateMessageId);
+        skippedCount++;
+      }
       continue;
     }
 
@@ -797,10 +834,20 @@ router.post('/manual-add', auth, async (req, res) => {
       const hasUrl = existing.downloads.some(d => d.links?.some(l => l.url === newUrl));
       if (hasUrl) continue; // exact URL already exists
 
-      const existingDl = existing.downloads.find(d => 
-        (d.filename && newDl.filename && d.filename === newDl.filename) ||
-        (d.quality === newDl.quality && d.language === newDl.language)
-      );
+      // Preserve different encodes (e.g. x264 vs HEVC) as separate rows.
+      const existingDl = existing.downloads.find(d => {
+        const oldName = String(d.filename || '').trim().toLowerCase();
+        const newName = String(newDl.filename || '').trim().toLowerCase();
+        if (oldName && newName) return oldName === newName;
+        return (
+          d.quality === newDl.quality &&
+          String(d.size || '') === String(newDl.size || '') &&
+          String(d.codec || '') === String(newDl.codec || '') &&
+          String(d.hdr || '') === String(newDl.hdr || '') &&
+          String(d.audio || '') === String(newDl.audio || '') &&
+          String(d.language || '') === String(newDl.language || '')
+        );
+      });
 
       if (existingDl) {
         for (const link of newDl.links) {

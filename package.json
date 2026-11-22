@@ -25,6 +25,7 @@
     "share": "node share.js",
     "disable-sharing": "node scripts/disable-sharing.js",
     "enable-sharing": "node scripts/enable-sharing.js",
+    "test:quickpaste": "node --test test/quick-paste-metadata.test.js test/quick-paste-integration.test.js",
     "test:analytics-html": "node test/analytics-html.test.js"
   },
   "dependencies": {

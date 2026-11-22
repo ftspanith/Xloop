@@ -22,15 +22,19 @@ function stripEmojis(str) {
 // ─── QUALITY ─────────────────────────────────────────────────────────────────
 function normalizeQuality(str) {
   if (!str) return 'HD';
-  const s = str.toUpperCase();
-  // Use negative lookbehind: 4K must NOT be preceded by a letter
-  // This prevents "Rahul4K", "MKV4K", "DS4K" (watermarks) from being detected as quality
-  // Valid: "4K", ".4K.", " 4K", "2160P", "UHD"
-  if (/2160P|(?<![A-Z])4K\b|\bUHD\b/.test(s)) return '4K';
-  if (/1080P/.test(s))           return '1080p';
-  if (/720P/.test(s))            return '720p';
-  if (/480P/.test(s))            return '480p';
-  if (/360P/.test(s))            return '360p';
+  const s = String(str).toUpperCase();
+  // Highest resolution first; avoid matching digits embedded in release-group names.
+  if (/(?:4320P|7680X4320|(?<![A-Z0-9])8K\b)/.test(s)) return '8K';
+  if (/(?:2160P|3840X2160|(?<![A-Z0-9])4K\b|\bUHD\b)/.test(s)) return '4K';
+  if (/(?:1440P|2560X1440|(?<![A-Z0-9])2K\b|\bQHD\b)/.test(s)) return '1440p';
+  if (/(?:1080P|1920X1080)/.test(s)) return '1080p';
+  if (/(?:720P|1280X720)/.test(s)) return '720p';
+  if (/(?:576P|720X576)/.test(s)) return '576p';
+  if (/(?:540P|960X540)/.test(s)) return '540p';
+  if (/(?:480P|854X480|720X480)/.test(s)) return '480p';
+  if (/(?:360P|640X360)/.test(s)) return '360p';
+  if (/(?:240P|426X240)/.test(s)) return '240p';
+  if (/\b(?:SD|CAMRip)\b/.test(s)) return 'SD';
   return 'HD';
 }
 
@@ -292,11 +296,33 @@ function detectLanguage(str) {
 
 // ─── CODEC ───────────────────────────────────────────────────────────────────
 function detectCodec(fn) {
-  const s=(fn||'').toUpperCase();
-  if (/\bAV1\b/.test(s))              return 'AV1';
-  if (/HEVC|H\.265|X265|H265/.test(s)) return 'HEVC';
-  if (/\bAVC\b|H\.264|X264|H264/.test(s)) return 'H.264';
+  const s = String(fn || '').toUpperCase();
+  if (/(?:\bAV1\b|AOMEDIA VIDEO 1)/.test(s)) return 'AV1';
+  if (/(?:\bVP9\b|V\.P9)/.test(s)) return 'VP9';
+  if (/(?:\bVP8\b|V\.P8)/.test(s)) return 'VP8';
+  if (/(?:HEVC|H[ ._-]?265|X265|\bH265\b)/.test(s)) return 'HEVC';
+  if (/(?:\bAVC\b|H[ ._-]?264|X264|\bH264\b)/.test(s)) return 'H.264';
+  if (/(?:MPEG[ ._-]?2|\bMPG2\b)/.test(s)) return 'MPEG-2';
+  if (/(?:MPEG[ ._-]?4|\bMP4V\b)/.test(s)) return 'MPEG-4';
+  if (/\bXVID\b/.test(s)) return 'Xvid';
+  if (/\bDIVX\b/.test(s)) return 'DivX';
+  if (/\bPRORES(?:\s?(?:422|4444)(?:\s?HQ)?)?\b/.test(s)) return 'ProRes';
+  if (/\bTHEORA\b/.test(s)) return 'Theora';
+  if (/(?:\bVC[ ._-]?1\b|WMV3)/.test(s)) return 'VC-1';
   return 'Other';
+}
+
+// ─── CONTAINER / FILE FORMAT ─────────────────────────────────────────────────
+function detectContainer(filename) {
+  const s = String(filename || '').toUpperCase();
+  const ext = s.match(/\.(MKV|MP4|M4V|WEBM|AVI|MOV|M4P|MPEG|MPG|TS|M2TS|WMV|FLV|OGV|3GP)(?:$|[?#\s])/);
+  if (ext) {
+    const formats = { M4V: 'MP4', M4P: 'MP4', MPG: 'MPEG', M2TS: 'M2TS' };
+    return formats[ext[1]] || ext[1];
+  }
+  if (/\bMATROSKA\b/.test(s)) return 'MKV';
+  if (/\bWEBM\b/.test(s)) return 'WEBM';
+  return null;
 }
 
 // ─── HDR ─────────────────────────────────────────────────────────────────────
@@ -424,7 +450,7 @@ function cleanTitleForApi(title, year = null) {
   // Pre-clean dots/underscores like pipeline_full does
   if (/[._]/.test(rawClean)) {
     const spaced = rawClean.replace(/[._]/g, ' ');
-    const TECH_TOKEN_RE = /\b(2160p|1080p|720p|480p|360p|4K|UHD|WEB[-\s]?DL|WEBRip|BluRay|BDRip|HDRip|REMUX|HEVC|x265|x264|AV1|AVC|DVDRip|DVDScr|DVDBD|DVD5|DVD9|\bDVD\b|AMZN|NF|DSNP|ZEE5|SUNNXT|JIOHS|TK|SS|AHA|ARTL|HMAX|HOTSTAR|CRKL|PCOK|DPLS|DDPd?|AAC|DTS|FLAC|DD5|DD2|HDR|SDR|DV|HLG)\b/i;
+    const TECH_TOKEN_RE = /\b(4320p|2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4K|UHD|WEB[-\s]?DL|WEBRip|BluRay|BDRip|HDRip|REMUX|HEVC|x265|x264|VP9|VP8|MPEG[ ._-]?[24]|Xvid|DivX|ProRes|Theora|VC[ ._-]?1|AV1|VP9|VP8|AVC|DVDRip|DVDScr|DVDBD|DVD5|DVD9|\bDVD\b|AMZN|NF|DSNP|ZEE5|SUNNXT|JIOHS|TK|SS|AHA|ARTL|HMAX|HOTSTAR|CRKL|PCOK|DPLS|DDPd?|AAC|DTS|FLAC|DD5|DD2|HDR|SDR|DV|HLG)\b/i;
     const techMatch = TECH_TOKEN_RE.exec(spaced);
     if (techMatch && techMatch.index > 3) rawClean = spaced.substring(0, techMatch.index);
     else rawClean = spaced;
@@ -454,7 +480,7 @@ function cleanTitleForApi(title, year = null) {
     // ── Language words ────────────────────────────────────────────────
     .replace(/\b(telugu|tamil|hindi|malayalam|kannada|bengali|english|marathi|japanese|korean|chinese|arabic|turkish|spanish|french|german|punjabi|dual|multi)\b/gi,'')
     // ── Resolution / quality ─────────────────────────────────────────
-    .replace(/\b(2160p|1080p|720p|480p|360p|4[Kk]|UHD|WEB[\s._-]*DL|WEB[\s._-]*RIP|HDRip|HDTV|BluRay|BD[\s._-]*Rip|WEBRip|HEVC|x265|x264|H\.265|H\.264|H[\s._-]*265|H[\s._-]*264|AVC|HDR|HDR10P|DV|Remux|HLG|SDR|AV1|FLAC|AAC|DDP|DTS|Atmos|DD5|DD2|DVD[\s._-]*Rip|DVD[\s._-]*Scr|DVDBD|DVD5|DVD9|\bDVD\b)\b/gi,'')
+    .replace(/\b(4320p|2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4[Kk]|UHD|WEB[\s._-]*DL|WEB[\s._-]*RIP|HDRip|HDTV|BluRay|BD[\s._-]*Rip|WEBRip|HEVC|x265|x264|VP9|VP8|MPEG[ ._-]?[24]|Xvid|DivX|ProRes|Theora|VC[ ._-]?1|H\.265|H\.264|H[\s._-]*265|H[\s._-]*264|MPEG[\s._-]?[24]|AVC|HDR|HDR10P|DV|Remux|HLG|SDR|AV1|FLAC|AAC|DDP|DTS|Atmos|DD5|DD2|DVD[\s._-]*Rip|DVD[\s._-]*Scr|DVDBD|DVD5|DVD9|\bDVD\b)\b/gi,'')
     // ── Edition / Cut variants ────────────────────────────────────────
     .replace(/\b(IMAX|Remastered|Anniversary|Director.?s?\s*Cut|Extended\s*Cut|Special\s*Edition|Theatrical\s*Cut|Uncut|Unrated|Open\s*Matte|Hybrid|Fan\s*Edit|Edition)\b/gi,'')
     // ── Streaming platform codes (standalone 2-4 letter tags) ─────────────────
@@ -680,7 +706,7 @@ function extractYear(sources) {
   for (const s of sources) {
     if (!s) continue;
     if (!(/[._]/.test(s))) continue; // only applies to dot/underscore filenames
-    const QUALITY_RE = /\b(2160p|1080p|720p|480p|360p|4[Kk]|UHD|WEB[-_.]?DL|WEBRip|HDRip|BluRay|BDRip|REMUX|HEVC|x265|x264|AVC|AV1|AMZN|NF|DSNP|ZEE5|SUNNXT|JIOHS|AHA|HMAX|HOTSTAR|CRKL|PCOK|DPLS)\b/i;
+    const QUALITY_RE = /\b(4320p|2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4[Kk]|UHD|WEB[-_.]?DL|WEBRip|HDRip|BluRay|BDRip|REMUX|HEVC|x265|x264|VP9|VP8|MPEG[ ._-]?[24]|Xvid|DivX|ProRes|Theora|VC[ ._-]?1|AVC|AV1|VP9|VP8|AMZN|NF|DSNP|ZEE5|SUNNXT|JIOHS|AHA|HMAX|HOTSTAR|CRKL|PCOK|DPLS)\b/i;
     const qualMatch = QUALITY_RE.exec(s);
     const searchIn = qualMatch ? s.substring(0, qualMatch.index) : s;
     // Find ALL years in the pre-quality section
@@ -782,16 +808,13 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const _fl = l.trim();
     return (
       /\.(mkv|mp4|avi|zip|rar|m2ts|mov)\b/i.test(_fl)||
-      /\b(2160p|1080p|720p|480p|360p|4[Kk]\b|UHD)\b/i.test(_fl)||
+      /\b(4320p|2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4[Kk]\b|UHD)\b/i.test(_fl)||
       /\b\d+(?:\.\d+)?\s*(?:GB|MB)\b/i.test(_fl)
     ) && _fl.length > 3;
   };
 
   // ── Helper: extract size from a 'Size :' or 'File Size:' line ─────────────
-  const extractSizeFromMeta=l=>{
-    const m=(l||'').match(/(\d+(?:\.\d+)?\s*(?:GB|MB))/i);
-    return m?m[1].replace(/\s+/g,'').trim():'';
-  };
+  const extractSizeFromMeta = l => extractSize(l || '');
 
   // ── Build URL+filename pairs ──────────────────────────────────────────────
   // Each 'pair' = { rawFilename, size, url, urlType }
@@ -880,7 +903,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   // Strategy 1: first line that is not URL / promo / metadata and has a meaningful clean title
   // Skip codec/quality-ONLY single-line titles (AV1, 4K, HEVC, etc.)
   // Also skip pure language-list lines, size lines, and channel-hub watermarks.
-  const TECH_ONLY_RE = /^\s*(AV1|HEVC|AVC|4K|UHD|2160p|1080p|720p|480p|360p|HDR|HDR10|DV|HLG|SDR|4K\.\.\.+)\s*$/i;
+  const TECH_ONLY_RE = /^\s*(AV1|HEVC|AVC|4K|UHD|4320p|2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|HDR|HDR10|DV|HLG|SDR|4K\.\.\.+)\s*$/i;
   // Lines that are ONLY a language list (e.g. "Telugu | Tamil | Hindi" OR just "Telugu | Tamil")
   const LANG_ONLY_RE = /^(?:(?:Telugu|Tamil|Hindi|Malayalam|Kannada|Bengali|Marathi|English|Japanese|Korean|Chinese|Arabic|Turkish|Spanish|French|German|Punjabi|Odia|Gujarati|Urdu|Multi|Dual)[,|\s&+]+){1,}(?:Telugu|Tamil|Hindi|Malayalam|Kannada|Bengali|Marathi|English|Japanese|Korean|Chinese|Arabic|Turkish|Spanish|French|German|Punjabi|Odia|Gujarati|Urdu|Multi|Dual)\s*$/i;
   // Single language word on its own line (e.g. just "Telugu")
@@ -931,7 +954,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   // Step 1: Split at first tech token
   if (/[._]/.test(cleanedTitle)) {
     const spaced = cleanedTitle.replace(/[._]/g, ' ');
-    const TECH_TOKEN_RE = /\b(2160p|1080p|720p|480p|360p|4K|UHD|WEB[-\s]?DL|WEBRip|BluRay|BDRip|HDRip|REMUX|HEVC|x265|x264|AV1|AVC|AMZN|NF|DSNP|ZEE5|SUNNXT|JIOHS|TK|SS|AHA|ARTL|HMAX|HOTSTAR|CRKL|PCOK|DPLS|DDPd?|AAC|DTS|FLAC|DD5|DD2|HDR|SDR|DV|HLG)\b/i;
+    const TECH_TOKEN_RE = /\b(4320p|2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4K|UHD|WEB[-\s]?DL|WEBRip|BluRay|BDRip|HDRip|REMUX|HEVC|x265|x264|VP9|VP8|MPEG[ ._-]?[24]|Xvid|DivX|ProRes|Theora|VC[ ._-]?1|AV1|VP9|VP8|AVC|AMZN|NF|DSNP|ZEE5|SUNNXT|JIOHS|TK|SS|AHA|ARTL|HMAX|HOTSTAR|CRKL|PCOK|DPLS|DDPd?|AAC|DTS|FLAC|DD5|DD2|HDR|SDR|DV|HLG)\b/i;
     const techMatch = TECH_TOKEN_RE.exec(spaced);
     if (techMatch && techMatch.index > 3) {
       cleanedTitle = spaced.substring(0, techMatch.index);
@@ -994,7 +1017,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     .replace(/\bS\d{1,2}\s*[-–]\s*S\d{1,2}\b/gi,'')    // Strip pack ranges: "S01-S04"
     .replace(/\bEpisode\s*\d+\b/gi,'').replace(/\bEp\s*\d+\b/gi,'')
     .replace(/\b(\d{1,2})x\d{2,3}\b/gi,'')
-    .replace(/\b(2160p|1080p|720p|480p|360p|4[Kk]|UHD|WEB[-.]?DL|HDRip|BluRay|BDRip|WEBRip|HEVC|x265|x264|AVC|AV1|HDR|HDR10P|REMUX|REPACK|PROPER|SDR|HLG|DV)\b/gi,'')
+    .replace(/\b(4320p|2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4[Kk]|UHD|WEB[-.]?DL|HDRip|BluRay|BDRip|WEBRip|HEVC|x265|x264|VP9|VP8|MPEG[ ._-]?[24]|Xvid|DivX|ProRes|Theora|VC[ ._-]?1|AVC|AV1|VP9|VP8|HDR|HDR10P|REMUX|REPACK|PROPER|SDR|HLG|DV)\b/gi,'')
     .replace(/\bH\s+26[45]\b/gi,'')
     .replace(/\b(IMAX|Remastered|Anniversary|Director.?s?\s*Cut|Extended\s*Cut|Special\s*Edition|Theatrical\s*Cut|Uncut|Unrated|Open\s*Matte|Hybrid|Fan\s*Edit|Edition)\b/gi,'')
     .replace(/\b(AMZN|NF|DSNP|ZEE5|SUN\s*NXT|SUNNXT|JIOHS|ETVWIN|AHA|ARTL|HMAX|SONY|HOTSTAR|APPLE|TVNZ|CRKL|PCOK|DPLS)\b/gi,'')
@@ -1110,7 +1133,8 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 
     const audio = extractAudio(rawFn) || null;
     const source = detectSource(rawFn) || null;
-    if (!fileMap[key]) fileMap[key]={quality,size,hdr,codec,audio,source,filename:stripEmojis(rawFn).trim()||cleanedTitle,language:fileLang,season:fs,episode:fe,links:[]};
+    const container = detectContainer(rawFn) || null;
+    if (!fileMap[key]) fileMap[key]={quality,size,hdr,codec,container,audio,source,filename:stripEmojis(rawFn).trim()||cleanedTitle,language:fileLang,season:fs,episode:fe,links:[]};
     if (!fileMap[key].links.find(l=>l.url===pair.url)) {
       fileMap[key].links.push({host:detectHost(pair.url),url:normalizeGdflixUrl(pair.url),isFast:/gdflix\.dev|hubcloud|gdlink/i.test(pair.url)});
     }
@@ -1119,7 +1143,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   const downloads=Object.values(fileMap);
   if (!downloads.length) return null;
 
-  const QO=['4K','1080p','720p','480p','360p','HD'];
+  const QO=['8K','4K','1440p','1080p','720p','576p','540p','480p','360p','240p','SD','HD'];
   const bestQuality=QO.find(q=>downloads.some(d=>d.quality===q))||'HD';
 
   // ── Extract IMDB / TMDB IDs embedded in message text ──────────────────────
@@ -1146,7 +1170,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 module.exports = {
   parseMessageBlock,classifyUrl,stripEmojis,cleanTitleForApi,normalizeQuality,
   extractSize,toMB,detectHost,detectLanguage,detectAllLanguages,detectContentType,
-  extractSeasonEpisode,detectCodec,detectHDR,extractAudio,isJunkTitle,isMetadataLine,
+  extractSeasonEpisode,detectCodec,detectContainer,detectHDR,extractAudio,detectSource,isJunkTitle,isMetadataLine,
   extractTitleFromStreamingUrl,
   parseManualInput,
 };
@@ -1159,14 +1183,15 @@ function parseManualInput(line) {
   const raw = line.trim();
 
   // Extract size  e.g. 1.2GB, 800MB, 1,200 MB
-  const sizeMatch = raw.match(/(\d[\d,.]*\s*(?:GB|MB))/i);
-  const size = sizeMatch ? sizeMatch[1].replace(/\s/g, '') : '';
+  // Reuse the canonical extractor so manual and quick-paste sizes stay consistent.
+  const size = extractSize(raw);
 
   // Extract quality
   const quality = normalizeQuality(raw) || 'HD';
 
   // Extract codec, HDR, audio from filename
   const codec = detectCodec(raw) || 'Other';
+  const container = detectContainer(raw) || null;
   const hdr   = detectHDR(raw)   || null;
   const audio = extractAudio(raw) || null;
 
@@ -1188,7 +1213,7 @@ function parseManualInput(line) {
   // Strip all noise to get title
   let title = raw
     .replace(/(\d[\d,.]*\s*(?:GB|MB))/gi, '')     // size
-    .replace(/\b(4K|UHD|2160p|1080p|720p|480p|360p|HD|SD)\b/gi, '')  // quality
+    .replace(/\b(4K|UHD|4320p|2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|HD|SD)\b/gi, '')  // quality
     .replace(/\b(HEVC|H\.?265|x265|AVC|H\.?264|x264|AV1|VP9)\b/gi, '') // codec
     .replace(/\b(TRUEHD|DTS[-.\s]?HD|DTS[-.\s]?X|DTS|ATMOS|EAC3|AC3|AAC|FLAC|MP3|DD[P+]?)\b/gi, '') // audio
     .replace(/\b(HDR10\+?|DOLBY[\s.]?VISION|HLG|SDR|HDR)\b/gi, '') // hdr
@@ -1203,5 +1228,5 @@ function parseManualInput(line) {
   title = title.replace(/\s*(BluRay|WEB-?DL|WEBRip|DVDRip|HDTV|Blu-?Ray|Remux|Extended|Theatrical|Directors\.?Cut)\s*/gi, ' ').trim();
   title = cleanTitleForApi(title) || title;
 
-  return { title, year, quality, size, codec, hdr, audio, language, season, episode, type, raw };
+  return { title, year, quality, size, codec, container, hdr, audio, language, season, episode, type, raw };
 }
