@@ -444,6 +444,7 @@
         <select id="accountSelect">
           <option value="1">Acc 1 — Main</option>
           <option value="2">Acc 2 — Secondary</option>
+          <option value="both">Both Accounts — Combined</option>
         </select>
       </div>
       <button class="generate-btn" id="generateBtn" onclick="generateCommand()">
@@ -636,7 +637,7 @@
 
     if (cmdEl)  cmdEl.textContent  = cmd;
     if (descEl) descEl.textContent = desc;
-    if (badge)  { badge.textContent = 'ACC ' + acc; }
+    if (badge)  { badge.textContent = acc === 'both' ? 'BOTH ACCOUNTS' : 'ACC ' + acc; }
     if (copyBtn) copyBtn.textContent = 'Copy';
     if (copyBtn) copyBtn.classList.remove('copied');
 
