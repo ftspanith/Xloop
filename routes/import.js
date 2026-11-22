@@ -956,6 +956,9 @@ router.post('/manual-batch', auth, async (req, res) => {
     const downloads = [];
     for (const item of items) {
       const fn = item.filename || item.links?.[0]?.url || '';
+      const parsedSize = item.size || require('../utils/parser').extractSize(fn) || '';
+      const parsedLanguages = require('../utils/parser').detectAllLanguages(fn);
+      const parsedLanguage = parsedLanguages.filter(l => l !== 'Multi').join(', ') || (parsedLanguages.includes('Multi') ? 'Multi' : '');
       const codec = item.codec || detectCodec(fn) || 'Other';
       const hdr   = item.hdr   || detectHDR(fn)   || null;
       const audio = item.audio || extractAudio(fn) || null;
@@ -963,9 +966,9 @@ router.post('/manual-batch', auth, async (req, res) => {
         const host = detectHost(link.url);
         downloads.push({
           quality: item.quality || 'HD',
-          size:    item.size    || '',
+          size:    parsedSize,
           filename: item.filename || '',
-          language: item.language || '',
+          language: item.language || parsedLanguage || '',
           codec, hdr, audio,
           season:  item.season  ?? null,
           episode: item.episode ?? null,
