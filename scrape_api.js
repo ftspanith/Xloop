@@ -61,10 +61,12 @@ const args = Object.fromEntries(
 );
 
 const MODE         = args.mode === undefined ? 4 : Number(args.mode);
+const FRESH_START  = args.fresh !== undefined && args.fresh !== 'false';
 const DAYS         = args.days === undefined ? 1 : Number(args.days);
 const START_DATE   = args['start-date'];
 const END_DATE     = args['end-date'];
 if (!Number.isInteger(MODE) || MODE < 1 || MODE > 4) throw new Error('--mode must be 1, 2, 3, or 4.');
+if (FRESH_START && MODE !== 1) throw new Error('--fresh is only valid with --mode=1 (full scrape).');
 if (!Number.isInteger(DAYS) || DAYS < 1 || DAYS > 3650) throw new Error('--days must be an integer between 1 and 3650.');
 if (START_DATE && Number.isNaN(Date.parse(START_DATE))) throw new Error('Invalid --start-date. Use YYYY-MM-DD.');
 if (END_DATE && Number.isNaN(Date.parse(END_DATE))) throw new Error('Invalid --end-date. Use YYYY-MM-DD.');
@@ -404,7 +406,11 @@ let client;
   }
 
   // ── Check for crash recovery ─────────────────────────────
-  const progress = loadProgress();
+  if (FRESH_START) {
+    clearProgress();
+    logFn('[Fresh] Previous checkpoint ignored. Every selected channel will be scanned from the beginning.');
+  }
+  const progress = FRESH_START ? { completedChannels: [], partialMessages: [] } : loadProgress();
   const alreadyDone = new Set(progress.completedChannels || []);
   const survivedMessages = progress.partialMessages || [];
   const scanStats = normalizeScanStats(progress.scanStats, survivedMessages.length);
@@ -476,13 +482,26 @@ let client;
   }
 
   // ── Final save ───────────────────────────────────────────
-  const totalInFile = saveOutput(allNew, modeLabel, existingMessages, scanStats);
-  const mb = (fs.statSync(EXPORT_FILE).size / 1024 / 1024).toFixed(2);
+  const freshRunHasErrors = FRESH_START && scanStats.channelErrors.length > 0;
+  let totalInFile;
+  if (freshRunHasErrors) {
+    try {
+      const oldExport = JSON.parse(fs.readFileSync(EXPORT_FILE, 'utf8'));
+      totalInFile = Array.isArray(oldExport.messages) ? oldExport.messages.length : 0;
+    } catch (_) { totalInFile = 0; }
+    logFn('[Fresh] Some channels failed. Keeping the previous canonical export unchanged; the new partial scan is saved in the recovery checkpoint.');
+  } else {
+    totalInFile = saveOutput(allNew, modeLabel, existingMessages, scanStats);
+  }
+  let mb = '0.00';
+  try { mb = (fs.statSync(EXPORT_FILE).size / 1024 / 1024).toFixed(2); } catch (_) {}
 
   if (scanStats.channelErrors.length) {
     // Keep a resumable checkpoint for channels that did not finish.
-    const exportStat = fs.statSync(EXPORT_FILE);
-    BASE_EXPORT_SIGNATURE = `${exportStat.size}:${exportStat.mtimeMs}`;
+    try {
+      const exportStat = fs.statSync(EXPORT_FILE);
+      BASE_EXPORT_SIGNATURE = `${exportStat.size}:${exportStat.mtimeMs}`;
+    } catch (_) { BASE_EXPORT_SIGNATURE = 'missing'; }
     saveProgress(completedChannels, allNew, scanStats);
     logFn(`\nSCRAPE PARTIALLY COMPLETE — ${scanStats.channelErrors.length} channel(s) need retry.`);
     logFn('   Re-run the same scrape command to retry only the incomplete channel(s).');
