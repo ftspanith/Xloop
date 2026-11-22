@@ -59,6 +59,14 @@ function readExport(file, account) {
     messageCount: messages.length, uniqueMessageCount: ids.size, messages };
 }
 
+function comparableUrl(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^http:\/\//i, 'https://')
+    .replace(/\/$/, '')
+    .toLowerCase();
+}
+
 function extractLinksFromMessages(messages, account) {
   const messageMap = new Map();
   for (const msg of messages) {
@@ -73,9 +81,16 @@ function extractLinksFromMessages(messages, account) {
   for (const msg of uniqueMessages) {
     // Promotion-only posts stay in telegram_export.json but are not imported as download records.
     // Mixed posts remain eligible so a Join/Subscribe CTA cannot hide valid download links.
-    if (msg.classification && msg.classification.is_promotion && !msg.classification.is_download) {
+    if (msg.classification &&
+        ((msg.classification.is_promotion && !msg.classification.is_download) ||
+         (msg.classification.needs_review && !msg.classification.is_download))) {
       skipped++;
       continue;
+    }
+
+    const classifiedLinkPurposes = new Map();
+    for (const item of (Array.isArray(msg.links) ? msg.links : [])) {
+      if (item && item.url) classifiedLinkPurposes.set(comparableUrl(item.url), item.purpose || 'unknown');
     }
 
     let rawText = '';
@@ -105,6 +120,8 @@ function extractLinksFromMessages(messages, account) {
       for (const link of (download.links || [])) {
         if (!link || !link.url) continue;
         const url = String(link.url).replace(/^http:\/\//i, 'https://').replace(/\/$/, '');
+        const linkPurpose = classifiedLinkPurposes.get(comparableUrl(url));
+        if (linkPurpose && ['promotion', 'review', 'unknown'].includes(linkPurpose)) continue;
         if (isJunkUrl(url) || seenUrls.has(url)) continue;
         const host = typeof classifyUrl === 'function'
           ? classifyUrl(url)
