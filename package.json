@@ -29,7 +29,11 @@
     "test:video-formats": "node tests/video-format-detection.test.js",
     "test:analytics-html": "node test/analytics-html.test.js",
     "test:scraper-intelligence": "node --test tests/scraper-intelligence.test.js test/variant-intelligence.test.js",
-    "test:admin-ui": "node --test test/admin-mobile-regression.test.js"
+    "test:admin-ui": "node --test test/admin-mobile-regression.test.js",
+    "scrape:both:json": "node scrape_api.js --mode=1 --account=1 && node scrape_api.js --mode=1 --account=2",
+    "import:telegram-json": "node import-telegram-json-to-mongodb.js",
+    "import:telegram-json:apply": "node import-telegram-json-to-mongodb.js --apply",
+    "test:telegram-import": "node --test test/telegram-mongodb-import.test.js"
   },
   "dependencies": {
     "axios": "^1.19.0",
