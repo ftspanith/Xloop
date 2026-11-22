@@ -2,3 +2,7 @@
 xloop_*.json
 .vercel
 .env*
+
+# Local Telegram exports and MongoDB import inputs
+telegram_export.json
+telegram_export_2.json
