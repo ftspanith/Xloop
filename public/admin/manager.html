@@ -716,6 +716,8 @@ async function submitQuickPaste() {
 //  Edit Modal 
 function openEdit(movie) {
   editMovieData = movie;
+  // Display existing GDFlix subdomain URLs in canonical base-domain form.
+  (editMovieData.downloads || []).forEach(d => (d.links || []).forEach(l => { l.url = normalizeGdflixUrl(l.url || ''); l.host = detectHostJS(l.url); }));
   document.getElementById('edit-id').value = movie._id;
   document.getElementById('edit-title').value = movie.title || '';
   document.getElementById('edit-year').value = movie.year || '';
@@ -801,7 +803,7 @@ function addNewDownload() {
 }
 
 function detectHostJS(url) {
-  if (/gdfilx\.dev|gdflix/i.test(url)) return 'GDFlix';
+  if (/^(?:https?:\/\/)?(?:[^/]+\.)?gdflix\.dev(?:[/:?#]|$)/i.test(url)) return 'GDFlix';
   if (/hubcloud/i.test(url)) return 'HubCloud';
   if (/gdlink/i.test(url)) return 'GDLink';
   if (/terabox/i.test(url)) return 'TeraBox';
