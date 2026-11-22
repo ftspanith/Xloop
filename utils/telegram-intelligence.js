@@ -305,7 +305,7 @@ function classifyMessage(record) {
   const media = record.media;
   const promotion = detectPromotion(record.raw_text || '', record.buttons || [], links);
   const fileMedia = !!(media && ['document', 'video', 'audio', 'voice', 'animation'].includes(media.media_type));
-  const knownDownloadHost = links.some(link => DOWNLOAD_HOSTS.has(link.host_class));
+  const knownDownloadHost = links.some(link => DOWNLOAD_HOSTS.has(link.host_class) || link.host_class === 'Direct');
   const shortlinkWithDownloadLabel = links.some(link => link.host_class === 'Shortlink' &&
     (DOWNLOAD_CTA_RE.test((link.labels || []).join(' ')) || MEDIA_TECH_RE.test((link.labels || []).join(' '))));
   const downloadButton = (record.buttons || []).some(button => DOWNLOAD_CTA_RE.test(button.text || '') || MEDIA_TECH_RE.test(button.text || ''));
