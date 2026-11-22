@@ -60,11 +60,15 @@ function readExport(file, account) {
 }
 
 function comparableUrl(value) {
-  return String(value || '')
-    .trim()
-    .replace(/^http:\/\//i, 'https://')
-    .replace(/\/$/, '')
-    .toLowerCase();
+  const raw = String(value || '').trim().replace(/^http:\/\//i, 'https://');
+  try {
+    const parsed = new URL(raw);
+    parsed.protocol = parsed.protocol.toLowerCase();
+    parsed.hostname = parsed.hostname.toLowerCase();
+    return parsed.toString().replace(/\/$/, '');
+  } catch (_) {
+    return raw;
+  }
 }
 
 function extractLinksFromMessages(messages, account) {
