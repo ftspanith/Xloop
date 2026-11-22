@@ -109,5 +109,12 @@ test('Skip Scraper reuses MongoDB extracted links and preserves existing Movies 
   assert.match(pipeline, /ExtractedLink\.countDocuments\(\{\}\)/);
   assert.match(pipeline, /ExtractedLink\.find\(\{\}\)\.lean\(\)/);
   assert.match(pipeline, /Loaded \$\{clean\.length\} pre-extracted links from MongoDB/);
+  assert.match(pipeline, /MongoDB is the persistent source of truth/);
+  assert.match(pipeline, /if \(IS_VERCEL && fs\.existsSync\(LINKS_FILE\)\)/);
+  assert.ok(
+    pipeline.indexOf('MongoDB is the persistent source of truth') <
+      pipeline.indexOf('if (fs.existsSync(LINKS_FILE))'),
+    'persistent MongoDB links must refresh the temp cache before it is read'
+  );
   assert.match(pipeline, /else if \(fs\.existsSync\(EXPORT_FILE\)\)/);
 });
