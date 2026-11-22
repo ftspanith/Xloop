@@ -43,6 +43,25 @@ test('extracts visible, hidden entity and inline-button URLs with labels and pos
   assert.equal(record.classification.is_download, true);
 });
 
+test('extracts Telegram auto-detected URL entities without a protocol in visible text', () => {
+  const visible = 'gdflix.dev/file/visible123';
+  const record = buildTelegramMessageRecord({
+    id: 111,
+    date: 1795305600,
+    message: visible,
+    entities: [{
+      className: 'MessageEntityUrl',
+      offset: 0,
+      length: visible.length,
+    }],
+  }, baseContext());
+
+  assert.equal(record.links.length, 1);
+  assert.equal(record.links[0].url, 'https://' + visible);
+  assert.ok(record.links[0].sources.includes('message_entity'));
+  assert.equal(record.classification.is_download, true);
+});
+
 test('captures ordinary visible URLs even when no Telegram entity or button exists', () => {
   const record = buildTelegramMessageRecord({
     id: 11,
@@ -134,6 +153,8 @@ test('extracts Telegram document and video/audio metadata without BigInt JSON fa
   assert.equal(record.forwarded.from_id.id, '54321');
   assert.equal(record.reply_to.message_id, 7);
   assert.equal(record.classification.is_download, true);
+  assert.ok(record.content_metadata);
+  assert.equal(record.content_metadata.file.filename, 'Example.Film.2026.1080p.WEB-DL.x265.mkv');
   assert.doesNotThrow(() => JSON.stringify(record));
 });
 
@@ -149,6 +170,24 @@ test('shortlinks are preserved verbatim and never resolved or bypassed', () => {
   assert.equal(record.links[0].host_class, 'Shortlink');
   assert.equal(record.links[0].is_shortlink, true);
   assert.equal(record.links[0].purpose, 'review');
+});
+
+test('Join CTA with a shortener gate stays promotion-only, not a download', () => {
+  const record = buildTelegramMessageRecord({
+    id: 151,
+    date: 1795305600,
+    message: 'Join our Telegram channel for updates',
+    replyMarkup: {
+      rows: [{ buttons: [
+        { className: 'KeyboardButtonUrl', text: 'Join', url: 'https://bit.ly/channel-invite' },
+      ] }],
+    },
+  }, baseContext());
+
+  assert.equal(record.classification.type, 'promotion');
+  assert.equal(record.classification.is_download, false);
+  assert.equal(record.links[0].is_shortlink, true);
+  assert.equal(record.links[0].purpose, 'promotion');
 });
 
 test('ambiguous non-classified links enter review without disappearing from main export', () => {
