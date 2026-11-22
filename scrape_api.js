@@ -290,9 +290,12 @@ function deduplicateMessages(messages) {
 }
 
 // ── Save output ───────────────────────────────────────────────
-function writeJsonAtomic(filePath, value) {
+function writeJsonAtomic(filePath, value, options = {}) {
   const tmp = `${filePath}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
+  // Large exports are machine-consumed JSON. Compact serialization avoids
+  // tens of MB of indentation while preserving the exact JSON data/schema.
+  const serialized = options.compact ? JSON.stringify(value) : JSON.stringify(value, null, 2);
+  fs.writeFileSync(tmp, serialized);
   fs.renameSync(tmp, filePath);
 }
 
@@ -316,8 +319,8 @@ function saveOutput(newMessages, modeLabel, existingMessages = [], scanStats = {
   ];
 
   // Preserve the canonical import file and add derived sidecars without a promotions file.
-  writeJsonAtomic(EXPORT_FILE, artifacts.main);
-  sidecars.forEach(([name, data]) => writeJsonAtomic(path.join(__dirname, name), data));
+  writeJsonAtomic(EXPORT_FILE, artifacts.main, { compact: true });
+  sidecars.forEach(([name, data]) => writeJsonAtomic(path.join(__dirname, name), data, { compact: true }));
 
   const downloadsDir = path.join(os.homedir(), 'storage', 'downloads');
   const dateStr = exportedAt.slice(0, 10);
@@ -326,8 +329,8 @@ function saveOutput(newMessages, modeLabel, existingMessages = [], scanStats = {
     if (!fs.existsSync(downloadsDir)) {
       throw new Error('Android shared Downloads is unavailable; run termux-setup-storage first.');
     }
-    writeJsonAtomic(path.join(downloadsDir, fileName), artifacts.main);
-    sidecars.forEach(([name, data]) => writeJsonAtomic(path.join(downloadsDir, name), data));
+    writeJsonAtomic(path.join(downloadsDir, fileName), artifacts.main, { compact: true });
+    sidecars.forEach(([name, data]) => writeJsonAtomic(path.join(downloadsDir, name), data, { compact: true }));
     logFn(`   Android Downloads: ${fileName} + ${sidecars.length} sidecar exports`);
   } catch(error) {
     logFn(`   Android Downloads unavailable (${error.message}); canonical exports remain in Xloop folder.`);
