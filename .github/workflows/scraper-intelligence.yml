@@ -3,6 +3,9 @@ on:
   push:
     paths:
       - 'utils/parser.js'
+      - 'utils/telegram-intelligence.js'
+      - 'import-telegram-json-to-mongodb.js'
+      - 'test/telegram-scraper-intelligence.test.js'
       - 'utils/variant-intelligence.js'
       - 'routes/scrape.js'
       - 'models/ExtractedLink.js'
