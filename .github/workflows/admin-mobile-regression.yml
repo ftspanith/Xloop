@@ -10,6 +10,14 @@ on:
       - 'routes/scrape.js'
       - 'routes/orchestrator.js'
       - 'pipeline_full.js'
+      - 'scrape_api.js'
+      - 'import-telegram-json-to-mongodb.js'
+      - 'utils/parser.js'
+      - 'test/telegram-mongodb-import.test.js'
+      - 'scrape_api.js'
+      - 'import-telegram-json-to-mongodb.js'
+      - 'utils/parser.js'
+      - 'test/telegram-mongodb-import.test.js'
       - 'models/ExtractedLink.js'
       - 'package.json'
       - 'test/admin-mobile-regression.test.js'
@@ -37,3 +45,5 @@ jobs:
           node-version: 20
       - name: Run admin UI regression tests
         run: npm run test:admin-ui
+      - name: Run Telegram JSON importer tests
+        run: npm run test:telegram-import
