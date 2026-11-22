@@ -96,7 +96,7 @@
     /*  Search  */
     .search-bar { position: relative; margin-bottom: 20px; }
     .search-bar input { padding-left: 44px; font-size: 1rem; height: 48px; }
-    .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 1.1rem; color: var(--muted); pointer-events: none; }
+    .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; display:flex; align-items:center; }
     .search-filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
     .filter-chip { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 0.82rem; cursor: pointer; transition: all 0.2s; }
     .filter-chip.active { border-color: var(--accent); color: var(--accent); background: rgba(229,9,20,0.1); }
@@ -254,8 +254,8 @@
 
   <!-- Tabs -->
   <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('search')"> Search & Manage</button>
-    <button class="tab-btn" onclick="switchTab('add')"> Add Movie</button>
+    <button class="tab-btn active" onclick="switchTab('search')"><span aria-hidden="true">⌕</span> Search & Manage</button>
+    <button class="tab-btn" onclick="switchTab('add')"><span aria-hidden="true">＋</span> Add Movie</button>
   </div>
 
   <!--  SEARCH TAB  -->
@@ -281,7 +281,7 @@
       </div>
     </div>
     <div class="search-bar">
-      <span class="search-icon"></span>
+      <span class="search-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
       <input type="text" id="search-input" placeholder="Search by title, language, genre, year..." oninput="debounceSearch()">
     </div>
 
@@ -312,7 +312,7 @@
     
     <!-- QUICK PASTE SECTION -->
     <div class="card" style="margin-bottom:20px; border-color:var(--accent);">
-      <div class="card-title"><span></span> Quick Paste Auto-Import</div>
+      <div class="card-title"><span aria-hidden="true">↯</span> Quick Paste Auto-Import</div>
       <p style="font-size:0.85rem; color:var(--text2); margin-bottom:12px;">
         Paste text exactly as you would send it on Telegram (filename + URL). The system will automatically detect the movie, fetch TMDB posters, and publish it immediately.
       </p>
@@ -325,7 +325,7 @@
 
     <!-- MANUAL ADD SECTION -->
     <div class="card">
-      <div class="card-title"><span></span> Manual Entry (Overrides)</div>
+      <div class="card-title"><span aria-hidden="true">✎</span> Manual Entry (Overrides)</div>
 
       <div class="form-row">
         <div class="form-group" style="margin-bottom:0">
@@ -560,7 +560,7 @@ function showStatus(id, msg, type) {
 function hideStatus(id) { document.getElementById(id).className = 'status'; }
 
 async function apiCall(method, path, body) {
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
   const r = await fetch(path, {
     method,
@@ -572,7 +572,7 @@ async function apiCall(method, path, body) {
   let data;
   try { data = raw ? JSON.parse(raw) : {}; }
   catch { throw new Error(`API returned non-JSON response (HTTP ${r.status})`); }
-  if (!r.ok) throw new Error(data.message || `Request failed (HTTP ${r.status})`);
+  if (!r.ok) { if (r.status === 401 || r.status === 403) { localStorage.removeItem('xloop_admin_token'); window.location.href = '/admin/login.html'; } throw new Error(data.message || `Request failed (HTTP ${r.status})`); }
   return data;
 }
 
@@ -678,12 +678,12 @@ async function loadSearch() {
     grid.innerHTML = movies.map(m => {
       const id = String(m._id || '');
       const title = m.title || 'Untitled';
-      const files = Array.isArray(m.downloads) ? m.downloads.length : 0;
+      const files = Array.isArray(m.downloads) ? m.downloads.reduce((sum, d) => sum + (Array.isArray(d.links) ? d.links.length : 0), 0) : 0;
       return `<article class="movie-card">
         <img class="movie-card-img" src="${escapeHtml(m.poster || '/images/placeholder.svg')}" onerror="this.onerror=null;this.src='/images/placeholder.svg'" alt="${escapeHtml(title)}" loading="lazy">
         <div class="movie-card-body">
           <div class="movie-card-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
-          <div class="movie-card-meta">${escapeHtml(m.year || '')} · ${escapeHtml(m.language || '')} · ${escapeHtml(m.quality || '')} · ${files} files</div>
+          <div class="movie-card-meta">${escapeHtml(m.year || '')} · ${escapeHtml(m.language || '')} · ${escapeHtml(m.quality || '')} · ${files} links</div>
           <div class="movie-card-actions">
             <button class="btn btn-secondary btn-sm" type="button" data-edit-id="${escapeHtml(id)}">Edit</button>
             <a class="btn btn-secondary btn-sm" href="/watch.html?id=${encodeURIComponent(id)}" target="_blank" rel="noopener">View</a>
