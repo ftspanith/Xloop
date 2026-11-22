@@ -64,3 +64,13 @@ test('CDN and image URLs are rejected while file hosts are retained', () => {
   assert.equal(isJunkUrl('https://gdflix.dev/file/123'), false);
   assert.equal(isJunkUrl('https://filepress.in/uploads/abc123'), false);
 });
+
+test('scraper requires an explicit channel allowlist for each Telegram account', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'scrape_api.js'), 'utf8');
+  assert.match(source, /PROFILE === 2 \? 'TG_CHANNELS_2' : 'TG_CHANNELS_1'/);
+  assert.match(source, /if \(!ACCOUNT_CHANNELS_ENV \|\| !ACCOUNT_CHANNELS_ENV\.trim\(\)\)/);
+  assert.match(source, /refusing to scrape an implicit\/default list/);
+  assert.doesNotMatch(source, /: ALL_CHANNEL_IDS/);
+});
