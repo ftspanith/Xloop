@@ -62,7 +62,7 @@ function normalizeGdflixUrl(value) {
 // Host detector
 function detectHost(url) {
   if (/^(?:https?:\/\/)?(?:[^/]+\.)?gdflix\.dev(?:[/:?#]|$)/i.test(url)) return 'GDFlix';
-  if (/^(?:https?:\\/\\/)?(?:[^/]+\\.)?hubcloud\\.one(?:[/:?#]|$)/i.test(url) || /hubcloud/i.test(url)) return 'HubCloud';
+  if (/^(?:https?:\/\/)?(?:[^/]+\.)?hubcloud\.one(?:[/:?#]|$)/i.test(url) || /hubcloud/i.test(url)) return 'HubCloud';
   if (/gdlink/i.test(url))         return 'GDLink';
   if (/terabox/i.test(url))        return 'TeraBox';
   if (/gofile/i.test(url))         return 'GoFile';
@@ -1078,8 +1078,8 @@ router.post('/normalize-links-batch', auth, async (req, res) => {
           const oldUrl = String(link.url || '');
           const newUrl = normalizeGdflixUrl(oldUrl);
           let newHost = link.host || 'Download';
-          if (/^https?:\\/\\/(?:[^/]+\\.)?gdflix\\.dev(?:[/:?#]|$)/i.test(newUrl)) newHost = 'GDFlix';
-          else if (/^https?:\\/\\/(?:[^/]+\\.)?hubcloud\\.one(?:[/:?#]|$)/i.test(newUrl)) newHost = 'HubCloud';
+          if (/^https?:\/\/(?:[^/]+\.)?gdflix\.dev(?:[/:?#]|$)/i.test(newUrl)) newHost = 'GDFlix';
+          else if (/^https?:\/\/(?:[^/]+\.)?hubcloud\.one(?:[/:?#]|$)/i.test(newUrl)) newHost = 'HubCloud';
           if (newUrl !== oldUrl || newHost !== (link.host || 'Download')) {
             link.url = newUrl;
             link.host = newHost;
