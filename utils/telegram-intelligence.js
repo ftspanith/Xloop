@@ -453,7 +453,7 @@ function mergeRelatedMetadata(target, source, relation) {
       languages: [],
       quality: null,
       content_type: null,
-      is_series: false,
+      is_series: null,
       season: null,
       episode: null,
       imdb_id: null,
