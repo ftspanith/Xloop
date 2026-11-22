@@ -190,6 +190,24 @@ test('Join CTA with a shortener gate stays promotion-only, not a download', () =
   assert.equal(record.links[0].purpose, 'promotion');
 });
 
+test('standalone Join button is detected as a promotion even with an external invite URL', () => {
+  const record = buildTelegramMessageRecord({
+    id: 152,
+    date: 1795305600,
+    message: '',
+    replyMarkup: {
+      rows: [{ buttons: [
+        { className: 'KeyboardButtonUrl', text: 'Join', url: 'https://bit.ly/xloop-invite' },
+      ] }],
+    },
+  }, baseContext());
+
+  assert.equal(record.classification.type, 'promotion');
+  assert.equal(record.classification.is_promotion, true);
+  assert.equal(record.classification.is_download, false);
+  assert.equal(record.links[0].purpose, 'promotion');
+});
+
 test('ambiguous non-classified links enter review without disappearing from main export', () => {
   const record = buildTelegramMessageRecord({
     id: 16,
