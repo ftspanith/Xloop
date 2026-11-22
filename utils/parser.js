@@ -326,6 +326,18 @@ function detectContainer(filename) {
 }
 
 // ─── HDR ─────────────────────────────────────────────────────────────────────
+function detectBitDepth(fn) {
+  const s = String(fn || '').toUpperCase();
+  const m = s.match(/(?:\\b(8|10|12|14|16)\\s*[- ]?BIT\\b|\\b(8|10|12|14|16)BIT\\b)/);
+  return m ? `${m[1] || m[2]}-bit` : null;
+}
+
+function detectAudioChannels(fn) {
+  const s = String(fn || '').toUpperCase();
+  const m = s.match(/\\b(7\\.1|5\\.1|2\\.1|2\\.0|1\\.0)\\b/);
+  return m ? m[1] : null;
+}
+
 function detectHDR(fn) {
   const s=(fn||'').toUpperCase();
   if (/DOLBY\s*VISION|\bDOVI\b|\.DV\.|\bDV\b/.test(s)) return 'Dolby Vision';
@@ -1131,10 +1143,10 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const fileIdentity = stripEmojis(rawFn).toLowerCase().replace(/\s+/g, ' ').trim();
     const key=`${quality}__${size||'nosize'}__S${fs??''}E${fe??''}__${fileIdentity||pair.url}`;
 
-    const audio = extractAudio(rawFn) || null;
+    const audio = extractAudio(rawFn) || null;\n    const bitDepth = detectBitDepth(rawFn);\n    const audioChannels = detectAudioChannels(rawFn);
     const source = detectSource(rawFn) || null;
     const container = detectContainer(rawFn) || null;
-    if (!fileMap[key]) fileMap[key]={quality,size,hdr,codec,container,audio,source,filename:stripEmojis(rawFn).trim()||cleanedTitle,language:fileLang,season:fs,episode:fe,links:[]};
+    if (!fileMap[key]) fileMap[key]={quality,size,hdr,codec,container,audio,bitDepth,audioChannels,source,filename:stripEmojis(rawFn).trim()||cleanedTitle,language:fileLang,season:fs,episode:fe,links:[]};
     if (!fileMap[key].links.find(l=>l.url===pair.url)) {
       fileMap[key].links.push({host:detectHost(pair.url),url:normalizeGdflixUrl(pair.url),isFast:/gdflix\.dev|hubcloud|gdlink/i.test(pair.url)});
     }
@@ -1170,7 +1182,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 module.exports = {
   parseMessageBlock,classifyUrl,stripEmojis,cleanTitleForApi,normalizeQuality,
   extractSize,toMB,detectHost,detectLanguage,detectAllLanguages,detectContentType,
-  extractSeasonEpisode,detectCodec,detectContainer,detectHDR,extractAudio,detectSource,isJunkTitle,isMetadataLine,
+  extractSeasonEpisode,detectCodec,detectContainer,detectHDR,detectBitDepth,detectAudioChannels,extractAudio,detectSource,isJunkTitle,isMetadataLine,
   extractTitleFromStreamingUrl,
   parseManualInput,
 };
