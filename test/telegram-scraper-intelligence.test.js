@@ -76,6 +76,18 @@ test('recognizes direct file-path URLs as download evidence', () => {
   assert.equal(record.links[0].purpose, 'download');
 });
 
+test('does not promote unrelated unknown URLs to download links just because the message has download metadata', () => {
+  const record = buildTelegramMessageRecord({
+    id: 154,
+    date: 1795305600,
+    message: 'Example Film (2026) 1080p WEB-DL\\nhttps://unknown.example/redirect?id=abc',
+  }, baseContext());
+
+  assert.equal(record.classification.is_download, true);
+  assert.equal(record.classification.needs_review, true);
+  assert.equal(record.links[0].purpose, 'review');
+});
+
 test('captures ordinary visible URLs even when no Telegram entity or button exists', () => {
   const record = buildTelegramMessageRecord({
     id: 11,
