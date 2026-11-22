@@ -308,11 +308,15 @@ function classifyMessage(record) {
   const knownDownloadHost = links.some(link => DOWNLOAD_HOSTS.has(link.host_class) || link.host_class === 'Direct');
   const shortlinkWithDownloadLabel = links.some(link => link.host_class === 'Shortlink' &&
     (DOWNLOAD_CTA_RE.test((link.labels || []).join(' ')) || MEDIA_TECH_RE.test((link.labels || []).join(' '))));
+  const ambiguousShortlinkWithPromotion = promotion.detected && links.some(link =>
+    link.host_class === 'Shortlink' &&
+    !link.labels.some(label => /join|subscribe|follow|channel|group|backup/i.test(label))
+  );
   const downloadButton = (record.buttons || []).some(button => DOWNLOAD_CTA_RE.test(button.text || '') || MEDIA_TECH_RE.test(button.text || ''));
   const filenameEvidence = FILE_NAME_RE.test(text) || !!(media && media.file_name);
   const technicalEvidence = MEDIA_TECH_RE.test(text);
   const downloadCta = DOWNLOAD_CTA_RE.test(text);
-  const hasDownloadEvidence = fileMedia || knownDownloadHost || shortlinkWithDownloadLabel || downloadButton || filenameEvidence || technicalEvidence || downloadCta;
+  const hasDownloadEvidence = fileMedia || knownDownloadHost || shortlinkWithDownloadLabel || ambiguousShortlinkWithPromotion || downloadButton || filenameEvidence || technicalEvidence || downloadCta;
   const isDownload = hasDownloadEvidence;
   const isPromotion = promotion.detected;
   const needsReview = !isDownload && !isPromotion && links.length > 0;
@@ -348,6 +352,7 @@ function classifyMessage(record) {
       file_media: fileMedia,
       known_download_host: knownDownloadHost,
       shortlink_with_download_label: shortlinkWithDownloadLabel,
+      ambiguous_shortlink_with_promotion: ambiguousShortlinkWithPromotion,
       download_button: downloadButton,
       filename: filenameEvidence,
       technical_metadata: technicalEvidence,
