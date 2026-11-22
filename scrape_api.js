@@ -200,29 +200,42 @@ async function scrapeChannel(client, channelId, { minId = 0, minDate = 0, maxDat
     let hitBoundary = false;
 
     for (const msg of msgs) {
-      if (minDate > 0 && msg.date < minDate) { hitBoundary = true; break; }
-      if (maxDate > 0 && msg.date > maxDate) { scanned++; scanStats.scanned++; continue; }
-      scanned++;
-      scanStats.scanned++;
-
       if (!msg || msg.id == null) {
+        scanned++;
+        scanStats.scanned++;
         skipped++;
         scanStats.skipped++;
         scanStats.skippedReasons.push({ channel_id: channelId, reason: 'message_without_id' });
         continue;
       }
 
-      // Capture first and classify second: promotion words never discard a message.
-      const record = buildTelegramMessageRecord(msg, {
-        channelId,
-        channelName,
-        account: PROFILE,
-      });
-      msgs_out.push(record);
-      collected++;
-      scanStats.captured++;
-    }
+      if (minDate > 0 && msg.date < minDate) { hitBoundary = true; break; }
+      if (maxDate > 0 && msg.date > maxDate) { scanned++; scanStats.scanned++; continue; }
+      scanned++;
+      scanStats.scanned++;
 
+      // Capture first and classify second: promotion words never discard a message.
+      try {
+        const record = buildTelegramMessageRecord(msg, {
+          channelId,
+          channelName,
+          account: PROFILE,
+        });
+        msgs_out.push(record);
+        collected++;
+        scanStats.captured++;
+      } catch (error) {
+        skipped++;
+        scanStats.skipped++;
+        scanStats.skippedReasons.push({
+          channel_id: channelId,
+          message_id: msg.id,
+          reason: 'message_serialization_error',
+          error: String(error && error.message || error).slice(0, 240),
+        });
+        logFn(\`   [WARN] Could not serialize message \${msg.id}: \${error.message || error}\`);
+      }
+    }
     offsetId = msgs[msgs.length - 1].id;
     logFn(\`   Scanned \${scanned} | Captured \${collected} | Skipped \${skipped}\`);
 
@@ -391,7 +404,7 @@ let client;
 
   logFn(`Starting ${modeLabel.toUpperCase()} scrape`);
   logFn(`Channels: ${TARGET_CHANNELS.length} | Parallel: ${PARALLEL_LIMIT} at a time`);
-  logFn(`Smart filter: ON | FloodWait handling: ON | Crash recovery: ON\n`);
+  logFn(`Deep capture: ON | Non-destructive classification: ON | FloodWait handling: ON | Crash recovery: ON\n`);
 
   // ── Split channels into parallel groups ──────────────────
   const allNew = [...survivedMessages];
@@ -407,18 +420,31 @@ let client;
 
     const tasks = group.map((channelId) => async () => {
       globalIdx++;
-      logFn(`\n[${globalIdx}/${totalChannels}] Channel: ${channelId}`);
-      const msgs = await scrapeChannel(client, channelId, { 
-        minId: minIdMap[channelId] || 0, 
-        minDate, maxDate, 
-      });
-      return { channelId, msgs };
+      logFn(\`\n[\${globalIdx}/\${totalChannels}] Channel: \${channelId}\`);
+      try {
+        const result = await scrapeChannel(client, channelId, {
+          minId: minIdMap[channelId] || 0,
+          minDate, maxDate,
+        });
+        return { channelId, ok: true, messages: result.messages, stats: result.stats };
+      } catch (error) {
+        return {
+          channelId,
+          ok: false,
+          error: String(error && error.message || error).slice(0, 500),
+        };
+      }
     });
 
     const results = await runInParallel(tasks, PARALLEL_LIMIT);
 
     for (const result of results) {
       if (!result) continue;
+      if (!result.ok) {
+        scanStats.channelErrors.push({ channel_id: result.channelId, error: result.error });
+        logFn(\`   [CHANNEL ERROR] \${result.channelId}: \${result.error}\`);
+        continue;
+      }
       allNew.push(...result.messages);
       mergeScanStats(scanStats, result.stats);
       completedChannels.push(result.channelId);
