@@ -173,7 +173,7 @@
     .date-shortcut:hover { background: rgba(229,9,20,0.12); border-color: var(--primary,#e50914); }
 
     /* ── Account + Generate row ── */
-    .generate-row {
+    @media (max-width: 640px) {\n      .generate-row { flex-direction: column; align-items: stretch; }\n      .account-selector { width: 100%; justify-content: space-between; }\n      .account-selector select { min-height: 44px; }\n      .generate-btn { width: 100%; min-height: 48px; }\n      .date-row { flex-direction: column; align-items: stretch; gap: 10px; }\n      .date-group, .date-group input[type=date] { width: 100%; }\n      .command-output-body { padding: 14px; }\n      .cmd-box { padding: 12px 54px 12px 12px; }\n    }\n\n    .generate-row {
       display: flex; gap: 12px; align-items: center;
       margin-bottom: 0;
       animation: fadeUpIn 0.5s cubic-bezier(0.2,0.8,0.2,1) 0.18s both;
@@ -324,7 +324,7 @@
 <div class="admin-layout">
   <!-- Sidebar -->
   <aside class="admin-sidebar" id="adminSidebar">
-    <div class="admin-logo"><button class="sidebar-close-btn" onclick="closeMobileSidebar()" aria-label="Close menu"></button></div>
+    <div class="admin-logo">XLOOP Admin <button class="sidebar-close-btn" onclick="closeMobileSidebar()" aria-label="Close menu">×</button></div>
     <nav class="admin-nav">
       <a href="/admin/dashboard.html">Dashboard</a>
       <a href="/admin/add-movie.html">+ Add Movie</a>
@@ -342,7 +342,7 @@
 
   <!-- Main Content -->
   <main class="admin-content">
-    <button class="mobile-menu-btn" onclick="openMobileSidebar()" aria-label="Open menu"></button>
+    <button class="mobile-menu-btn" onclick="openMobileSidebar()" aria-label="Open menu">&#9776;</button>
     <h1 class="admin-page-title page-header">Telegram Scraper</h1>
 
     <!-- Info banner -->
