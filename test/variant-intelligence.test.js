@@ -9,7 +9,7 @@ test('parses binary file sizes and normalizes title/year', () => {
 
 test('ranks source and resolution rather than blindly choosing largest file', () => {
   const result = analyzeVariantSet([
-    {title:'Example Film',year:2020,quality:'1080p',source:'WEB-DL',codec:'HEVC',size:'2.19 GB',language:'Telugu, Hindi',audio:'DDP 5.1',url:'https://a/1'},
+    {title:'Example Film',year:2020,quality:'1080p',source:'WEB-DL',codec:'x264',size:'2.19 GB',language:'Telugu, Hindi',audio:'AAC 2.0',url:'https://a/1'},
     {title:'Example Film',year:2020,quality:'1080p',source:'BluRay',codec:'x264',size:'2 GB',language:'Telugu, Hindi',audio:'AAC 2.0',url:'https://a/2'}
   ]);
   assert.equal(result.ranked[0].source,'BluRay');
