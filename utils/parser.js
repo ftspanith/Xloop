@@ -334,7 +334,7 @@ function detectBitDepth(fn) {
 
 function detectAudioChannels(fn) {
   const s = String(fn || '').toUpperCase();
-  const m = s.match(/\\b(7\\.1|5\\.1|2\\.1|2\\.0|1\\.0)\\b/);
+  const m = s.match(/\b(7\.1|5\.1|2\.1|2\.0|1\.0)\b/);
   return m ? m[1] : null;
 }
 
