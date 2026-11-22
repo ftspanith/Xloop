@@ -19,6 +19,7 @@ function titleKey(item) {
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[’']/g, '')
     .replace(/\b(19\d{2}|20\d{2})\b/g, ' ')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
