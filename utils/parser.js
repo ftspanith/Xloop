@@ -1143,7 +1143,8 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const fileIdentity = stripEmojis(rawFn).toLowerCase().replace(/\s+/g, ' ').trim();
     const key=`${quality}__${size||'nosize'}__S${fs??''}E${fe??''}__${fileIdentity||pair.url}`;
 
-    const audio = extractAudio(rawFn) || null;\n    const bitDepth = detectBitDepth(rawFn);\n    const audioChannels = detectAudioChannels(rawFn);
+    const audio = extractAudio(rawFn) || null;
+    const bitDepth = detectBitDepth(rawFn);\n    const audioChannels = detectAudioChannels(rawFn);
     const source = detectSource(rawFn) || null;
     const container = detectContainer(rawFn) || null;
     if (!fileMap[key]) fileMap[key]={quality,size,hdr,codec,container,audio,bitDepth,audioChannels,source,filename:stripEmojis(rawFn).trim()||cleanedTitle,language:fileLang,season:fs,episode:fe,links:[]};
