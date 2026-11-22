@@ -37,6 +37,8 @@ npm run telegram:login:2
 
 Enter each account's phone number, Telegram login code and (if enabled) 2-step verification password in Termux. The helper stores each StringSession in the local `.env` with restricted file permissions and never prints the session string. Do not share that file.
 
+**Security:** `.env` is local-only. It must never be committed or included in a public repository. A session/API credential or database URI that was pushed to a public remote must be treated as compromised: terminate exposed Telegram sessions, rotate/recreate Telegram API credentials as appropriate, rotate the MongoDB password, and clean the Git history after revocation. Making the repository private or deleting `.env` from the latest commit does not revoke leaked credentials.
+
 ## 3. Full scrape — both accounts
 
 Run:
@@ -55,9 +57,13 @@ This runs Account 1 first, then Account 2, each in full-history mode (`--mode=1`
 
 Promotions are classified inside each main `telegram_export*.json` message record. There is no separate promotions export, and promotion-only records are not imported as download entries; mixed download-plus-promotion messages remain eligible for import.
 
+Each captured message preserves its original `raw_text` and legacy `text`, entity links, button labels/positions, media and webpage-preview metadata, grouped-media ID, forwarded/reply context, sender and available engagement fields. The `classification` field distinguishes download, promotion, mixed, review and other content. Movie/series metadata is stored in `content_metadata`. When a message explicitly replies to another scanned message or belongs to the same Telegram album, only missing descriptive fields (such as title/year/language/season) may be inherited; per-file quality, filenames and URLs are never copied between messages.
+
+Ambiguous links in a mixed message stay in the main export and review sidecar. The MongoDB importer only imports links classified as downloads; promotional and unresolved links are not silently turned into download records.
+
 The scraper also writes dated copies directly into Android's shared `Download` folder (`~/storage/downloads`). Run `termux-setup-storage` and allow the Android storage permission before scraping. It also keeps the canonical `telegram_export.json` / `telegram_export_2.json` files in the Xloop project folder for the importer. Do not run the two account scrapers simultaneously; their progress and export files are separate, but sequential execution is gentler on Telegram rate limits.
 
-If Telegram returns FloodWait, leave the process running; the scraper waits for Telegram's requested interval and has per-channel recovery checkpoints.
+If Telegram returns FloodWait, leave the process running; the scraper waits for Telegram's requested interval. If a channel fails, the partial export and checkpoint are saved, the process exits with a partial-completion status, and rerunning the same command retries only the incomplete channel(s).
 
 ## 4. Validate first — no database writes
 
