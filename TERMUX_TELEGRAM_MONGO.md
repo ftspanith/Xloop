@@ -49,6 +49,11 @@ This runs Account 1 first, then Account 2, each in full-history mode (`--mode=1`
 
 - `telegram_export.json` — Account 1
 - `telegram_export_2.json` — Account 2
+- `telegram_shortlinks.json` / `telegram_shortlinks_2.json` — detected shortlinks with their original URL and source references; no redirect resolution or bypass.
+- `telegram_review.json` / `telegram_review_2.json` — ambiguous messages retained for manual review.
+- `telegram_scan_report.json` / `telegram_scan_report_2.json` — per-account scan and classification totals, plus skipped-record reasons.
+
+Promotions are classified inside each main `telegram_export*.json` message record. There is no separate promotions export, and promotion-only records are not imported as download entries; mixed download-plus-promotion messages remain eligible for import.
 
 The scraper also writes dated copies directly into Android's shared `Download` folder (`~/storage/downloads`). Run `termux-setup-storage` and allow the Android storage permission before scraping. It also keeps the canonical `telegram_export.json` / `telegram_export_2.json` files in the Xloop project folder for the importer. Do not run the two account scrapers simultaneously; their progress and export files are separate, but sequential execution is gentler on Telegram rate limits.
 
