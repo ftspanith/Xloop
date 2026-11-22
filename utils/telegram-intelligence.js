@@ -329,7 +329,6 @@ function classifyMessage(record) {
     if (link.host_class === 'Ignore' && (promotion.detected || promoLabel)) link.purpose = 'promotion';
     else if (promoLabel) link.purpose = 'promotion';
     else if (downloadLabel || knownDownloadLink) link.purpose = 'download';
-    else if (isDownload && !isPromotion && link.host_class !== 'Ignore') link.purpose = 'download';
     else if (promotion.detected && TELEGRAM_HOST_RE.test(link.host || '')) link.purpose = 'promotion';
     else if (promotion.detected || needsReview || (isDownload && isPromotion && link.host_class === 'Download')) link.purpose = 'review';
   });
