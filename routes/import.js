@@ -561,8 +561,16 @@ router.post('/bulk', auth, async (req, res) => {
         existing.telegramMessageIds.push(msgObj.id);
         updated = true;
       }
-      if (updated) { await existing.save(); updatedCount++; }
-      else { duplicateCount++; skippedCount++; }
+      if (updated) {
+        // Keep movie-level aggregate fields in sync with newly added variants.
+        const { recomputeAggregates } = require('../pipeline_full');
+        recomputeAggregates(existing);
+        await existing.save();
+        updatedCount++;
+      } else {
+        duplicateCount++;
+        skippedCount++;
+      }
       continue;
     }
 
