@@ -24,6 +24,7 @@ const { StringSession }  = require('telegram/sessions');
 const { Api }            = require('telegram');
 const fs                 = require('fs');
 const path               = require('path');
+const { buildTelegramMessageRecord, createExportArtifacts } = require('./utils/telegram-intelligence');
 require('dotenv').config();
 
 // ── Config ───────────────────────────────────────────────────
@@ -49,20 +50,6 @@ const ALL_CHANNEL_IDS = [
   3374719986, 2271910467, 3927502894, 3354192797,
   3579217190, 3952255152, 2640824484, 4355201143,
   2252012526, 4372491493, 3881216988, 4430701213
-];
-
-// ── Download relevance indicators ────────────────────────────
-const DOWNLOAD_PATTERNS = [
-  /\.(mkv|mp4|avi|mov|m2ts|ts|wmv)\b/i,
-  /\b(gdflix|hubcloud|filepress|gplinks|nowshort|shorturl|aroralinks)\b/i,
-  /https?:\/\/[^\s]+/,
-  /\[\d+\.?\d*\s?(GB|MB)\]/i,
-  /\b(2160p|1080p|720p|480p|360p|4K|UHD|BluRay|WEB-DL|REMUX|HEVC|x265|x264|H\.264|H\.265)\b/i,
-];
-
-const SKIP_PATTERNS = [
-  /^(join|subscribe|follow|click here|telegram|channel|group)\b/i,
-  /^[0-9\s\/\.\-]{1,15}$/,  // just numbers/dates
 ];
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -114,38 +101,6 @@ let logFn = (msg) => process.stdout.write(msg + '\n');
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// ── Smart message relevance check ────────────────────────────
-function isRelevant(text, msg) {
-  if (SKIP_PATTERNS.some(p => p.test(text.trim()))) return false;
-  
-  // If it has a media attachment (direct video/file upload), keep it!
-  if (msg && msg.media) return true;
-  
-  if (!text || text.trim().length < 2) return false;
-  
-  return DOWNLOAD_PATTERNS.some(p => p.test(text));
-}
-
-// ── Extract all URLs from a message (entities + buttons) ─────
-function extractUrls(msg) {
-  const urls = [];
-  // Hyperlink entities (MessageEntityTextUrl)
-  if (msg.entities) {
-    for (const ent of msg.entities) {
-      if (ent.url) urls.push(ent.url);
-    }
-  }
-  // Inline keyboard buttons (ReplyInlineMarkup)
-  if (msg.replyMarkup && msg.replyMarkup.rows) {
-    for (const row of msg.replyMarkup.rows) {
-      for (const btn of (row.buttons || [])) {
-        if (btn.url) urls.push(btn.url);
-      }
-    }
-  }
-  return urls;
-}
-
 // ── Load / save crash-recovery progress ──────────────────────
 function loadProgress() {
   try {
@@ -158,10 +113,19 @@ function loadProgress() {
   } catch(_) { logFn('[Recovery] Progress file is invalid; starting clean.'); }
   return { completedChannels: [], partialMessages: [] };
 }
-function saveProgress(completedChannels, partialMessages) {
+function saveProgress(completedChannels, partialMessages, scanStats) {
   const tmp = `${PROGRESS_FILE}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify({ savedAt: new Date().toISOString(), profile: PROFILE, mode: MODE, baseExportSignature: BASE_EXPORT_SIGNATURE, targetChannels: TARGET_CHANNELS, completedChannels, partialMessages }, null, 2));
+  fs.writeFileSync(tmp, JSON.stringify({ savedAt: new Date().toISOString(), profile: PROFILE, mode: MODE, baseExportSignature: BASE_EXPORT_SIGNATURE, targetChannels: TARGET_CHANNELS, completedChannels, partialMessages, scanStats }, null, 2));
   fs.renameSync(tmp, PROGRESS_FILE);
+}
+
+function mergeScanStats(target, source) {
+  target.scanned += Number(source && source.scanned || 0);
+  target.captured += Number(source && source.captured || 0);
+  target.skipped += Number(source && source.skipped || 0);
+  if (Array.isArray(source && source.skippedReasons)) target.skippedReasons.push(...source.skippedReasons);
+  if (Array.isArray(source && source.channelErrors)) target.channelErrors.push(...source.channelErrors);
+  return target;
 }
 
 function clearProgress() {
@@ -202,18 +166,18 @@ async function withRetry(fn, maxRetries = 4) {
 
 // ── Core channel scraper ──────────────────────────────────────
 async function scrapeChannel(client, channelId, { minId = 0, minDate = 0, maxDate = 0 } = {}) {
-  const peer = `-100${channelId}`;
-  let channelName = `channel_${channelId}`;
+  const peer = \`-100\${channelId}\`;
+  let channelName = \`channel_\${channelId}\`;
   let scanned = 0, collected = 0, skipped = 0, offsetId = 0;
   const msgs_out = [];
+  const scanStats = { scanned: 0, captured: 0, skipped: 0, skippedReasons: [], channelErrors: [] };
 
-  // Resolve channel name
   try {
     const entity = await withRetry(() => client.getEntity(peer));
     channelName = entity.title || entity.username || channelName;
-    logFn(`   Name: ${channelName}`);
+    logFn(\`   Name: \${channelName}\`);
   } catch(_) {
-    logFn(`   Could not resolve name, using ID: ${channelId}`);
+    logFn(\`   Could not resolve name, using ID: \${channelId}\`);
   }
 
   while (true) {
@@ -228,50 +192,47 @@ async function scrapeChannel(client, channelId, { minId = 0, minDate = 0, maxDat
         })
       ));
     } catch(err) {
-      throw new Error(`Channel ${channelId} fetch failed: ${err.message}`);
+      throw new Error(\`Channel \${channelId} fetch failed: \${err.message}\`);
     }
 
     const msgs = batch.messages;
     if (!msgs || msgs.length === 0) break;
-
     let hitBoundary = false;
 
     for (const msg of msgs) {
-      // Date boundary check
       if (minDate > 0 && msg.date < minDate) { hitBoundary = true; break; }
-      if (maxDate > 0 && msg.date > maxDate) { scanned++; continue; }
+      if (maxDate > 0 && msg.date > maxDate) { scanned++; scanStats.scanned++; continue; }
       scanned++;
+      scanStats.scanned++;
 
-      // Build full text including button URLs
-      let text = msg.message || '';
-      const urls = extractUrls(msg);
-      if (urls.length > 0) text += '\n' + urls.join('\n');
+      if (!msg || msg.id == null) {
+        skipped++;
+        scanStats.skipped++;
+        scanStats.skippedReasons.push({ channel_id: channelId, reason: 'message_without_id' });
+        continue;
+      }
 
-      // Relevance filter — skip junk messages
-      if (!isRelevant(text, msg)) { skipped++; continue; }
-
-      msgs_out.push({
-        id:           msg.id,
-        type:         'message',
-        channel_id:   channelId,
-        channel_name: channelName,
-        date:         new Date(msg.date * 1000).toISOString(),
-        text:         text.trim(),
+      // Capture first and classify second: promotion words never discard a message.
+      const record = buildTelegramMessageRecord(msg, {
+        channelId,
+        channelName,
+        account: PROFILE,
       });
+      msgs_out.push(record);
       collected++;
+      scanStats.captured++;
     }
 
     offsetId = msgs[msgs.length - 1].id;
-    logFn(`   Scanned ${scanned} | Collected ${collected} | Skipped ${skipped}`);
+    logFn(\`   Scanned \${scanned} | Captured \${collected} | Skipped \${skipped}\`);
 
     if (hitBoundary || msgs.length < BATCH_SIZE) break;
     await sleep(INTER_BATCH_DELAY);
   }
 
-  logFn(`   Done: ${scanned} scanned → ${collected} kept (${skipped} irrelevant filtered)`);
-  return msgs_out;
+  logFn(\`   Done: \${scanned} scanned → \${collected} captured (\${skipped} unsupported records)\`);
+  return { messages: msgs_out, stats: scanStats };
 }
-
 // ── Parallel pool executor ────────────────────────────────────
 async function runInParallel(tasks, concurrency) {
   const results = new Array(tasks.length);
@@ -303,46 +264,52 @@ function deduplicateMessages(messages) {
 }
 
 // ── Save output ───────────────────────────────────────────────
-function saveOutput(newMessages, modeLabel, existingMessages = []) {
+function writeJsonAtomic(filePath, value) {
+  const tmp = \`\${filePath}.tmp\`;
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
+  fs.renameSync(tmp, filePath);
+}
+
+function saveOutput(newMessages, modeLabel, existingMessages = [], scanStats = {}) {
   const merged = deduplicateMessages([...existingMessages, ...newMessages]);
-  // Sort by date descending (newest first)
-  merged.sort((a, b) => new Date(b.date) - new Date(a.date));
+  merged.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
   const exportedAt = new Date().toISOString();
-  const exportData = {
-    exported_at:              exportedAt,
-    scrape_mode:              modeLabel,
-    total_messages_collected: merged.length,
-    messages:                 merged,
-  };
+  const artifacts = createExportArtifacts(merged, {
+    account: PROFILE,
+    modeLabel,
+    exportedAt,
+    scanStats,
+  });
+  const suffix = PROFILE === 2 ? '_2' : '';
+  const sidecars = [
+    [\`telegram_shortlinks\${suffix}.json\`, artifacts.shortlinks],
+    [\`telegram_review\${suffix}.json\`, artifacts.review],
+    [\`telegram_scan_report\${suffix}.json\`, artifacts.report],
+  ];
 
-  const json = JSON.stringify(exportData, null, 2);
+  // Preserve the canonical import file and add derived sidecars without a promotions file.
+  writeJsonAtomic(EXPORT_FILE, artifacts.main);
+  sidecars.forEach(([name, data]) => writeJsonAtomic(path.join(__dirname, name), data));
 
-  // ── Human-readable filename → saved to ~/Downloads for easy access
-  const dateStr      = exportedAt.slice(0, 10); // YYYY-MM-DD
-  const fileName     = `xloop_${modeLabel}_${ACCOUNT_NAME}_${dateStr}_${merged.length}msgs.json`;
-  // Termux shared-storage path maps to Android's visible Download folder.
   const downloadsDir = path.join(os.homedir(), 'storage', 'downloads');
-  const readableFile = path.join(downloadsDir, fileName);
-
+  const dateStr = exportedAt.slice(0, 10);
+  const fileName = \`xloop_\${modeLabel}_\${ACCOUNT_NAME}_\${dateStr}_\${merged.length}msgs.json\`;
   try {
     if (!fs.existsSync(downloadsDir)) {
       throw new Error('Android shared Downloads is unavailable; run termux-setup-storage first.');
     }
-    fs.writeFileSync(readableFile, json);
-    logFn(`   Saved to       : ~/storage/downloads/${fileName} (Android Download)`);
+    writeJsonAtomic(path.join(downloadsDir, fileName), artifacts.main);
+    sidecars.forEach(([name, data]) => writeJsonAtomic(path.join(downloadsDir, name), data));
+    logFn(\`   Android Downloads: \${fileName} + \${sidecars.length} sidecar exports\`);
   } catch(error) {
-    // Keep the export safe in the project folder if Android storage is not mounted.
-    fs.writeFileSync(path.join(__dirname, fileName), json);
-    logFn(`   Android Download unavailable (${error.message}); saved in Xloop folder: ${fileName}`);
+    logFn(\`   Android Downloads unavailable (\${error.message}); canonical exports remain in Xloop folder.\`);
   }
-  // Also write telegram_export.json in project root for pipeline compatibility
-  const exportTmp = `${EXPORT_FILE}.tmp`;
-  fs.writeFileSync(exportTmp, json);
-  fs.renameSync(exportTmp, EXPORT_FILE);
+
+  logFn(\`   Main export      : \${EXPORT_FILE}\`);
+  sidecars.forEach(([name]) => logFn(\`   Sidecar export   : \${path.join(__dirname, name)}\`));
   return merged.length;
 }
-
 // ── MAIN ─────────────────────────────────────────────────────
 let client;
 (async () => {
@@ -415,6 +382,7 @@ let client;
   const progress = loadProgress();
   const alreadyDone = new Set(progress.completedChannels || []);
   const survivedMessages = progress.partialMessages || [];
+  const scanStats = progress.scanStats || { scanned: 0, captured: survivedMessages.length, skipped: 0, skippedReasons: [], channelErrors: [] };
 
   if (alreadyDone.size > 0) {
     logFn(`[Recovery] Found interrupted session. ${alreadyDone.size} channels already scraped.`);
@@ -451,12 +419,13 @@ let client;
 
     for (const result of results) {
       if (!result) continue;
-      allNew.push(...result.msgs);
+      allNew.push(...result.messages);
+      mergeScanStats(scanStats, result.stats);
       completedChannels.push(result.channelId);
     }
 
     // Auto-save progress after every group
-    saveProgress(completedChannels, allNew);
+    saveProgress(completedChannels, allNew, scanStats);
     logFn(`\n[AutoSave] Progress saved. ${allNew.length} messages collected so far.`);
 
     // Delay between groups to respect rate limits
@@ -467,7 +436,7 @@ let client;
   }
 
   // ── Final save ───────────────────────────────────────────
-  const totalInFile = saveOutput(allNew, modeLabel, existingMessages);
+  const totalInFile = saveOutput(allNew, modeLabel, existingMessages, scanStats);
   clearProgress(); // remove crash recovery file since we're done
 
   const mb = (fs.statSync(EXPORT_FILE).size / 1024 / 1024).toFixed(2);
