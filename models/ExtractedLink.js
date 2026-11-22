@@ -29,6 +29,7 @@ const extractedLinkSchema = new mongoose.Schema({
   date:        { type: String, default: '' },
   imdbId:      { type: String, default: '' },
   tmdbIdHint:  { type: Number, default: null },
+  sourceAccount:{ type: String, enum: ['1','2',''], default: '' },
   uploadBatch: { type: String, default: '' },
 }, {
   timestamps: true,
