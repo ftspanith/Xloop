@@ -325,12 +325,15 @@ function classifyMessage(record) {
     else if (needsReview) link.purpose = 'review';
   });
 
+  const hasUnresolvedLinks = links.some(link => link.purpose === 'review' || link.purpose === 'unknown');
+  const finalNeedsReview = needsReview || hasUnresolvedLinks;
+
   return {
     type,
     is_download: isDownload,
     is_promotion: isPromotion,
     is_shortlink: links.some(link => link.is_shortlink),
-    needs_review: needsReview,
+    needs_review: finalNeedsReview,
     promotion,
     evidence: {
       file_media: fileMedia,
@@ -558,7 +561,7 @@ function createExportArtifacts(messages, options) {
     if (classification.is_download && classification.is_promotion) mixed++;
     if (!classification.is_download && !classification.is_promotion && !classification.needs_review) other++;
     if (message.media) mediaCount++;
-    if (classification.needs_review) review.push(message);
+    if (classification.needs_review || (message.links || []).some(link => link.purpose === 'review' || link.purpose === 'unknown')) review.push(message);
     (message.links || []).forEach(link => {
       if (!link.is_shortlink) return;
       const key = String(message.channel_id) + ':' + String(message.id) + ':' + link.url;
