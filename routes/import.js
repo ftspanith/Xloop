@@ -55,7 +55,7 @@ function normalizeGdflixUrl(value) {
 
 // Host detector
 function detectHost(url) {
-  if (/gdfilx\.dev|gdflix/i.test(url)) return 'GDFlix';
+  if (/^(?:https?:\/\/)?(?:[^/]+\.)?gdflix\.dev(?:[/:?#]|$)/i.test(url)) return 'GDFlix';
   if (/hubcloud/i.test(url))       return 'HubCloud';
   if (/gdlink/i.test(url))         return 'GDLink';
   if (/terabox/i.test(url))        return 'TeraBox';
