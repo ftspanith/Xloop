@@ -86,6 +86,22 @@ test('promotion-only messages are excluded while mixed download promotions retai
   assert.equal(result.skipped, 2);
 });
 
+test('link-purpose matching does not collapse case-sensitive URL IDs', () => {
+  const msg = {
+    id: 23,
+    channel_id: 999,
+    text: 'Example Movie 2026 1080p WEB-DL\nhttps://bit.ly/ABC123\nhttps://bit.ly/abc123',
+    links: [
+      { url: 'https://bit.ly/ABC123', purpose: 'promotion' },
+      { url: 'https://bit.ly/abc123', purpose: 'download' },
+    ],
+    classification: { is_promotion: true, is_download: true, needs_review: false },
+  };
+  const result = extractLinksFromMessages([msg], '1');
+  assert.ok(result.links.some(link => link.url.endsWith('/abc123')));
+  assert.ok(result.links.every(link => !link.url.endsWith('/ABC123')));
+});
+
 test('CDN and image URLs are rejected while file hosts are retained', () => {
   assert.equal(isJunkUrl('https://example.com/poster/image.jpg'), true);
   assert.equal(isJunkUrl('https://cdn.cloudfront.net/video.m3u8'), true);
