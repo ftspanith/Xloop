@@ -58,6 +58,23 @@ test('Telegram message extractor tags account source and deduplicates repeated m
   for (const link of result.links) assert.equal(link.sourceAccount, '2');
 });
 
+test('promotion-only messages are excluded while mixed download promotions retain links', () => {
+  const promoOnly = {
+    id: 20, channel_id: 999, text: 'Join our channel https://t.me/xloop',
+    classification: { is_promotion: true, is_download: false },
+  };
+  const mixed = {
+    id: 21, channel_id: 999,
+    text: 'Example Film 2026 1080p [1.5GB]\nhttps://gdflix.dev/example-file',
+    classification: { is_promotion: true, is_download: true },
+  };
+  const result = extractLinksFromMessages([promoOnly, mixed], '1');
+  assert.ok(result.links.length > 0, 'mixed download/promotion should retain its download URL');
+  assert.ok(result.links.every(link => link.url.includes('gdflix.dev')));
+  assert.equal(result.uniqueMessages, 2);
+  assert.equal(result.skipped, 1);
+});
+
 test('CDN and image URLs are rejected while file hosts are retained', () => {
   assert.equal(isJunkUrl('https://example.com/poster/image.jpg'), true);
   assert.equal(isJunkUrl('https://cdn.cloudfront.net/video.m3u8'), true);
