@@ -3,7 +3,7 @@
 // Telegram message intelligence for Xloop.
 // This module is deliberately pure: no Telegram connection, filesystem, or database writes.
 
-const { classifyUrl } = require('./parser');
+const { classifyUrl, parseMessageBlock, parseManualInput } = require('./parser');
 
 const URL_RE = /\bhttps?:\/\/[^\s<>"'`]+/giu;
 const TRAILING_URL_PUNCTUATION = /[),.!?;:}\]]+$/;
@@ -50,7 +50,7 @@ function safeUrl(value) {
   let url = asString(value).trim();
   if (!url) return '';
   url = url.replace(TRAILING_URL_PUNCTUATION, '');
-  if (/^www\./i.test(url)) url = 'https://' + url;
+  if (/^www\./i.test(url) || (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url) && /^(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:[/?#]|$)/i.test(url))) url = 'https://' + url;
   try {
     const parsed = new URL(url);
     if (!['http:', 'https:', 'tg:'].includes(parsed.protocol)) return '';
@@ -88,12 +88,14 @@ function getEntities(text, entities) {
     const displayText = offset != null && length != null
       ? text.slice(offset, offset + length)
       : '';
+    const type = entityType(entity);
+    const entityUrl = safeUrl(entity.url) || (/MessageEntityUrl|MessageEntityTextUrl/i.test(type) ? safeUrl(displayText) : '');
     return {
-      type: entityType(entity),
+      type,
       offset,
       length,
       text: displayText,
-      url: safeUrl(entity.url),
+      url: entityUrl,
     };
   });
 }
@@ -136,7 +138,13 @@ function extractLinks(text, entities, buttons) {
   while ((match = URL_RE.exec(text)) !== null) add(match[0], 'message_text', '', null, null, '');
 
   (Array.isArray(entities) ? entities : []).forEach(entity => {
-    if (entity && entity.url) add(entity.url, 'message_entity', text.slice(entity.offset || 0, (entity.offset || 0) + (entity.length || 0)), null, null, entityType(entity));
+    if (!entity) return;
+    const type = entityType(entity);
+    const displayText = Number.isFinite(entity.offset) && Number.isFinite(entity.length)
+      ? text.slice(entity.offset, entity.offset + entity.length)
+      : '';
+    const entityUrl = safeUrl(entity.url) || (/MessageEntityUrl|MessageEntityTextUrl/i.test(type) ? safeUrl(displayText) : '');
+    if (entityUrl) add(entityUrl, 'message_entity', displayText, null, null, type);
   });
 
   (Array.isArray(buttons) ? buttons : []).forEach(button => {
@@ -298,6 +306,52 @@ function classifyMessage(record) {
   };
 }
 
+function extractContentMetadata(text, links, media, classification, messageId) {
+  if (!classification || !classification.is_download) return null;
+  let parsed = null;
+  try { parsed = parseMessageBlock(text || '', messageId); } catch (_) {}
+  const filename = media && media.file_name ? media.file_name : '';
+  let manual = null;
+  const fallbackInput = filename || ((MEDIA_TECH_RE.test(text || '') || FILE_NAME_RE.test(text || '')) ? String(text).split('\n')[0] : '');
+  if (fallbackInput) {
+    try { manual = parseManualInput(fallbackInput); } catch (_) {}
+  }
+
+  const downloads = parsed && Array.isArray(parsed.downloads) ? parsed.downloads : [];
+  const languages = parsed && Array.isArray(parsed.languages) && parsed.languages.length
+    ? parsed.languages
+    : (manual && manual.language ? [manual.language] : []);
+  const metadata = {
+    title: (parsed && parsed.title) || (manual && manual.title) || null,
+    raw_title: (parsed && parsed.rawTitle) || (manual && manual.raw) || null,
+    year: (parsed && parsed.year) || (manual && manual.year) || null,
+    language: (parsed && parsed.language) || (manual && manual.language) || '',
+    languages,
+    quality: parsed && parsed.quality && parsed.quality !== 'HD'
+      ? parsed.quality
+      : (manual && manual.quality && manual.quality !== 'HD' ? manual.quality : null),
+    content_type: (parsed && parsed.contentType) || (manual && manual.type) || null,
+    is_series: parsed ? !!parsed.isSeries : !!(manual && manual.type === 'series'),
+    season: parsed && parsed.season != null ? parsed.season : (manual ? manual.season : null),
+    episode: parsed && parsed.episode != null ? parsed.episode : (manual ? manual.episode : null),
+    imdb_id: (parsed && parsed.imdbId) || null,
+    tmdb_id_hint: (parsed && parsed.tmdbIdHint) || null,
+    downloads,
+    file: {
+      filename: filename || (manual && manual.raw) || null,
+      codec: (manual && manual.codec) || null,
+      container: (manual && manual.container) || null,
+      hdr: (manual && manual.hdr) || null,
+      audio: (manual && manual.audio) || null,
+      size: (manual && manual.size) || null,
+    },
+  };
+  const hasMetadata = metadata.title || metadata.year || metadata.language || metadata.quality ||
+    metadata.season != null || metadata.episode != null || metadata.downloads.length ||
+    metadata.file.filename;
+  return hasMetadata ? metadata : null;
+}
+
 function safeIsoDate(value) {
   if (value == null) return null;
   const date = value instanceof Date ? value : new Date(Number(value) * 1000);
@@ -337,6 +391,7 @@ function buildTelegramMessageRecord(msg, context) {
     account: String(context.account || '1'),
   };
   record.classification = classifyMessage(record);
+  record.content_metadata = extractContentMetadata(legacyText, links, media, record.classification, record.id);
   return record;
 }
 
@@ -435,5 +490,6 @@ module.exports = {
   getMediaMetadata,
   detectPromotion,
   classifyMessage,
+  extractContentMetadata,
   createExportArtifacts,
 };
