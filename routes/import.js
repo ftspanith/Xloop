@@ -525,11 +525,24 @@ router.post('/bulk', auth, async (req, res) => {
         }
 
         // 2. If it's a new URL, try to group it with an existing download by filename/size
-        const existingDl = existing.downloads.find(d => 
-          (d.filename && newDl.filename && d.filename === newDl.filename) || 
-          (d.size && newDl.size && d.size === newDl.size) ||
-          (d.quality === newDl.quality && d.language === newDl.language)
-        );
+        // Never merge distinct file variants merely because quality/language match.
+        // Prefer exact filename identity; only use a strict metadata signature when
+        // one or both legacy records have no filename.
+        const existingDl = existing.downloads.find(d => {
+          const oldName = String(d.filename || '').trim().toLowerCase();
+          const newName = String(newDl.filename || '').trim().toLowerCase();
+          if (oldName && newName) return oldName === newName;
+          return (
+            d.quality === newDl.quality &&
+            String(d.size || '') === String(newDl.size || '') &&
+            String(d.codec || '') === String(newDl.codec || '') &&
+            String(d.hdr || '') === String(newDl.hdr || '') &&
+            String(d.audio || '') === String(newDl.audio || '') &&
+            String(d.language || '') === String(newDl.language || '') &&
+            (d.season ?? null) === (newDl.season ?? null) &&
+            (d.episode ?? null) === (newDl.episode ?? null)
+          );
+        });
 
         if (existingDl) {
           for (const link of newDl.links) {
@@ -797,10 +810,20 @@ router.post('/manual-add', auth, async (req, res) => {
       const hasUrl = existing.downloads.some(d => d.links?.some(l => l.url === newUrl));
       if (hasUrl) continue; // exact URL already exists
 
-      const existingDl = existing.downloads.find(d => 
-        (d.filename && newDl.filename && d.filename === newDl.filename) ||
-        (d.quality === newDl.quality && d.language === newDl.language)
-      );
+      // Preserve different encodes (e.g. x264 vs HEVC) as separate rows.
+      const existingDl = existing.downloads.find(d => {
+        const oldName = String(d.filename || '').trim().toLowerCase();
+        const newName = String(newDl.filename || '').trim().toLowerCase();
+        if (oldName && newName) return oldName === newName;
+        return (
+          d.quality === newDl.quality &&
+          String(d.size || '') === String(newDl.size || '') &&
+          String(d.codec || '') === String(newDl.codec || '') &&
+          String(d.hdr || '') === String(newDl.hdr || '') &&
+          String(d.audio || '') === String(newDl.audio || '') &&
+          String(d.language || '') === String(newDl.language || '')
+        );
+      });
 
       if (existingDl) {
         for (const link of newDl.links) {
