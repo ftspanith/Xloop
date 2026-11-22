@@ -166,8 +166,8 @@ async function withRetry(fn, maxRetries = 4) {
 
 // ── Core channel scraper ──────────────────────────────────────
 async function scrapeChannel(client, channelId, { minId = 0, minDate = 0, maxDate = 0 } = {}) {
-  const peer = \`-100\${channelId}\`;
-  let channelName = \`channel_\${channelId}\`;
+  const peer = `-100${channelId}`;
+  let channelName = `channel_${channelId}`;
   let scanned = 0, collected = 0, skipped = 0, offsetId = 0;
   const msgs_out = [];
   const scanStats = { scanned: 0, captured: 0, skipped: 0, skippedReasons: [], channelErrors: [] };
@@ -175,9 +175,9 @@ async function scrapeChannel(client, channelId, { minId = 0, minDate = 0, maxDat
   try {
     const entity = await withRetry(() => client.getEntity(peer));
     channelName = entity.title || entity.username || channelName;
-    logFn(\`   Name: \${channelName}\`);
+    logFn(`   Name: ${channelName}`);
   } catch(_) {
-    logFn(\`   Could not resolve name, using ID: \${channelId}\`);
+    logFn(`   Could not resolve name, using ID: ${channelId}`);
   }
 
   while (true) {
@@ -192,7 +192,7 @@ async function scrapeChannel(client, channelId, { minId = 0, minDate = 0, maxDat
         })
       ));
     } catch(err) {
-      throw new Error(\`Channel \${channelId} fetch failed: \${err.message}\`);
+      throw new Error(`Channel ${channelId} fetch failed: ${err.message}`);
     }
 
     const msgs = batch.messages;
@@ -233,17 +233,17 @@ async function scrapeChannel(client, channelId, { minId = 0, minDate = 0, maxDat
           reason: 'message_serialization_error',
           error: String(error && error.message || error).slice(0, 240),
         });
-        logFn(\`   [WARN] Could not serialize message \${msg.id}: \${error.message || error}\`);
+        logFn(`   [WARN] Could not serialize message ${msg.id}: ${error.message || error}`);
       }
     }
     offsetId = msgs[msgs.length - 1].id;
-    logFn(\`   Scanned \${scanned} | Captured \${collected} | Skipped \${skipped}\`);
+    logFn(`   Scanned ${scanned} | Captured ${collected} | Skipped ${skipped}`);
 
     if (hitBoundary || msgs.length < BATCH_SIZE) break;
     await sleep(INTER_BATCH_DELAY);
   }
 
-  logFn(\`   Done: \${scanned} scanned → \${collected} captured (\${skipped} unsupported records)\`);
+  logFn(`   Done: ${scanned} scanned → ${collected} captured (${skipped} unsupported records)`);
   return { messages: msgs_out, stats: scanStats };
 }
 // ── Parallel pool executor ────────────────────────────────────
@@ -278,7 +278,7 @@ function deduplicateMessages(messages) {
 
 // ── Save output ───────────────────────────────────────────────
 function writeJsonAtomic(filePath, value) {
-  const tmp = \`\${filePath}.tmp\`;
+  const tmp = `${filePath}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
   fs.renameSync(tmp, filePath);
 }
@@ -296,9 +296,9 @@ function saveOutput(newMessages, modeLabel, existingMessages = [], scanStats = {
   });
   const suffix = PROFILE === 2 ? '_2' : '';
   const sidecars = [
-    [\`telegram_shortlinks\${suffix}.json\`, artifacts.shortlinks],
-    [\`telegram_review\${suffix}.json\`, artifacts.review],
-    [\`telegram_scan_report\${suffix}.json\`, artifacts.report],
+    [`telegram_shortlinks${suffix}.json`, artifacts.shortlinks],
+    [`telegram_review${suffix}.json`, artifacts.review],
+    [`telegram_scan_report${suffix}.json`, artifacts.report],
   ];
 
   // Preserve the canonical import file and add derived sidecars without a promotions file.
@@ -307,20 +307,20 @@ function saveOutput(newMessages, modeLabel, existingMessages = [], scanStats = {
 
   const downloadsDir = path.join(os.homedir(), 'storage', 'downloads');
   const dateStr = exportedAt.slice(0, 10);
-  const fileName = \`xloop_\${modeLabel}_\${ACCOUNT_NAME}_\${dateStr}_\${merged.length}msgs.json\`;
+  const fileName = `xloop_${modeLabel}_${ACCOUNT_NAME}_${dateStr}_${merged.length}msgs.json`;
   try {
     if (!fs.existsSync(downloadsDir)) {
       throw new Error('Android shared Downloads is unavailable; run termux-setup-storage first.');
     }
     writeJsonAtomic(path.join(downloadsDir, fileName), artifacts.main);
     sidecars.forEach(([name, data]) => writeJsonAtomic(path.join(downloadsDir, name), data));
-    logFn(\`   Android Downloads: \${fileName} + \${sidecars.length} sidecar exports\`);
+    logFn(`   Android Downloads: ${fileName} + ${sidecars.length} sidecar exports`);
   } catch(error) {
-    logFn(\`   Android Downloads unavailable (\${error.message}); canonical exports remain in Xloop folder.\`);
+    logFn(`   Android Downloads unavailable (${error.message}); canonical exports remain in Xloop folder.`);
   }
 
-  logFn(\`   Main export      : \${EXPORT_FILE}\`);
-  sidecars.forEach(([name]) => logFn(\`   Sidecar export   : \${path.join(__dirname, name)}\`));
+  logFn(`   Main export      : ${EXPORT_FILE}`);
+  sidecars.forEach(([name]) => logFn(`   Sidecar export   : ${path.join(__dirname, name)}`));
   return merged.length;
 }
 // ── MAIN ─────────────────────────────────────────────────────
@@ -420,7 +420,7 @@ let client;
 
     const tasks = group.map((channelId) => async () => {
       globalIdx++;
-      logFn(\`\n[\${globalIdx}/\${totalChannels}] Channel: \${channelId}\`);
+      logFn(`\n[${globalIdx}/${totalChannels}] Channel: ${channelId}`);
       try {
         const result = await scrapeChannel(client, channelId, {
           minId: minIdMap[channelId] || 0,
@@ -442,7 +442,7 @@ let client;
       if (!result) continue;
       if (!result.ok) {
         scanStats.channelErrors.push({ channel_id: result.channelId, error: result.error });
-        logFn(\`   [CHANNEL ERROR] \${result.channelId}: \${result.error}\`);
+        logFn(`   [CHANNEL ERROR] ${result.channelId}: ${result.error}`);
         continue;
       }
       allNew.push(...result.messages);
