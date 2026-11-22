@@ -264,7 +264,8 @@ function classifyMessage(record) {
   const media = record.media;
   const promotion = detectPromotion(record.raw_text || '', record.buttons || [], links);
   const fileMedia = !!(media && ['document', 'video', 'audio', 'voice', 'animation'].includes(media.media_type));
-  const knownDownloadHost = links.some(link => DOWNLOAD_HOSTS.has(link.host_class));
+  const knownDownloadHost = links.some(link => DOWNLOAD_HOSTS.has(link.host_class) &&
+    (link.host_class !== 'Shortlink' || !promotion.detected));
   const downloadButton = (record.buttons || []).some(button => DOWNLOAD_CTA_RE.test(button.text || '') || MEDIA_TECH_RE.test(button.text || ''));
   const filenameEvidence = FILE_NAME_RE.test(text) || !!(media && media.file_name);
   const technicalEvidence = MEDIA_TECH_RE.test(text);
@@ -284,7 +285,7 @@ function classifyMessage(record) {
     if (link.host_class === 'Ignore' && (promotion.detected || promoLabel)) link.purpose = 'promotion';
     else if (promoLabel) link.purpose = 'promotion';
     else if (DOWNLOAD_CTA_RE.test(link.labels.join(' ')) || (isDownload && link.host_class !== 'Ignore')) link.purpose = 'download';
-    else if (promotion.detected && TELEGRAM_HOST_RE.test(link.host || '')) link.purpose = 'promotion';
+    else if (promotion.detected && (TELEGRAM_HOST_RE.test(link.host || '') || !isDownload)) link.purpose = 'promotion';
     else if (needsReview) link.purpose = 'review';
   });
 
