@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   buildTelegramMessageRecord,
+  enrichRelatedMessageMetadata,
   createExportArtifacts,
 } = require('../utils/telegram-intelligence');
 
@@ -72,6 +73,36 @@ test('captures ordinary visible URLs even when no Telegram entity or button exis
   assert.equal(record.links.length, 1);
   assert.equal(record.links[0].sources[0], 'message_text');
   assert.equal(record.classification.is_download, true);
+});
+
+test('captures Telegram webpage preview URL and metadata without treating preview as a file attachment', () => {
+  const record = buildTelegramMessageRecord({
+    id: 109,
+    date: 1795305600,
+    message: 'Open this article',
+    media: {
+      className: 'MessageMediaWebPage',
+      webpage: {
+        url: 'https://example.org/movie-page',
+        displayUrl: 'example.org/movie-page',
+        siteName: 'Example',
+        title: 'Example Movie',
+        description: 'Movie details and synopsis',
+        author: 'Editorial',
+        type: 'article',
+        embedUrl: 'https://player.example.org/embed/123',
+        duration: 120,
+      },
+    },
+  }, baseContext());
+
+  assert.equal(record.media.media_type, 'webpage');
+  assert.equal(record.media.is_webpage_preview, true);
+  assert.equal(record.media.webpage.title, 'Example Movie');
+  assert.equal(record.media.webpage.site_name, 'Example');
+  assert.equal(record.media.webpage.duration, 120);
+  assert.ok(record.links.some(link => link.url === 'https://example.org/movie-page' && link.sources.includes('webpage_preview')));
+  assert.equal(record.classification.evidence.file_media, false);
 });
 
 test('promotion-only Join/Subscribe post is retained and classified as promotion', () => {
@@ -156,6 +187,88 @@ test('extracts Telegram document and video/audio metadata without BigInt JSON fa
   assert.ok(record.content_metadata);
   assert.equal(record.content_metadata.file.filename, 'Example.Film.2026.1080p.WEB-DL.x265.mkv');
   assert.doesNotThrow(() => JSON.stringify(record));
+});
+
+test('related album metadata fills missing descriptive fields but keeps per-file quality', () => {
+  const messages = [
+    {
+      id: 201,
+      channel_id: 999,
+      grouped_media_id: 'album-77',
+      content_metadata: {
+        title: 'Example Movie',
+        raw_title: 'Example.Movie.2026',
+        year: 2026,
+        language: 'Telugu',
+        languages: ['Telugu', 'Hindi'],
+        quality: '1080p',
+        content_type: 'movie',
+        is_series: false,
+        season: null,
+        episode: null,
+        imdb_id: 'tt1234567',
+        tmdb_id_hint: null,
+        downloads: [],
+        file: { filename: 'Example.Movie.1080p.mkv' },
+      },
+    },
+    {
+      id: 202,
+      channel_id: 999,
+      grouped_media_id: 'album-77',
+      content_metadata: {
+        title: null,
+        raw_title: null,
+        year: null,
+        language: '',
+        languages: [],
+        quality: '720p',
+        content_type: null,
+        is_series: false,
+        season: null,
+        episode: null,
+        imdb_id: null,
+        tmdb_id_hint: null,
+        downloads: [],
+        file: { filename: 'Example.Movie.720p.mkv' },
+      },
+    },
+  ];
+
+  const count = enrichRelatedMessageMetadata(messages);
+  assert.equal(count, 1);
+  assert.equal(messages[1].content_metadata.title, 'Example Movie');
+  assert.equal(messages[1].content_metadata.year, 2026);
+  assert.deepEqual(messages[1].content_metadata.languages, ['Telugu', 'Hindi']);
+  assert.equal(messages[1].content_metadata.quality, '720p');
+  assert.equal(messages[1].content_metadata.file.filename, 'Example.Movie.720p.mkv');
+  assert.deepEqual(messages[1].content_metadata.related_sources, [{
+    channel_id: 999,
+    message_id: 201,
+    relation: 'album',
+  }]);
+});
+
+test('related reply metadata is isolated to the same Telegram channel', () => {
+  const parent = {
+    id: 301, channel_id: 999,
+    content_metadata: { title: 'Reply Parent', year: 2025, language: 'Telugu' },
+  };
+  const child = {
+    id: 302, channel_id: 999,
+    reply_to: { message_id: 301 },
+    content_metadata: { title: null, year: null, language: '' },
+  };
+  const unrelated = {
+    id: 303, channel_id: 1000,
+    reply_to: { message_id: 301 },
+    content_metadata: { title: null, year: null, language: '' },
+  };
+
+  const count = enrichRelatedMessageMetadata([parent, child, unrelated]);
+  assert.equal(count, 1);
+  assert.equal(child.content_metadata.title, 'Reply Parent');
+  assert.equal(unrelated.content_metadata.title, null);
 });
 
 test('shortlinks are preserved verbatim and never resolved or bypassed', () => {
