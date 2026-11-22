@@ -71,6 +71,20 @@ function extractTitleFromStreamingUrl(url) {
   return '';
 }
 
+// Normalize every GDFlix subdomain to the canonical base domain.
+// Keep path, query, fragment and protocol unchanged.
+function normalizeGdflixUrl(value) {
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'gdflix.dev' || host.endsWith('.gdflix.dev')) {
+      parsed.hostname = 'gdflix.dev';
+      return parsed.toString();
+    }
+  } catch (_) {}
+  return value;
+}
+
 // ─── URL CLASSIFIER ──────────────────────────────────────────────────────────
 const DIRECT_RE = [
   /gdflix\.(dev|to|one|link|net|dad|cfd|io)/i, /gdlink\.dev/i,
@@ -1095,7 +1109,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const source = detectSource(rawFn) || null;
     if (!fileMap[key]) fileMap[key]={quality,size,hdr,codec,audio,source,filename:stripEmojis(rawFn).trim()||cleanedTitle,language:fileLang,season:fs,episode:fe,links:[]};
     if (!fileMap[key].links.find(l=>l.url===pair.url)) {
-      fileMap[key].links.push({host:detectHost(pair.url),url:pair.url,isFast:/gdflix|hubcloud|gdlink/i.test(pair.url)});
+      fileMap[key].links.push({host:detectHost(pair.url),url:normalizeGdflixUrl(pair.url),isFast:/gdflix\.dev|hubcloud|gdlink/i.test(pair.url)});
     }
   }
 
