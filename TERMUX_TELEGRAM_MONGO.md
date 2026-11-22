@@ -16,7 +16,7 @@ cp .env.example .env
 nano .env
 ```
 
-First fill the Telegram API ID and API hash values in the local `.env` for both accounts. Get those credentials from `https://my.telegram.org/apps`. Set **both** `TG_CHANNELS_1` and `TG_CHANNELS_2` to comma-separated numeric IDs of the specific channels/groups each account is allowed to scrape. The lists can be different or overlap. Both are mandatory: the scraper stops if either list is missing or invalid, and it never falls back to a built-in/default channel list.
+First fill the Telegram API ID and API hash values in the local `.env` for both accounts. Get those credentials from `https://my.telegram.org/apps`. The recovered channel lists are already prefilled in `.env.example`: Account 1 has the 20 IDs from the existing scraper configuration; Account 2 has the 4 IDs recovered from its existing full export (including `$𝚝𝚘𝚠¥ 𝙴𝚗𝙲𝚘𝙳𝚎𝚂`, `PMi-XD`, `NAPA Pulse`, and `KiNGSMAN Official`). Keep or edit those comma-separated IDs as needed. Both `TG_CHANNELS_1` and `TG_CHANNELS_2` are mandatory: the scraper stops if either list is missing or invalid, and it never falls back to a built-in/default channel list.
 
 Do not paste API hashes, Telegram session strings, OTPs, 2-step passwords, or MongoDB connection strings into chat or commit them to Git.
 
