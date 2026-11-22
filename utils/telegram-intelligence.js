@@ -19,7 +19,7 @@ const PROMOTION_PATTERNS = [
 ];
 
 const DOWNLOAD_HOSTS = new Set([
-  'Shortlink', 'GDFlix', 'HubCloud', 'FilePress', 'TMBCloud', 'DriveNext',
+  'GDFlix', 'HubCloud', 'FilePress', 'TMBCloud', 'DriveNext',
   'DTFlix', 'FileBee', 'StreamTape', 'MixDrop', 'DoodStream', 'BuzzHeavier',
   'PixelDrain', '1Fichier', 'CatBox', 'Direct',
 ]);
@@ -264,13 +264,14 @@ function classifyMessage(record) {
   const media = record.media;
   const promotion = detectPromotion(record.raw_text || '', record.buttons || [], links);
   const fileMedia = !!(media && ['document', 'video', 'audio', 'voice', 'animation'].includes(media.media_type));
-  const knownDownloadHost = links.some(link => DOWNLOAD_HOSTS.has(link.host_class) &&
-    (link.host_class !== 'Shortlink' || !promotion.detected));
+  const knownDownloadHost = links.some(link => DOWNLOAD_HOSTS.has(link.host_class));
+  const shortlinkWithDownloadLabel = links.some(link => link.host_class === 'Shortlink' &&
+    (DOWNLOAD_CTA_RE.test((link.labels || []).join(' ')) || MEDIA_TECH_RE.test((link.labels || []).join(' '))));
   const downloadButton = (record.buttons || []).some(button => DOWNLOAD_CTA_RE.test(button.text || '') || MEDIA_TECH_RE.test(button.text || ''));
   const filenameEvidence = FILE_NAME_RE.test(text) || !!(media && media.file_name);
   const technicalEvidence = MEDIA_TECH_RE.test(text);
   const downloadCta = DOWNLOAD_CTA_RE.test(text);
-  const hasDownloadEvidence = fileMedia || knownDownloadHost || downloadButton || filenameEvidence || technicalEvidence || downloadCta;
+  const hasDownloadEvidence = fileMedia || knownDownloadHost || shortlinkWithDownloadLabel || downloadButton || filenameEvidence || technicalEvidence || downloadCta;
   const isDownload = hasDownloadEvidence;
   const isPromotion = promotion.detected;
   const needsReview = !isDownload && !isPromotion && links.length > 0;
@@ -299,6 +300,7 @@ function classifyMessage(record) {
     evidence: {
       file_media: fileMedia,
       known_download_host: knownDownloadHost,
+      shortlink_with_download_label: shortlinkWithDownloadLabel,
       download_button: downloadButton,
       filename: filenameEvidence,
       technical_metadata: technicalEvidence,
