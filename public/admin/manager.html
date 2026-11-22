@@ -302,7 +302,8 @@
       <div class="stat-pill">Showing: <strong id="stat-showing">—</strong></div>
     </div>
 
-    <div id="search-results" class="movie-grid"></div>
+    <div class="card-title" style="margin:8px 0 14px;">Recent Contents <span style="font-size:0.75rem;color:var(--muted);font-weight:500;">(newly added first)</span></div>
+    <div id="search-results" class="movie-grid" aria-live="polite"></div>
     <div class="pagination" id="pagination"></div>
   </div>
 
@@ -559,11 +560,20 @@ function showStatus(id, msg, type) {
 function hideStatus(id) { document.getElementById(id).className = 'status'; }
 
 async function apiCall(method, path, body) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const r = await fetch(path, {
-    method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    method,
+    headers,
+    cache: 'no-store',
     body: body ? JSON.stringify(body) : undefined
   });
-  return r.json();
+  const raw = await r.text();
+  let data;
+  try { data = raw ? JSON.parse(raw) : {}; }
+  catch { throw new Error(`API returned non-JSON response (HTTP ${r.status})`); }
+  if (!r.ok) throw new Error(data.message || `Request failed (HTTP ${r.status})`);
+  return data;
 }
 
 //  Search & Load 
@@ -629,7 +639,7 @@ async function loadSearch() {
   const showingEl = document.getElementById('stat-showing');
   const q = document.getElementById('search-input').value.trim();
   currentQuery = q;
-  let url = `/api/movies?page=${currentPage}&limit=18&sort=updatedAt`;
+  let url = `/api/movies?page=${currentPage}&limit=18&sort=createdAt`;
   if (q) url += `&search=${encodeURIComponent(q)}`;
   if (['movie', 'series', 'anime'].includes(currentFilter)) url += `&type=${currentFilter}`;
   else if (currentFilter === 'all') url += '&type=all';
@@ -985,7 +995,6 @@ async function deleteMovie() {
 
 //  Init 
 addLinkRow();
-loadSearch();
 
   // ── Mobile sidebar ────────────────────────────────────────
 </script>
