@@ -1034,6 +1034,13 @@ loadSearch();
     }
   }
 })();
+
+
+// Load the default Search & Manage tab on first page visit.
+// Without this call the grid stays blank until the user switches tabs.
+if (document.getElementById('tab-search')?.classList.contains('active')) {
+  loadSearch();
+}
 </script>
 </body>
 </html>
