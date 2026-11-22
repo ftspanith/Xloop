@@ -276,7 +276,7 @@ async function uploadExport(token, mergeMode = false) {
         const entry = { messageId: parsed.messageId, title: parsed.title, year: parsed.year,
           contentType: parsed.contentType, isSeries: parsed.isSeries,
           season: dl.season??parsed.season, episode: dl.episode??parsed.episode,
-          language: lang, quality: dl.quality, size: dl.size, filename: dl.filename,
+          language: lang, quality: dl.quality, size: dl.size, filename: dl.filename,\n          codec: dl.codec || '', hdr: dl.hdr || '', audio: dl.audio || '', bitDepth: dl.bitDepth || '', audioChannels: dl.audioChannels || '',
           host: urlType, url, bypassedUrl: null,
           isFast: /gdflix|hubcloud|gdlink|tmbcloud|fpgo|filebee/i.test(url),
           imdbId: parsed.imdbId||null, tmdbIdHint: parsed.tmdbIdHint||null };
