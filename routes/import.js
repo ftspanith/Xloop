@@ -1048,4 +1048,68 @@ router.post('/manual-batch', auth, async (req, res) => {
   res.json({ message: `Processed ${results.length} title groups`, results });
 });
 
+
+// ── POST /api/import/normalize-links-batch ──────────────────────────────────
+// Safely migrate existing GDFlix/HubCloud links in small resumable batches.
+router.post('/normalize-links-batch', auth, async (req, res) => {
+  try {
+    const batchSize = Math.min(50, Math.max(1, parseInt(req.body?.batchSize, 10) || 15));
+    const lastId = req.body?.lastId || null;
+    const filter = { downloads: { $exists: true, $ne: [] } };
+    const total = await Movie.countDocuments(filter);
+    const pageFilter = lastId
+      ? { ...filter, _id: { $gt: lastId } }
+      : filter;
+    const movies = await Movie.find(pageFilter)
+      .select('_id downloads')
+      .sort({ _id: 1 })
+      .limit(batchSize)
+      .lean();
+
+    let changedMovies = 0;
+    let changedLinks = 0;
+    for (const movie of movies) {
+      let movieChanged = false;
+      for (const download of (movie.downloads || [])) {
+        for (const link of (download.links || [])) {
+          const oldUrl = String(link.url || '');
+          const newUrl = normalizeGdflixUrl(oldUrl);
+          let newHost = link.host || 'Download';
+          if (/^https?:\\/\\/(?:[^/]+\\.)?gdflix\\.dev(?:[/:?#]|$)/i.test(newUrl)) newHost = 'GDFlix';
+          else if (/^https?:\\/\\/(?:[^/]+\\.)?hubcloud\\.one(?:[/:?#]|$)/i.test(newUrl)) newHost = 'HubCloud';
+          if (newUrl !== oldUrl || newHost !== (link.host || 'Download')) {
+            link.url = newUrl;
+            link.host = newHost;
+            if (newHost === 'GDFlix' || newHost === 'HubCloud') link.isFast = true;
+            changedLinks++;
+            movieChanged = true;
+          }
+        }
+      }
+      if (movieChanged) {
+        await Movie.updateOne(
+          { _id: movie._id },
+          { $set: { downloads: movie.downloads } }
+        );
+        changedMovies++;
+      }
+      // Yield between records so this migration stays gentle on the database.
+      await sleep(35);
+    }
+
+    const nextCursor = movies.length ? String(movies[movies.length - 1]._id) : lastId;
+    res.json({
+      success: true,
+      total,
+      scanned: movies.length,
+      changedMovies,
+      changedLinks,
+      nextCursor,
+      done: movies.length < batchSize
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Link normalization failed: ' + err.message });
+  }
+});
+
 module.exports = router;
