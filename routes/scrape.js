@@ -10,6 +10,7 @@ const { spawn } = require('child_process');
 const path     = require('path');
 const fs       = require('fs');
 const auth     = require('../middleware/auth');
+const { analyzeVariantSet } = require('../utils/variant-intelligence');
 
 const ROOT          = path.join(__dirname, '..');
 const SCRAPE_SCRIPT = path.join(ROOT, 'scrape_api.js');
@@ -637,12 +638,13 @@ router.get('/collection-links', auth, async (req, res) => {
 
     const regex = new RegExp('^' + title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
     const links = await ExtractedLink.find({ title: regex })
-      .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
+      .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio')
       .sort({ quality: -1, size: -1 })
       .maxTimeMS(8000)
       .lean();
 
-    res.json({ title, count: links.length, links });
+    const variantAnalysis = analyzeVariantSet(links.map(link => ({ ...link, source: require('../utils/parser').detectSource(link.filename || '') })));
+    res.json({ title, count: links.length, links, variantAnalysis });
   } catch (err) {
     res.status(500).json({ error: err.message, links: [] });
   }
@@ -718,7 +720,8 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
     const titles = [...new Set(links.map(l => l.title).filter(Boolean))];
     const displayTitle = titles.sort((a, b) => a.length - b.length)[0] || q;
 
-    res.json({ query: q, year, displayTitle, count: links.length, links });
+    const variantAnalysis = analyzeVariantSet(links.map(link => ({ ...link, source: require('../utils/parser').detectSource(link.filename || '') })));
+    res.json({ query: q, year, displayTitle, count: links.length, links, variantAnalysis });
   } catch (err) {
     res.status(500).json({ error: err.message, links: [] });
   }
