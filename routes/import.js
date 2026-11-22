@@ -40,6 +40,19 @@ function normalizeQuality(str) {
   return 'HD';
 }
 
+// Canonicalize GDFlix subdomains while preserving each link's path and query.
+function normalizeGdflixUrl(value) {
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'gdflix.dev' || host.endsWith('.gdflix.dev')) {
+      parsed.hostname = 'gdflix.dev';
+      return parsed.toString();
+    }
+  } catch (_) {}
+  return value;
+}
+
 // Host detector
 function detectHost(url) {
   if (/gdfilx\.dev|gdflix/i.test(url)) return 'GDFlix';
@@ -764,7 +777,7 @@ router.post('/manual-add', auth, async (req, res) => {
       codec:    link.codec    || detectCodec(fn)    || 'Other',
       hdr:      link.hdr      || detectHDR(fn)      || null,
       audio:    link.audio    || extractAudio(fn)   || null,
-      links: [{ host: detectHost(link.url), url: link.url, isFast: /gdfilx\.dev|gdflix|hubcloud|gdlink/i.test(link.url) }],
+      links: [{ host: detectHost(link.url), url: normalizeGdflixUrl(link.url), isFast: /gdflix\.dev|hubcloud|gdlink/i.test(link.url) }],
     };
   });
 
@@ -988,7 +1001,7 @@ router.post('/manual-batch', auth, async (req, res) => {
           codec, hdr, audio,
           season:  item.season  ?? null,
           episode: item.episode ?? null,
-          links: [{ host, url: link.url, isFast: /gdfilx\.dev|gdflix|hubcloud|gdlink/i.test(link.url) }],
+          links: [{ host, url: normalizeGdflixUrl(link.url), isFast: /gdflix\.dev|hubcloud|gdlink/i.test(link.url) }],
         });
       }
     }
