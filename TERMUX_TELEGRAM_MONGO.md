@@ -16,7 +16,7 @@ cp .env.example .env
 nano .env
 ```
 
-First fill only the Telegram API ID and API hash values in the local `.env` for both accounts. Get those credentials from `https://my.telegram.org/apps`. Account 2 must also have `TG_CHANNELS_2` set to its comma-separated numeric channel IDs. Account 1 uses the scraper's built-in channel list unless `TG_CHANNELS_1` is configured.
+First fill the Telegram API ID and API hash values in the local `.env` for both accounts. Get those credentials from `https://my.telegram.org/apps`. Set **both** `TG_CHANNELS_1` and `TG_CHANNELS_2` to comma-separated numeric IDs of the specific channels/groups each account is allowed to scrape. The lists can be different or overlap. Both are mandatory: the scraper stops if either list is missing or invalid, and it never falls back to a built-in/default channel list.
 
 Do not paste API hashes, Telegram session strings, OTPs, 2-step passwords, or MongoDB connection strings into chat or commit them to Git.
 
@@ -45,7 +45,7 @@ Run:
 npm run scrape:both:json
 ```
 
-This runs Account 1 first, then Account 2, each in full-history mode (`--mode=1`). The scraper writes:
+This runs Account 1 first, then Account 2, each in full-history mode (`--mode=1`). Each account scrapes only the channel/group IDs in its own allowlist (`TG_CHANNELS_1` or `TG_CHANNELS_2`); no other chats are scanned. The scraper writes:
 
 - `telegram_export.json` — Account 1
 - `telegram_export_2.json` — Account 2
