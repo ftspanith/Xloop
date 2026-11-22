@@ -679,10 +679,10 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
 
     const [titleLinks, fileLinks] = await Promise.all([
       ExtractedLink.find(titleFilter)
-        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio')
         .lean(),
       ExtractedLink.find(fileFilter)
-        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio')
         .lean(),
     ]);
     const seenInit = new Set(titleLinks.map(l => l.url));
@@ -694,7 +694,7 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
       const looseFilter = { $or: [{ title: looseRegex }, { filename: looseRegex }] };
       if (year && /^\d{4}$/.test(year)) looseFilter.year = parseInt(year, 10);
       const looseLinks = await ExtractedLink.find(looseFilter)
-        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio')
         .lean();
       const seen2 = new Set(links.map(l => l.url));
       links = [...links, ...looseLinks.filter(l => !seen2.has(l.url))];
