@@ -62,4 +62,5 @@ test('CDN and image URLs are rejected while file hosts are retained', () => {
   assert.equal(isJunkUrl('https://example.com/poster/image.jpg'), true);
   assert.equal(isJunkUrl('https://cdn.cloudfront.net/video.m3u8'), true);
   assert.equal(isJunkUrl('https://gdflix.dev/file/123'), false);
+  assert.equal(isJunkUrl('https://filepress.in/uploads/abc123'), false);
 });
