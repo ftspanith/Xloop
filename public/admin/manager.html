@@ -96,7 +96,13 @@
     /*  Search  */
     .search-bar { position: relative; margin-bottom: 20px; }
     .search-bar input { padding-left: 44px; font-size: 1rem; height: 48px; }
-    .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 1.1rem; color: var(--muted); pointer-events: none; }
+    .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; display:flex; align-items:center; }
+    .search-icon svg { width:18px; height:18px; display:block; }
+    .card-title .title-icon { display:inline-flex; align-items:center; justify-content:center; color:var(--accent); margin-right:3px; vertical-align:middle; }
+    .card-title .title-icon svg { width:17px; height:17px; display:block; }
+    .modal-close svg { width:16px; height:16px; display:block; }
+    .icon-action { display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+    .icon-action svg { width:14px; height:14px; flex:0 0 auto; }
     .search-filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
     .filter-chip { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 0.82rem; cursor: pointer; transition: all 0.2s; }
     .filter-chip.active { border-color: var(--accent); color: var(--accent); background: rgba(229,9,20,0.1); }
@@ -239,7 +245,7 @@
 
   <!-- API Keys (shared) -->
   <div class="card" style="margin-bottom:20px;">
-    <div class="card-title"><span></span> API Keys (Required for metadata fetch)</div>
+    <div class="card-title"><span class="title-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg></span> API Keys (Required for metadata fetch)</div>
     <div class="form-row">
       <div class="form-group" style="margin-bottom:0">
         <label>TMDB API Key</label>
@@ -281,7 +287,7 @@
       </div>
     </div>
     <div class="search-bar">
-      <span class="search-icon"></span>
+      <span class="search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></span>
       <input type="text" id="search-input" placeholder="Search by title, language, genre, year..." oninput="debounceSearch()">
     </div>
 
@@ -312,7 +318,7 @@
     
     <!-- QUICK PASTE SECTION -->
     <div class="card" style="margin-bottom:20px; border-color:var(--accent);">
-      <div class="card-title"><span></span> Quick Paste Auto-Import</div>
+      <div class="card-title"><span class="title-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5V3h6v1.5M8 10h8M8 14h8M8 18h5"/></svg></span> Quick Paste Auto-Import</div>
       <p style="font-size:0.85rem; color:var(--text2); margin-bottom:12px;">
         Paste text exactly as you would send it on Telegram (filename + URL). The system will automatically detect the movie, fetch TMDB posters, and publish it immediately.
       </p>
@@ -325,7 +331,7 @@
 
     <!-- MANUAL ADD SECTION -->
     <div class="card">
-      <div class="card-title"><span></span> Manual Entry (Overrides)</div>
+      <div class="card-title"><span class="title-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></span> Manual Entry (Overrides)</div>
 
       <div class="form-row">
         <div class="form-group" style="margin-bottom:0">
@@ -397,7 +403,7 @@
     </div>
 
     <div class="card">
-      <div class="card-title"><span></span> Download Links</div>
+      <div class="card-title"><span class="title-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.1 0l-3 3A5 5 0 0 0 12 21.1l1.7-1.7"/></svg></span> Download Links</div>
       <p style="font-size:0.82rem;color:var(--muted);margin-bottom:16px;">Paste one download URL per row. Fill in filename and size for best results.</p>
 
       <div id="links-container">
@@ -418,7 +424,7 @@
 <!--  EDIT MODAL  -->
 <div class="modal-overlay" id="edit-modal">
   <div class="modal">
-    <button class="modal-close" onclick="closeModal()"></button>
+    <button class="modal-close" type="button" onclick="closeModal()" aria-label="Close edit window" title="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="m18 6-12 12M6 6l12 12"/></svg></button>
     <div class="modal-title"> Edit Movie</div>
 
     <input type="hidden" id="edit-id">
@@ -744,7 +750,7 @@ function addLinkRow(url='', filename='', size='', lang='Telugu') {
     <div><label style="display:${c.children.length>0?'none':'block'}">Size</label>
       <input type="text" placeholder="2.1 GB" value="${escapeHtml(size)}" style="width:100px;"></div>
     <div style="padding-top:${c.children.length>0?0:22}px">
-      <button class="btn btn-danger btn-sm" onclick="this.closest('.link-row').remove()"></button>
+      <button class="btn btn-danger btn-sm icon-action" type="button" onclick="this.closest('.link-row').remove()" aria-label="Remove this link row" title="Remove link row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg><span>Remove</span></button>
     </div>
   `;
   c.appendChild(div);
@@ -756,7 +762,12 @@ async function fetchPreview() {
   if (!title) return showStatus('fetch-status', 'Please enter a title first.', 'error');
   const { tmdbKey, omdbKey } = getKeys();
   showStatus('fetch-status', ' Fetching from TMDB...', 'loading');
-  const data = await apiCall('POST', '/api/import/fetch-meta', { title, year: year ? parseInt(year) : null, tmdbKey, omdbKey });
+  let data;
+  try {
+    data = await apiCall('POST', '/api/import/fetch-meta', { title, year: year ? parseInt(year) : null, tmdbKey, omdbKey });
+  } catch (err) {
+    return showStatus('fetch-status', err.message || 'Metadata lookup failed.', 'error');
+  }
   if (data.message) return showStatus('fetch-status', data.message, 'error');
   previewMeta = data;
   document.getElementById('preview-poster').src = data.poster || '/images/placeholder.svg';
@@ -807,16 +818,20 @@ async function submitManualAdd(overwrite=false) {
     links, tmdbKey, omdbKey, overwrite
   };
 
-  const data = await apiCall('POST', '/api/import/manual-add', payload);
-  if (data.movie) {
-    showStatus('add-status', data.message, 'success');
-    document.getElementById('links-container').innerHTML = '';
-    document.getElementById('add-title').value = '';
-    document.getElementById('add-year').value = '';
-    clearPreview();
-    debounceSearch(); // Refresh search list
-  } else {
-    showStatus('add-status', data.message || 'Error saving movie.', 'error');
+  try {
+    const data = await apiCall('POST', '/api/import/manual-add', payload);
+    if (data.movie) {
+      showStatus('add-status', data.message, 'success');
+      document.getElementById('links-container').innerHTML = '';
+      document.getElementById('add-title').value = '';
+      document.getElementById('add-year').value = '';
+      clearPreview();
+      debounceSearch(); // Refresh search list
+    } else {
+      showStatus('add-status', data.message || 'Error saving movie.', 'error');
+    }
+  } catch (err) {
+    showStatus('add-status', err.message || 'Could not save this content.', 'error');
   }
 }
 
@@ -891,10 +906,10 @@ function openEdit(movie) {
   dl.innerHTML = (movie.downloads || []).map((d, di) => `
     <div class="dl-item" id="dl-${di}">
       <div class="dl-item-head">
-        <div class="dl-item-name" title="${d.filename||''}">${d.filename || 'Unnamed file'}</div>
+        <div class="dl-item-name" title="${escapeHtml(d.filename || '')}">${d.filename || 'Unnamed file'}</div>
         <span class="badge badge-blue">${d.quality||''}</span>
         <span class="badge badge-green">${d.size||''}</span>
-        <button class="btn btn-danger btn-sm" onclick="removeDl(${di})"></button>
+        <button class="btn btn-danger btn-sm icon-action" type="button" onclick="removeDl(${di})" aria-label="Remove this download file" title="Remove file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg><span>Remove</span></button>
       </div>
       <div class="dl-link-list">
         ${(d.links||[]).map((l,li) => `
@@ -997,12 +1012,16 @@ async function saveEdit() {
     downloads:   editMovieData.downloads,
   };
   showStatus('edit-status', ' Saving...', 'loading');
-  const data = await apiCall('PATCH', `/api/import/update-movie/${id}`, body);
-  if (data.movie) {
-    showStatus('edit-status', ' Saved successfully!', 'success');
-    setTimeout(() => { closeModal(); loadSearch(); }, 1000);
-  } else {
-    showStatus('edit-status', data.message || 'Error saving.', 'error');
+  try {
+    const data = await apiCall('PATCH', `/api/import/update-movie/${id}`, body);
+    if (data.movie) {
+      showStatus('edit-status', ' Saved successfully!', 'success');
+      setTimeout(() => { closeModal(); loadSearch(); }, 1000);
+    } else {
+      showStatus('edit-status', data.message || 'Error saving.', 'error');
+    }
+  } catch (err) {
+    showStatus('edit-status', err.message || 'Could not save changes.', 'error');
   }
 }
 
@@ -1010,9 +1029,13 @@ async function deleteMovie() {
   if (!confirm(' Are you sure you want to PERMANENTLY delete this movie and all its download links?')) return;
   const id = document.getElementById('edit-id').value;
   showStatus('edit-status', ' Deleting...', 'loading');
-  const data = await apiCall('DELETE', `/api/import/delete-movie/${id}`);
-  showStatus('edit-status', data.message || 'Deleted!', 'success');
-  setTimeout(() => { closeModal(); loadSearch(); }, 800);
+  try {
+    const data = await apiCall('DELETE', `/api/import/delete-movie/${id}`);
+    showStatus('edit-status', data.message || 'Deleted!', 'success');
+    setTimeout(() => { closeModal(); loadSearch(); }, 800);
+  } catch (err) {
+    showStatus('edit-status', err.message || 'Could not delete this content.', 'error');
+  }
 }
 
 //  Init 
