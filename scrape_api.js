@@ -95,14 +95,17 @@ const TG_SESSION  = PROFILE === 2 ? process.env.TG_SESSION_2  : process.env.TG_S
 
 
 
-// Each account can have its own channel list (TG_CHANNELS_2=id1,id2,...)
-// If not set, falls back to the built-in ALL_CHANNEL_IDS
-const ACCOUNT_CHANNELS_ENV = PROFILE === 2 ? process.env.TG_CHANNELS_2 : process.env.TG_CHANNELS_1;
-if (PROFILE === 2 && !ACCOUNT_CHANNELS_ENV) throw new Error('TG_CHANNELS_2 is required for account 2; refusing to scrape the primary account channel list by mistake.');
-const ACCOUNT_CHANNEL_IDS = ACCOUNT_CHANNELS_ENV
-  ? ACCOUNT_CHANNELS_ENV.split(',').map(v => Number(v.trim()))
-  : ALL_CHANNEL_IDS;
-if (!ACCOUNT_CHANNEL_IDS.length || ACCOUNT_CHANNEL_IDS.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new Error('Invalid Telegram channel ID list in environment.');
+// Both accounts must have an explicit allowlist. Never silently scrape
+// the built-in/default channel set: only IDs configured for this account run.
+const CHANNELS_ENV_NAME = PROFILE === 2 ? 'TG_CHANNELS_2' : 'TG_CHANNELS_1';
+const ACCOUNT_CHANNELS_ENV = process.env[CHANNELS_ENV_NAME];
+if (!ACCOUNT_CHANNELS_ENV || !ACCOUNT_CHANNELS_ENV.trim()) {
+  throw new Error(`${CHANNELS_ENV_NAME} is required. Add the specific channel/group IDs for Account ${PROFILE}; refusing to scrape an implicit/default list.`);
+}
+const ACCOUNT_CHANNEL_IDS = ACCOUNT_CHANNELS_ENV.split(',').map(v => Number(v.trim()));
+if (!ACCOUNT_CHANNEL_IDS.length || ACCOUNT_CHANNEL_IDS.some(id => !Number.isSafeInteger(id) || id <= 0)) {
+  throw new Error(`Invalid ${CHANNELS_ENV_NAME}. Use comma-separated positive numeric Telegram channel IDs only.`);
+}
 const RAW_CHANNELS = args.channels || 'all';
 const TARGET_CHANNELS = [...new Set(RAW_CHANNELS === 'all' ? [...ACCOUNT_CHANNEL_IDS] : RAW_CHANNELS.split(',').map(v => Number(v.trim())))];
 if (!TARGET_CHANNELS.length || TARGET_CHANNELS.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new Error('No valid channels selected.')
