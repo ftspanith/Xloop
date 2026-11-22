@@ -637,57 +637,79 @@ async function loadSearch() {
   const grid = document.getElementById('search-results');
   const totalEl = document.getElementById('stat-total');
   const showingEl = document.getElementById('stat-showing');
-  const q = document.getElementById('search-input').value.trim();
-  currentQuery = q;
-  let url = `/api/movies?page=${currentPage}&limit=18&sort=createdAt`;
-  if (q) url += `&search=${encodeURIComponent(q)}`;
-  if (['movie', 'series', 'anime'].includes(currentFilter)) url += `&type=${currentFilter}`;
-  else if (currentFilter === 'all') url += '&type=all';
-  else if (currentFilter !== '4K') url += `&language=${encodeURIComponent(currentFilter)}`;
-  if (currentFilter === '4K') url += '&quality=4K';
+  if (!grid || !totalEl || !showingEl) return;
 
-  grid.innerHTML = '<div class="empty" style="grid-column:1/-1">Loading movies…</div>';
+  const q = document.getElementById('search-input')?.value.trim() || '';
+  currentQuery = q;
+  const params = new URLSearchParams({
+    page: String(currentPage),
+    limit: '18',
+    sort: 'createdAt',
+    type: ['movie', 'series', 'anime'].includes(currentFilter) ? currentFilter : 'all'
+  });
+  if (q) params.set('search', q);
+  if (['Telugu', 'Tamil', 'Hindi', 'Multi'].includes(currentFilter)) params.set('language', currentFilter);
+  if (currentFilter === '4K') params.set('quality', '4K');
+
+  grid.innerHTML = '<div class="empty" style="grid-column:1/-1">Loading recent contents…</div>';
+  totalEl.textContent = '…';
+  showingEl.textContent = '…';
+
   try {
-    const data = await apiCall('GET', url);
-    if (!data || data.message || data.error) throw new Error(data?.message || data?.error || 'Unable to load movies');
-    const movies = Array.isArray(data) ? data : (Array.isArray(data.movies) ? data.movies : []);
-    const total = Number(data.total ?? movies.length);
-    totalPages = Number(data.pages || Math.ceil(total / 18) || 1);
-    totalEl.textContent = total;
-    showingEl.textContent = movies.length;
+    const data = await apiCall('GET', '/api/movies?' + params.toString());
+    // The list API returns { movies, total, page, pages }; also accept a raw array.
+    const movies = Array.isArray(data) ? data
+      : Array.isArray(data?.movies) ? data.movies
+      : Array.isArray(data?.data?.movies) ? data.data.movies
+      : null;
+    if (!movies) throw new Error(data?.message || data?.error || 'Unexpected response from /api/movies');
+
+    const total = Number(data?.total ?? movies.length);
+    totalPages = Math.max(1, Number(data?.pages) || Math.ceil(total / 18) || 1);
+    totalEl.textContent = total.toLocaleString();
+    showingEl.textContent = movies.length.toLocaleString();
 
     if (!movies.length) {
-      grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>No movies found</div></div>';
-    } else {
-      grid.innerHTML = movies.map(m => `
-        <div class="movie-card">
-          <img class="movie-card-img" src="${m.poster || '/images/placeholder.svg'}" onerror="this.src='/images/placeholder.svg'" alt="${escapeHtml(m.title || 'Movie')}">
-          <div class="movie-card-body">
-            <div class="movie-card-title" title="${escapeHtml(m.title || '')}">${escapeHtml(m.title || 'Untitled')}</div>
-            <div class="movie-card-meta">${m.year || ''} · ${escapeHtml(m.language || '')} · ${escapeHtml(m.quality || '')} · ${(m.downloads||[]).length} files</div>
-            <div class="movie-card-actions">
-              <button class="btn btn-secondary btn-sm" type="button" data-edit-id="${escapeHtml(m._id)}">Edit</button>
-              <a class="btn btn-secondary btn-sm" href="/watch.html?id=${encodeURIComponent(m._id)}" target="_blank" rel="noopener">View</a>
-            </div>
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>No contents found for this filter.</div></div>';
+      renderPagination();
+      return;
+    }
+
+    grid.innerHTML = movies.map(m => {
+      const id = String(m._id || '');
+      const title = m.title || 'Untitled';
+      const files = Array.isArray(m.downloads) ? m.downloads.length : 0;
+      return `<article class="movie-card">
+        <img class="movie-card-img" src="${escapeHtml(m.poster || '/images/placeholder.svg')}" onerror="this.onerror=null;this.src='/images/placeholder.svg'" alt="${escapeHtml(title)}" loading="lazy">
+        <div class="movie-card-body">
+          <div class="movie-card-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
+          <div class="movie-card-meta">${escapeHtml(m.year || '')} · ${escapeHtml(m.language || '')} · ${escapeHtml(m.quality || '')} · ${files} files</div>
+          <div class="movie-card-actions">
+            <button class="btn btn-secondary btn-sm" type="button" data-edit-id="${escapeHtml(id)}">Edit</button>
+            <a class="btn btn-secondary btn-sm" href="/watch.html?id=${encodeURIComponent(id)}" target="_blank" rel="noopener">View</a>
           </div>
         </div>
-      `).join('');
-      // Bind Edit actions by document ID instead of embedding full movie JSON in HTML.
-      // This safely handles apostrophes, quotes and other special characters in metadata.
-      grid.querySelectorAll('[data-edit-id]').forEach(button => {
-        button.addEventListener('click', () => {
-          const movie = movies.find(item => String(item._id) === button.dataset.editId);
-          if (movie) openEdit(movie);
-        });
+      </article>`;
+    }).join('');
+
+    grid.querySelectorAll('[data-edit-id]').forEach(button => {
+      button.addEventListener('click', () => {
+        const movie = movies.find(item => String(item._id) === button.dataset.editId);
+        if (movie) openEdit(movie);
       });
-    }
+    });
     renderPagination();
   } catch (err) {
     totalEl.textContent = '—';
     showingEl.textContent = '—';
-    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div>Could not load movies</div><small>${escapeHtml(err.message)}</small><br><button class="btn btn-secondary" style="margin-top:12px" onclick="loadSearch()">Retry</button></div>`;
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1;padding:24px;text-align:center">
+      <div>Recent contents couldn't load.</div>
+      <small style="display:block;margin:8px 0">${escapeHtml(err.message || 'Unknown error')}</small>
+      <button class="btn btn-secondary" type="button" id="retry-load-search" style="margin-top:12px">Retry</button>
+    </div>`;
+    document.getElementById('retry-load-search')?.addEventListener('click', loadSearch);
     document.getElementById('pagination').innerHTML = '';
-    console.error('Movie manager loadSearch failed:', err);
+    console.error('[XLOOP Content Manager] Failed to load recent contents:', err);
   }
 }
 
@@ -1048,7 +1070,8 @@ addLinkRow();
 // Load the default Search & Manage tab on first page visit.
 // Without this call the grid stays blank until the user switches tabs.
 if (document.getElementById('tab-search')?.classList.contains('active')) {
-  loadSearch();
+  // Run after the page and admin navigation scripts have finished initializing.
+  window.addEventListener('load', () => loadSearch(), { once: true });
 }
 </script>
 </body>
