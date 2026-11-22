@@ -21,6 +21,8 @@ const extractedLinkSchema = new mongoose.Schema({
   codec:       { type: String, default: '' },
   hdr:         { type: String, default: '' },
   audio:       { type: String, default: '' },
+  bitDepth:    { type: String, default: '' },
+  audioChannels:{ type: String, default: '' },
   bypassedUrl: { type: String, default: '' },
   isSeries:    { type: Boolean, default: false },
   contentType: { type: String, default: '' },
