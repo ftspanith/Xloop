@@ -1,4 +1,4 @@
-name: Admin Mobile UI Regression
+name: Admin, Scraper & Pipeline Regression
 
 on:
   push:
@@ -6,7 +6,9 @@ on:
       - test/mobile-dual-upload
     paths:
       - 'public/admin/**'
+      - 'public/admin/manager.html'
       - 'routes/scrape.js'
+      - 'routes/orchestrator.js'
       - 'pipeline_full.js'
       - 'models/ExtractedLink.js'
       - 'package.json'
