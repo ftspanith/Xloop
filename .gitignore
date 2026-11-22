@@ -2,3 +2,8 @@
 xloop_*.json
 .vercel
 .env*
+
+# Local Telegram exports and per-account scraper recovery state
+telegram_export*.json
+.scrape_progress*.json
+.scrape_progress*.json.tmp
