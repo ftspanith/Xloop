@@ -328,7 +328,7 @@ function detectContainer(filename) {
 // ─── HDR ─────────────────────────────────────────────────────────────────────
 function detectBitDepth(fn) {
   const s = String(fn || '').toUpperCase();
-  const m = s.match(/(?:\\b(8|10|12|14|16)\\s*[- ]?BIT\\b|\\b(8|10|12|14|16)BIT\\b)/);
+  const m = s.match(/(?:\b(8|10|12|14|16)\s*[- ]?BIT\b|\b(8|10|12|14|16)BIT\b)/);
   return m ? `${m[1] || m[2]}-bit` : null;
 }
 
