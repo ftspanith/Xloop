@@ -79,10 +79,13 @@ function normalizeGdflixUrl(value) {
     const host = parsed.hostname.toLowerCase();
     if (host === 'gdflix.dev' || host.endsWith('.gdflix.dev')) {
       parsed.hostname = 'gdflix.dev';
-      return parsed.toString();
+    } else if (host === 'hubcloud.one' || host.endsWith('.hubcloud.one')) {
+      parsed.hostname = 'hubcloud.one';
     }
-  } catch (_) {}
-  return value;
+    return parsed.toString();
+  } catch (_) {
+    return value;
+  }
 }
 
 // ─── URL CLASSIFIER ──────────────────────────────────────────────────────────
