@@ -656,12 +656,20 @@ async function loadSearch() {
             <div class="movie-card-title" title="${escapeHtml(m.title || '')}">${escapeHtml(m.title || 'Untitled')}</div>
             <div class="movie-card-meta">${m.year || ''} · ${escapeHtml(m.language || '')} · ${escapeHtml(m.quality || '')} · ${(m.downloads||[]).length} files</div>
             <div class="movie-card-actions">
-              <button class="btn btn-secondary btn-sm" onclick='openEdit(${JSON.stringify(m).replace(/</g, '\\u003c')})'>Edit</button>
+              <button class="btn btn-secondary btn-sm" type="button" data-edit-id="${escapeHtml(m._id)}">Edit</button>
               <a class="btn btn-secondary btn-sm" href="/watch.html?id=${encodeURIComponent(m._id)}" target="_blank" rel="noopener">View</a>
             </div>
           </div>
         </div>
       `).join('');
+      // Bind Edit actions by document ID instead of embedding full movie JSON in HTML.
+      // This safely handles apostrophes, quotes and other special characters in metadata.
+      grid.querySelectorAll('[data-edit-id]').forEach(button => {
+        button.addEventListener('click', () => {
+          const movie = movies.find(item => String(item._id) === button.dataset.editId);
+          if (movie) openEdit(movie);
+        });
+      });
     }
     renderPagination();
   } catch (err) {
