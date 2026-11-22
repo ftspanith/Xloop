@@ -240,6 +240,26 @@
 
   <!--  SEARCH TAB  -->
   <div class="tab-panel active" id="tab-search">
+
+    <!-- EXISTING LINK NORMALIZATION -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-title">Normalize Existing Download Links</div>
+      <p style="font-size:0.85rem;color:var(--muted);line-height:1.6;margin-bottom:14px;">
+        Updates old links in the database in small batches. GDFlix subdomains become <strong>gdflix.dev</strong> and HubCloud subdomains become <strong>hubcloud.one</strong>. Other hosts and their links are left unchanged.
+      </p>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-secondary" id="normalize-links-btn" onclick="startLinkNormalization()">Normalize All Existing Links</button>
+        <span id="normalize-links-status" style="font-size:0.83rem;color:var(--muted);">Ready — this may take a while.</span>
+      </div>
+      <div id="normalize-progress-wrap" style="display:none;margin-top:16px;">
+        <div style="height:10px;background:var(--surface2);border-radius:20px;overflow:hidden;border:1px solid var(--border);">
+          <div id="normalize-progress-bar" style="height:100%;width:0%;background:var(--green);border-radius:20px;transition:width .25s ease;"></div>
+        </div>
+        <div id="normalize-progress-text" style="display:flex;justify-content:space-between;gap:10px;margin-top:8px;font-size:0.78rem;color:var(--muted);">
+          <span>0%</span><span>0 / 0 records scanned</span>
+        </div>
+      </div>
+    </div>
     <div class="search-bar">
       <span class="search-icon"></span>
       <input type="text" id="search-input" placeholder="Search by title, language, genre, year..." oninput="debounceSearch()">
@@ -537,6 +557,50 @@ function setFilter(el, val) {
   currentFilter = val;
   currentPage = 1;
   loadSearch();
+}
+
+
+async function startLinkNormalization() {
+  if (!confirm('Normalize all existing GDFlix and HubCloud links in the database? This will update stored URLs and host labels.')) return;
+  const button = document.getElementById('normalize-links-btn');
+  const status = document.getElementById('normalize-links-status');
+  const wrap = document.getElementById('normalize-progress-wrap');
+  const bar = document.getElementById('normalize-progress-bar');
+  const progressText = document.getElementById('normalize-progress-text');
+  button.disabled = true;
+  button.style.opacity = '0.55';
+  wrap.style.display = 'block';
+  status.textContent = 'Starting migration...';
+  let cursor = null, scanned = 0, total = 0, changedMovies = 0, changedLinks = 0;
+  try {
+    while (true) {
+      const data = await apiCall('POST', '/api/import/normalize-links-batch', { batchSize: 15, lastId: cursor });
+      if (!data.success) throw new Error(data.message || 'Migration failed');
+      total = data.total || total;
+      scanned += data.scanned || 0;
+      changedMovies += data.changedMovies || 0;
+      changedLinks += data.changedLinks || 0;
+      const percent = total ? Math.min(100, Math.round((scanned / total) * 100)) : 100;
+      bar.style.width = percent + '%';
+      progressText.innerHTML = '<span>' + percent + '%</span><span>' + scanned + ' / ' + total + ' records scanned</span>';
+      status.textContent = changedLinks + ' links updated · ' + changedMovies + ' records changed';
+      if (data.done) break;
+      if (!data.nextCursor || data.nextCursor === cursor) throw new Error('Migration cursor did not advance. Please retry.');
+      cursor = data.nextCursor;
+      await new Promise(resolve => setTimeout(resolve, 120));
+    }
+    bar.style.width = '100%';
+    progressText.innerHTML = '<span>100%</span><span>' + scanned + ' / ' + total + ' records scanned</span>';
+    status.textContent = 'Completed — ' + changedLinks + ' links normalized across ' + changedMovies + ' records.';
+    status.style.color = 'var(--green)';
+  } catch (err) {
+    status.textContent = 'Paused with error: ' + err.message + '. You can run it again safely.';
+    status.style.color = 'var(--accent2)';
+  } finally {
+    button.disabled = false;
+    button.style.opacity = '';
+    button.textContent = 'Run Again / Retry';
+  }
 }
 
 async function loadSearch() {
