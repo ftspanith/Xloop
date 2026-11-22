@@ -457,6 +457,12 @@ async function main() {
   }
 
   try {
+    if (account === 'both') {
+      await runBothAccounts();
+      console.log(`\n${c.green}${c.bold}━━━ BOTH ACCOUNTS DONE ━━━${c.reset}\n`);
+      printSyncSummary();
+      return;
+    }
     // Step 1: Scrape
     await runScraper();
 
