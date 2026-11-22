@@ -274,7 +274,7 @@ router.get('/start', auth, async (req, res) => {
 
   emit(`[START] ${label}...`);
   if (skipScraper) {
-    emit(`[INFO] Skip Scraper: re-extracting from telegram_export.json (skipping Telegram API scrape)`);
+    emit('[INFO] Skip Scraper: reusing extracted links saved in MongoDB; Telegram API scraping is skipped and existing Movies data is preserved.');
   } else {
     emit(`[INFO] Full Pipeline: scraping Telegram → extracting → importing`);
   }
@@ -363,7 +363,7 @@ router.post('/start', auth, async (req, res) => {
   setPipelineRunningFlag(true);
   broadcast(`[START] ${label}...`);
   broadcast(`[INFO] Pipeline running in background — safe to close this tab.`);
-  if (skipScraper) broadcast(`[INFO] Skip Scraper: re-extracting from telegram_export.json`);
+  if (skipScraper) broadcast('[INFO] Skip Scraper: reusing extracted MongoDB links; Telegram scraping is skipped and existing Movies data is preserved.');
   if (scope === 'daily') broadcast(`[INFO] Scope: Today's new content only`);
   if (scope === 'title' && titleFilter) broadcast(`[INFO] Scope: Searching for title matching "${titleFilter}"`);
 
