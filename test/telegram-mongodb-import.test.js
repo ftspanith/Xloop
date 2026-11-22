@@ -65,14 +65,25 @@ test('promotion-only messages are excluded while mixed download promotions retai
   };
   const mixed = {
     id: 21, channel_id: 999,
-    text: 'Example Film 2026 1080p [1.5GB]\nhttps://gdflix.dev/example-file',
-    classification: { is_promotion: true, is_download: true },
+    text: 'Example Film 2026 1080p [1.5GB]\nhttps://gdflix.dev/example-file\nhttps://bit.ly/join-channel\nhttps://unknown.example/extra',
+    links: [
+      { url: 'https://gdflix.dev/example-file', purpose: 'download' },
+      { url: 'https://bit.ly/join-channel', purpose: 'promotion' },
+      { url: 'https://unknown.example/extra', purpose: 'review' },
+    ],
+    classification: { is_promotion: true, is_download: true, needs_review: true },
   };
-  const result = extractLinksFromMessages([promoOnly, mixed], '1');
-  assert.ok(result.links.length > 0, 'mixed download/promotion should retain its download URL');
+  const reviewOnly = {
+    id: 22, channel_id: 999,
+    text: 'Maybe useful: https://unknown.example/article',
+    links: [{ url: 'https://unknown.example/article', purpose: 'review' }],
+    classification: { is_promotion: false, is_download: false, needs_review: true },
+  };
+  const result = extractLinksFromMessages([promoOnly, mixed, reviewOnly], '1');
+  assert.ok(result.links.length > 0, 'mixed download/promotion should retain its valid download URL');
   assert.ok(result.links.every(link => link.url.includes('gdflix.dev')));
-  assert.equal(result.uniqueMessages, 2);
-  assert.equal(result.skipped, 1);
+  assert.equal(result.uniqueMessages, 3);
+  assert.equal(result.skipped, 2);
 });
 
 test('CDN and image URLs are rejected while file hosts are retained', () => {
