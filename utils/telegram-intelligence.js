@@ -16,12 +16,12 @@ const PROMOTION_PATTERNS = [
   { key: 'backup_channel', re: /\bbackup\s+(?:telegram\s+)?(?:channel|group)\b/i },
   { key: 'share_promotion', re: /\bshare\s+(?:this|our|the)\s+(?:channel|group|page|invite)\b/i },
   { key: 'channel_promotion', re: /\b(?:official|new|second|alternative)\s+(?:telegram\s+)?channel\b/i },
-  { key: 'platform_channel', re: /\\b(?:join|subscribe|follow)\\s+(?:(?:our|the|this|official)\\s+)?(?:whatsapp|youtube|discord|instagram|facebook|tiktok|twitter)\\s+(?:channel|group|community)\\b/i },
-  { key: 'social_follow', re: /\\bfollow\\s+(?:(?:us|our|the)\\s+)?(?:on\\s+)?(?:instagram|facebook|x|twitter|youtube|tiktok)\\b/i },
-  { key: 'website_promotion', re: /\\b(?:visit|check\\s+out|open)\\s+(?:(?:our|the|official)\\s+)?(?:website|site|blog)\\b/i },
-  { key: 'click_to_join', re: /\\b(?:click|tap)\\s+(?:here|below)\\s+to\\s+join\\b/i },
-  { key: 'telugu_promotion', re: /(?:జాయిన్\\s*అవ్వండి|చేరండి|సబ్\\s*స్క్రైబ్\\s*చేయండి|ఫాలో\\s*అవ్వండి|(?:మా|మన)\\s*(?:టెలిగ్రామ్\\s*)?(?:ఛానల్|గ్రూప్).{0,24}(?:జాయిన్|చేరండి|సబ్\\s*స్క్రైబ్|ఫాలో))/i },
-  { key: 'telugu_transliteration', re: /\\b(?:join|subscribe|follow)\\s+(?:cheyandi|cheyyandi|avvandi)\\b/i },
+  { key: 'platform_channel', re: /\b(?:join|subscribe|follow)\s+(?:(?:our|the|this|official)\s+)?(?:whatsapp|youtube|discord|instagram|facebook|tiktok|twitter)\s+(?:channel|group|community)\b/i },
+  { key: 'social_follow', re: /\bfollow\s+(?:(?:us|our|the)\s+)?(?:on\s+)?(?:instagram|facebook|x|twitter|youtube|tiktok)\b/i },
+  { key: 'website_promotion', re: /\b(?:visit|check\s+out|open)\s+(?:(?:our|the|official)\s+)?(?:website|site|blog)\b/i },
+  { key: 'click_to_join', re: /\b(?:click|tap)\s+(?:here|below)\s+to\s+join\b/i },
+  { key: 'telugu_promotion', re: /(?:జాయిన్\s*అవ్వండి|చేరండి|సబ్\s*స్క్రైబ్\s*చేయండి|ఫాలో\s*అవ్వండి|(?:మా|మన)\s*(?:టెలిగ్రామ్\s*)?(?:ఛానల్|గ్రూప్).{0,24}(?:జాయిన్|చేరండి|సబ్\s*స్క్రైబ్|ఫాలో))/i },
+  { key: 'telugu_transliteration', re: /\b(?:join|subscribe|follow)\s+(?:cheyandi|cheyyandi|avvandi)\b/i },
 ];
 
 const DOWNLOAD_HOSTS = new Set([
