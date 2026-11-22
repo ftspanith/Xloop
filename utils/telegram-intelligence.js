@@ -614,6 +614,7 @@ function createExportArtifacts(messages, options) {
     review: review.length,
     other,
     media_attachments: mediaCount,
+    related_metadata_enrichments: Number(scanStats.relatedMetadataEnrichments || 0),
     extracted_links: sourceMessages.reduce((sum, message) => sum + ((message.links || []).length), 0),
     shortlinks: shortlinks.length,
     channel_errors: Array.isArray(scanStats.channelErrors) ? scanStats.channelErrors : [],
