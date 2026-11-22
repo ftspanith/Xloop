@@ -577,6 +577,22 @@ router.post('/bulk', auth, async (req, res) => {
     message: `Added ${successCount} new | Updated ${updatedCount} existing | Skipped ${skippedCount} (${lowConfidence} low confidence)`,
     successCount, updatedCount, skippedCount, lowConfidence, duplicateCount,
     addedTitle: lastAddedTitle,
+    detectedFiles: processedItems.filter(item => !item.skip && item.parsed).flatMap(item =>
+      (item.parsed.downloads || []).map(file => ({
+        title: item.meta?.title || item.parsed.title,
+        filename: file.filename || '',
+        quality: file.quality || 'HD',
+        size: file.size || '',
+        season: file.season ?? null,
+        episode: file.episode ?? null,
+        language: file.language || '',
+        codec: file.codec || '',
+        hdr: file.hdr || '',
+        audio: file.audio || '',
+        source: file.source || '',
+        urls: (file.links || []).map(link => link.url)
+      }))
+    ),
     errors: errors.slice(0, 20),
   });
 });
