@@ -454,3 +454,66 @@ test('promotion data stays inside the main export; only shortlinks/review/report
   assert.ok(Array.isArray(artifacts.review.messages));
   assert.equal(Object.prototype.hasOwnProperty.call(artifacts, 'promotions'), false);
 });
+
+
+test('review sidecar is a compact index and leaves the complete main message untouched', () => {
+  const record = buildTelegramMessageRecord({
+    id: 1901,
+    date: 1795305600,
+    message: 'Read more: https://example.org/article',
+    media: {
+      photo: {
+        id: 998877,
+        sizes: [
+          { w: 90, h: 90, size: 1200, type: 's' },
+          { w: 1280, h: 720, size: 45678, type: 'x' },
+        ],
+      },
+    },
+  }, baseContext());
+
+  const artifacts = createExportArtifacts([record], { account: 1, modeLabel: 'full' });
+  const compactReview = artifacts.review.messages[0];
+
+  assert.equal(artifacts.main.messages.length, 1);
+  assert.deepEqual(artifacts.main.messages[0], record);
+  assert.equal(artifacts.review.schema_version, 2);
+  assert.equal(compactReview.id, record.id);
+  assert.equal(compactReview.channel_id, record.channel_id);
+  assert.equal(compactReview.text, record.text);
+  assert.ok(compactReview.review_reasons.includes('classification_needs_review'));
+  assert.ok(compactReview.links.some(link => link.url === 'https://example.org/article'));
+  assert.ok(!Object.prototype.hasOwnProperty.call(compactReview, 'entities'));
+  assert.ok(!Object.prototype.hasOwnProperty.call(compactReview, 'media'));
+  assert.ok(!Object.prototype.hasOwnProperty.call(compactReview, 'content_metadata'));
+  assert.ok(!Object.prototype.hasOwnProperty.call(compactReview, 'buttons'));
+  assert.ok(!Object.prototype.hasOwnProperty.call(compactReview, 'raw_text'));
+});
+
+test('photo media export contains dimensions and thumbnail descriptors, not image bytes', () => {
+  const record = buildTelegramMessageRecord({
+    id: 1902,
+    date: 1795305600,
+    message: 'Photo attachment',
+    media: {
+      photo: {
+        id: 112233,
+        sizes: [
+          { w: 100, h: 100, size: 2048, type: 's' },
+          { w: 800, h: 600, size: 32768, type: 'x' },
+        ],
+      },
+    },
+  }, baseContext());
+
+  assert.equal(record.media.media_type, 'photo');
+  assert.equal(record.media.width, 800);
+  assert.equal(record.media.height, 600);
+  assert.deepEqual(record.media.thumbnails, [
+    { width: 100, height: 100, size: '2048', type: 's' },
+    { width: 800, height: 600, size: '32768', type: 'x' },
+  ]);
+  const serializedMedia = JSON.stringify(record.media);
+  assert.doesNotMatch(serializedMedia, /base64|image_data|file_content|data:image/i);
+  assert.equal(Object.prototype.hasOwnProperty.call(record.media, 'bytes'), false);
+});
