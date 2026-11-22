@@ -100,7 +100,7 @@ function getEntities(text, entities) {
   });
 }
 
-function extractLinks(text, entities, buttons) {
+function extractLinks(text, entities, buttons, previewUrl) {
   const map = new Map();
   function add(rawValue, source, label, row, column, type) {
     const url = safeUrl(rawValue);
@@ -150,17 +150,22 @@ function extractLinks(text, entities, buttons) {
   (Array.isArray(buttons) ? buttons : []).forEach(button => {
     if (button && button.url) add(button.url, 'inline_button', button.text, button.row, button.column, button.type);
   });
+  if (previewUrl) add(previewUrl, 'webpage_preview', '', null, null, 'MessageMediaWebPage');
 
   return Array.from(map.values());
 }
 
 function getMediaMetadata(media) {
   if (!media) return null;
-  const document = media.document || null;
-  const photo = media.photo || null;
+  const webpage = media.webpage || null;
+  const attachedDocument = media.document || null;
+  const attachedPhoto = media.photo || null;
+  const document = attachedDocument || (webpage && webpage.document) || null;
+  const photo = attachedPhoto || (webpage && webpage.photo) || null;
   const attrs = document && Array.isArray(document.attributes) ? document.attributes : [];
+  const isWebPagePreview = !attachedDocument && !attachedPhoto && !!webpage;
   const meta = {
-    media_type: document ? 'document' : (photo ? 'photo' : entityType(media)),
+    media_type: attachedDocument ? 'document' : (attachedPhoto ? 'photo' : (webpage ? 'webpage' : entityType(media))),
     file_id: document && document.id != null ? asString(document.id) : (photo && photo.id != null ? asString(photo.id) : null),
     mime_type: document ? asString(document.mimeType) || null : null,
     file_size: document && document.size != null ? asString(document.size) : null,
@@ -175,6 +180,19 @@ function getMediaMetadata(media) {
     is_voice: false,
     is_animation: false,
     is_sticker: false,
+    is_webpage_preview: isWebPagePreview,
+    webpage: webpage ? {
+      url: safeUrl(webpage.url),
+      display_url: asString(webpage.displayUrl) || null,
+      site_name: asString(webpage.siteName) || null,
+      title: asString(webpage.title) || null,
+      description: asString(webpage.description) || null,
+      author: asString(webpage.author) || null,
+      type: asString(webpage.type) || null,
+      embed_url: safeUrl(webpage.embedUrl),
+      duration: webpage.duration != null ? Number(webpage.duration) : null,
+    } : null,
+    thumbnails: [],
     grouped_media_id: media.groupedId != null ? asString(media.groupedId) : null,
   };
 
@@ -209,16 +227,32 @@ function getMediaMetadata(media) {
       meta.width = Number(sizes[0].w);
       meta.height = Number(sizes[0].h);
     }
+    meta.thumbnails = sizes.map(size => ({
+      width: Number(size.w),
+      height: Number(size.h),
+      size: size.size != null ? asString(size.size) : null,
+      type: asString(size.type) || null,
+    }));
   }
-  if (document && meta.is_video) meta.media_type = 'video';
-  else if (document && meta.is_audio) meta.media_type = meta.is_voice ? 'voice' : 'audio';
-  else if (document && meta.is_animation) meta.media_type = 'animation';
-  else if (document && meta.is_sticker) meta.media_type = 'sticker';
-  else if (photo) meta.media_type = 'photo';
 
+  if (document && Array.isArray(document.thumbs)) {
+    meta.thumbnails = document.thumbs.map(size => ({
+      width: size && size.w != null ? Number(size.w) : null,
+      height: size && size.h != null ? Number(size.h) : null,
+      size: size && size.size != null ? asString(size.size) : null,
+      type: asString(size && size.type) || null,
+    }));
+  }
+
+  if (!isWebPagePreview) {
+    if (attachedDocument && meta.is_video) meta.media_type = 'video';
+    else if (attachedDocument && meta.is_audio) meta.media_type = meta.is_voice ? 'voice' : 'audio';
+    else if (attachedDocument && meta.is_animation) meta.media_type = 'animation';
+    else if (attachedDocument && meta.is_sticker) meta.media_type = 'sticker';
+    else if (attachedPhoto) meta.media_type = 'photo';
+  }
   return meta;
 }
-
 function getPeerId(peer) {
   if (!peer) return null;
   const type = entityType(peer);
@@ -367,7 +401,7 @@ function buildTelegramMessageRecord(msg, context) {
   const rawText = asString(msg && msg.message) || asString(msg && msg.caption);
   const buttons = getButtons(msg && msg.replyMarkup);
   const entities = getEntities(rawText, msg && msg.entities);
-  const links = extractLinks(rawText, msg && msg.entities, buttons);
+  const links = extractLinks(rawText, msg && msg.entities, buttons, msg && msg.media && msg.media.webpage && msg.media.webpage.url);
   const media = getMediaMetadata(msg && msg.media);
   const uniqueUrls = links.map(link => link.url);
   const legacyText = rawText + (uniqueUrls.length ? '\n' + uniqueUrls.filter(url => !rawText.includes(url)).join('\n') : '');
@@ -397,6 +431,109 @@ function buildTelegramMessageRecord(msg, context) {
   record.classification = classifyMessage(record);
   record.content_metadata = extractContentMetadata(legacyText, links, media, record.classification, record.id);
   return record;
+}
+
+const RELATED_METADATA_FIELDS = [
+  'title', 'raw_title', 'year', 'language', 'languages', 'content_type',
+  'is_series', 'season', 'episode', 'imdb_id', 'tmdb_id_hint',
+];
+
+function hasMetadataValue(value) {
+  return value != null && value !== '' && !(Array.isArray(value) && value.length === 0);
+}
+
+function mergeRelatedMetadata(target, source, relation) {
+  if (!source || !source.content_metadata) return false;
+  if (!target.content_metadata) {
+    target.content_metadata = {
+      title: null,
+      raw_title: null,
+      year: null,
+      language: '',
+      languages: [],
+      quality: null,
+      content_type: null,
+      is_series: false,
+      season: null,
+      episode: null,
+      imdb_id: null,
+      tmdb_id_hint: null,
+      downloads: [],
+      file: {
+        filename: target.media && target.media.file_name ? target.media.file_name : null,
+        codec: null,
+        container: null,
+        hdr: null,
+        audio: null,
+        size: null,
+      },
+    };
+  }
+  const destination = target.content_metadata;
+  const sourceMetadata = source.content_metadata;
+  let changed = false;
+
+  RELATED_METADATA_FIELDS.forEach(key => {
+    if (!hasMetadataValue(destination[key]) && hasMetadataValue(sourceMetadata[key])) {
+      destination[key] = Array.isArray(sourceMetadata[key])
+        ? sourceMetadata[key].slice()
+        : sourceMetadata[key];
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    if (!Array.isArray(destination.related_sources)) destination.related_sources = [];
+    const reference = {
+      channel_id: source.channel_id,
+      message_id: source.id,
+      relation,
+    };
+    if (!destination.related_sources.some(item =>
+      String(item.channel_id) === String(reference.channel_id) &&
+      String(item.message_id) === String(reference.message_id) &&
+      item.relation === relation
+    )) destination.related_sources.push(reference);
+  }
+  return changed;
+}
+
+// Only explicit Telegram relationships are used. Titles/language/season data can
+// flow through reply and album links; file-specific fields and download URLs never do.
+function enrichRelatedMessageMetadata(messages) {
+  if (!Array.isArray(messages) || !messages.length) return 0;
+  const byChannelAndId = new Map();
+  const albums = new Map();
+
+  messages.forEach(message => {
+    if (!message) return;
+    byChannelAndId.set(String(message.channel_id) + ':' + String(message.id), message);
+    if (message.grouped_media_id) {
+      const key = String(message.channel_id) + ':' + String(message.grouped_media_id);
+      if (!albums.has(key)) albums.set(key, []);
+      albums.get(key).push(message);
+    }
+  });
+
+  let enriched = 0;
+  messages.forEach(message => {
+    if (!message || !message.reply_to || message.reply_to.message_id == null) return;
+    const parent = byChannelAndId.get(String(message.channel_id) + ':' + String(message.reply_to.message_id));
+    if (mergeRelatedMetadata(message, parent, 'reply')) enriched++;
+  });
+
+  albums.forEach(group => {
+    if (group.length < 2) return;
+    const sources = group.filter(message => message.content_metadata && message.content_metadata.title);
+    if (!sources.length) return;
+    // Use the first captioned/title-bearing item as the album metadata source.
+    const source = sources[0];
+    group.forEach(message => {
+      if (message === source) return;
+      if (mergeRelatedMetadata(message, source, 'album')) enriched++;
+    });
+  });
+  return enriched;
 }
 
 function createExportArtifacts(messages, options) {
@@ -495,5 +632,6 @@ module.exports = {
   detectPromotion,
   classifyMessage,
   extractContentMetadata,
+  enrichRelatedMessageMetadata,
   createExportArtifacts,
 };
