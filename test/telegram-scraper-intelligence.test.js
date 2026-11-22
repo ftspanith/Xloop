@@ -356,6 +356,25 @@ test('standalone Join button is detected as a promotion even with an external in
   assert.equal(record.links[0].purpose, 'promotion');
 });
 
+test('ambiguous shortlink beside a promotion is retained as mixed and queued for review', () => {
+  const record = buildTelegramMessageRecord({
+    id: 153,
+    date: 1795305600,
+    message: 'Join our Telegram channel for updates\nhttps://bit.ly/possibly-a-download',
+  }, baseContext());
+
+  assert.equal(record.classification.type, 'mixed');
+  assert.equal(record.classification.is_download, true);
+  assert.equal(record.classification.is_promotion, true);
+  assert.equal(record.classification.needs_review, true);
+  assert.equal(record.links[0].purpose, 'unknown');
+
+  const artifacts = createExportArtifacts([record], { account: 1, modeLabel: 'full' });
+  assert.equal(artifacts.main.messages.length, 1);
+  assert.equal(artifacts.shortlinks.total_shortlinks, 1);
+  assert.equal(artifacts.review.total_review_messages, 1);
+});
+
 test('ambiguous non-classified links enter review without disappearing from main export', () => {
   const record = buildTelegramMessageRecord({
     id: 16,
