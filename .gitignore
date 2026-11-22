@@ -6,3 +6,8 @@ xloop_*.json
 # Local Telegram exports and MongoDB import inputs
 telegram_export.json
 telegram_export_2.json
+
+# Derived Telegram intelligence exports are local scrape data too
+telegram_shortlinks*.json
+telegram_review*.json
+telegram_scan_report*.json
