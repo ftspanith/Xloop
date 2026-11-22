@@ -1067,12 +1067,23 @@ addLinkRow();
 })();
 
 
-// Load the default Search & Manage tab on first page visit.
-// Without this call the grid stays blank until the user switches tabs.
-if (document.getElementById('tab-search')?.classList.contains('active')) {
-  // Run after the page and admin navigation scripts have finished initializing.
-  window.addEventListener('load', () => loadSearch(), { once: true });
-}
+// Always initialize the default Search & Manage tab.
+// The previous load-only listener could miss initialization when this script
+// executes after the window load event, leaving stats and Recent Contents blank.
+(function initializeContentManager() {
+  const start = () => {
+    const panel = document.getElementById('tab-search');
+    if (panel && panel.classList.contains('active')) loadSearch();
+  };
+  if (document.readyState === 'complete') {
+    start();
+  } else {
+    window.addEventListener('load', start, { once: true });
+    // Also cover browsers/webviews where the load event has already fired
+    // between script evaluation and listener registration.
+    if (document.readyState !== 'loading') setTimeout(start, 0);
+  }
+})();
 </script>
 </body>
 </html>
