@@ -63,6 +63,19 @@ test('extracts Telegram auto-detected URL entities without a protocol in visible
   assert.equal(record.classification.is_download, true);
 });
 
+test('recognizes direct file-path URLs as download evidence', () => {
+  const record = buildTelegramMessageRecord({
+    id: 112,
+    date: 1795305600,
+    message: 'https://files.example.org/file/abcd1234',
+  }, baseContext());
+
+  assert.equal(record.classification.is_download, true);
+  assert.equal(record.classification.type, 'download');
+  assert.equal(record.links[0].host_class, 'Direct');
+  assert.equal(record.links[0].purpose, 'download');
+});
+
 test('captures ordinary visible URLs even when no Telegram entity or button exists', () => {
   const record = buildTelegramMessageRecord({
     id: 11,
