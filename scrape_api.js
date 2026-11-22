@@ -24,7 +24,7 @@ const { StringSession }  = require('telegram/sessions');
 const { Api }            = require('telegram');
 const fs                 = require('fs');
 const path               = require('path');
-const { buildTelegramMessageRecord, createExportArtifacts } = require('./utils/telegram-intelligence');
+const { buildTelegramMessageRecord, enrichRelatedMessageMetadata, createExportArtifacts } = require('./utils/telegram-intelligence');
 require('dotenv').config();
 
 // ── Config ───────────────────────────────────────────────────
@@ -299,11 +299,12 @@ function saveOutput(newMessages, modeLabel, existingMessages = [], scanStats = {
   merged.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
   const exportedAt = new Date().toISOString();
+  const relatedMetadataEnrichments = enrichRelatedMessageMetadata(merged);
   const artifacts = createExportArtifacts(merged, {
     account: PROFILE,
     modeLabel,
     exportedAt,
-    scanStats,
+    scanStats: { ...scanStats, relatedMetadataEnrichments },
   });
   const suffix = PROFILE === 2 ? '_2' : '';
   const sidecars = [
