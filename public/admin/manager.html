@@ -544,8 +544,9 @@ async function loadSearch() {
   currentQuery = q;
   let url = `/api/movies?page=${currentPage}&limit=18&sort=updatedAt`;
   if (q) url += `&search=${encodeURIComponent(q)}`;
-  if (currentFilter === 'movie' || currentFilter === 'series') url += `&type=${currentFilter}`;
-  else if (currentFilter !== 'all' && currentFilter !== '4K') url += `&language=${currentFilter}`;
+  if (['movie', 'series', 'anime'].includes(currentFilter)) url += `&type=${currentFilter}`;
+  else if (currentFilter === 'all') url += '&type=all';
+  else if (currentFilter !== '4K') url += `&language=${encodeURIComponent(currentFilter)}`;
   if (currentFilter === '4K') url += `&quality=4K`;
 
   const data = await apiCall('GET', url);
@@ -795,7 +796,7 @@ function addNewDownload() {
 }
 
 function detectHostJS(url) {
-  if (/gdflix/i.test(url)) return 'GDFlix';
+  if (/gdfilx\.dev|gdflix/i.test(url)) return 'GDFlix';
   if (/hubcloud/i.test(url)) return 'HubCloud';
   if (/gdlink/i.test(url)) return 'GDLink';
   if (/terabox/i.test(url)) return 'TeraBox';
