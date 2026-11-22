@@ -457,10 +457,15 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
         const slice = links.slice(i, i + CHUNK);
         if (mergeMode) {
           // Merge mode: skip URLs that already exist in the database
-          const incomingUrls = slice.map(l => l.url);
+          const incomingUrls = [...new Set(slice.map(l => l.url).filter(Boolean))];
           const existing = await ExtractedLink.find({ url: { $in: incomingUrls } }).select('url').lean();
           const existingUrls = new Set(existing.map(e => e.url));
-          const uniqueLinks = slice.filter(l => !existingUrls.has(l.url));
+          const seenIncoming = new Set();
+          const uniqueLinks = slice.filter(l => {
+            if (!l.url || existingUrls.has(l.url) || seenIncoming.has(l.url)) return false;
+            seenIncoming.add(l.url);
+            return true;
+          });
           if (uniqueLinks.length > 0) {
             await ExtractedLink.insertMany(uniqueLinks, { ordered: false });
           }
