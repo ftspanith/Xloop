@@ -955,6 +955,11 @@ async function main(opts = {}) {
           { $set: { count: clean.length, 'data.count': clean.length } },
           { upsert: false }
         );
+      } else if (IS_VERCEL && fs.existsSync(LINKS_FILE)) {
+        // A warm serverless instance can retain an obsolete /tmp file after
+        // the persistent collection has been cleared. Never import that file.
+        fs.unlinkSync(LINKS_FILE);
+        warn('STEP 1 — Ignoring stale links_for_bypasser.json from an earlier serverless run.');
       }
     } catch (err) {
       fail(`Could not verify MongoDB extracted links: ${err.message}`);
