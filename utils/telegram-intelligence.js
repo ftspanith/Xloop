@@ -318,11 +318,14 @@ function classifyMessage(record) {
 
   links.forEach(link => {
     const promoLabel = link.labels.some(label => /join|subscribe|follow|channel|group|backup/i.test(label));
+    const downloadLabel = DOWNLOAD_CTA_RE.test(link.labels.join(' ')) || MEDIA_TECH_RE.test(link.labels.join(' '));
+    const knownDownloadLink = DOWNLOAD_HOSTS.has(link.host_class) || link.host_class === 'Direct';
     if (link.host_class === 'Ignore' && (promotion.detected || promoLabel)) link.purpose = 'promotion';
     else if (promoLabel) link.purpose = 'promotion';
-    else if (DOWNLOAD_CTA_RE.test(link.labels.join(' ')) || (isDownload && link.host_class !== 'Ignore')) link.purpose = 'download';
+    else if (downloadLabel || knownDownloadLink) link.purpose = 'download';
+    else if (isDownload && !isPromotion && link.host_class !== 'Ignore') link.purpose = 'download';
     else if (promotion.detected && (TELEGRAM_HOST_RE.test(link.host || '') || !isDownload)) link.purpose = 'promotion';
-    else if (needsReview) link.purpose = 'review';
+    else if (needsReview || (isDownload && isPromotion && link.host_class === 'Download')) link.purpose = 'review';
   });
 
   const hasUnresolvedLinks = links.some(link => link.purpose === 'review' || link.purpose === 'unknown');
