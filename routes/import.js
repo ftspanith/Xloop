@@ -47,16 +47,19 @@ function normalizeGdflixUrl(value) {
     const host = parsed.hostname.toLowerCase();
     if (host === 'gdflix.dev' || host.endsWith('.gdflix.dev')) {
       parsed.hostname = 'gdflix.dev';
-      return parsed.toString();
+    } else if (host === 'hubcloud.one' || host.endsWith('.hubcloud.one')) {
+      parsed.hostname = 'hubcloud.one';
     }
-  } catch (_) {}
-  return value;
+    return parsed.toString();
+  } catch (_) {
+    return value;
+  }
 }
 
 // Host detector
 function detectHost(url) {
   if (/^(?:https?:\/\/)?(?:[^/]+\.)?gdflix\.dev(?:[/:?#]|$)/i.test(url)) return 'GDFlix';
-  if (/hubcloud/i.test(url))       return 'HubCloud';
+  if (/^(?:https?:\\/\\/)?(?:[^/]+\\.)?hubcloud\\.one(?:[/:?#]|$)/i.test(url) || /hubcloud/i.test(url)) return 'HubCloud';
   if (/gdlink/i.test(url))         return 'GDLink';
   if (/terabox/i.test(url))        return 'TeraBox';
   if (/gofile/i.test(url))         return 'GoFile';
