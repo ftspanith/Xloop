@@ -639,7 +639,7 @@ router.get('/collection-links', auth, async (req, res) => {
 
     const regex = new RegExp('^' + title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
     const links = await ExtractedLink.find({ title: regex })
-      .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels')
+      .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels sourceAccount')
       .sort({ quality: -1, size: -1 })
       .maxTimeMS(8000)
       .lean();
@@ -680,10 +680,10 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
 
     const [titleLinks, fileLinks] = await Promise.all([
       ExtractedLink.find(titleFilter)
-        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels')
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels sourceAccount')
         .lean(),
       ExtractedLink.find(fileFilter)
-        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels')
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels sourceAccount')
         .lean(),
     ]);
     const seenInit = new Set(titleLinks.map(l => l.url));
@@ -695,7 +695,7 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
       const looseFilter = { $or: [{ title: looseRegex }, { filename: looseRegex }] };
       if (year && /^\d{4}$/.test(year)) looseFilter.year = parseInt(year, 10);
       const looseLinks = await ExtractedLink.find(looseFilter)
-        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels')
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels sourceAccount')
         .lean();
       const seen2 = new Set(links.map(l => l.url));
       links = [...links, ...looseLinks.filter(l => !seen2.has(l.url))];
