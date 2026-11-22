@@ -362,7 +362,9 @@ async function triggerPipeline(token) {
   }
 
   log('Triggering Full Pipeline on Vercel...');
-  const res = await apiRequest('POST', '/api/orchestrator/start', { skipScraper: false }, token);
+  // Preserve the live Movie collection: import the freshly uploaded export without DB wipe.
+  // Explicitly keep bypass enabled while skipScraper=true makes the orchestrator set noWipe=true.
+  const res = await apiRequest('POST', '/api/orchestrator/start', { skipScraper: true, skipBypass: false }, token);
   if (res.status === 200) {
     ok('Full Pipeline started! Watch progress at:');
     log(`  → ${SITE_URL}/admin/dashboard.html`);
