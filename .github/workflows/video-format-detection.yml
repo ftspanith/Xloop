@@ -1,0 +1,22 @@
+name: Video Format Detection Tests
+
+on:
+  push:
+    branches:
+      - feature/expanded-video-format-detection
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  video-format-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run video format detection tests
+        run: npm run test:video-formats
