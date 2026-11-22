@@ -83,7 +83,7 @@ test('Inline JavaScript on every admin page parses without syntax errors', () =>
 
   for (const page of pages) {
     const html = fs.readFileSync(path.join(adminDir, page), 'utf8');
-    const scripts = [...html.matchAll(/<script\\b(?![^>]*\\bsrc=)[^>]*>([\\s\\S]*?)<\\/script>/gi)];
+    const scripts = [...html.matchAll(/<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
 
     scripts.forEach((match, index) => {
       checked += 1;
