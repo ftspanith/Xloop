@@ -1,0 +1,38 @@
+name: Scraper Intelligence Regression
+on:
+  push:
+    paths:
+      - 'utils/parser.js'
+      - 'utils/variant-intelligence.js'
+      - 'routes/scrape.js'
+      - 'models/ExtractedLink.js'
+      - 'scrape_api.js'
+      - 'scrape-and-upload.js'
+      - 'tests/scraper-intelligence.test.js'
+      - 'test/variant-intelligence.test.js'
+      - 'package.json'
+      - '.github/workflows/scraper-intelligence.yml'
+  pull_request:
+    paths:
+      - 'utils/parser.js'
+      - 'utils/variant-intelligence.js'
+      - 'routes/scrape.js'
+      - 'models/ExtractedLink.js'
+      - 'scrape_api.js'
+      - 'scrape-and-upload.js'
+      - 'tests/scraper-intelligence.test.js'
+      - 'test/variant-intelligence.test.js'
+      - 'package.json'
+      - '.github/workflows/scraper-intelligence.yml'
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:scraper-intelligence
+      - run: npm run test:video-formats

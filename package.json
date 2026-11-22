@@ -27,7 +27,8 @@
     "enable-sharing": "node scripts/enable-sharing.js",
     "test:quickpaste": "node --test test/quick-paste-metadata.test.js test/quick-paste-integration.test.js",
     "test:video-formats": "node tests/video-format-detection.test.js",
-    "test:analytics-html": "node test/analytics-html.test.js"
+    "test:analytics-html": "node test/analytics-html.test.js",
+    "test:scraper-intelligence": "node --test tests/scraper-intelligence.test.js test/variant-intelligence.test.js"
   },
   "dependencies": {
     "axios": "^1.19.0",

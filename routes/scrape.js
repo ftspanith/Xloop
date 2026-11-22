@@ -10,6 +10,7 @@ const { spawn } = require('child_process');
 const path     = require('path');
 const fs       = require('fs');
 const auth     = require('../middleware/auth');
+const { analyzeVariantSet } = require('../utils/variant-intelligence');
 
 const ROOT          = path.join(__dirname, '..');
 const SCRAPE_SCRIPT = path.join(ROOT, 'scrape_api.js');
@@ -274,6 +275,7 @@ router.post('/upload-export', auth, upload.array('files', 10), async (req, res) 
             contentType: parsed.contentType, isSeries: parsed.isSeries,
             season: dl.season??parsed.season, episode: dl.episode??parsed.episode,
             language: lang, quality: dl.quality, size: dl.size, filename: dl.filename,
+            codec: dl.codec || '', hdr: dl.hdr || '', audio: dl.audio || '', bitDepth: dl.bitDepth || '', audioChannels: dl.audioChannels || '',
             host: urlType, url, bypassedUrl: null,
             isFast: /gdflix|hubcloud|gdlink|tmbcloud|fpgo|filebee/i.test(url),
             imdbId: parsed.imdbId||null, tmdbIdHint: parsed.tmdbIdHint||null };
@@ -637,12 +639,13 @@ router.get('/collection-links', auth, async (req, res) => {
 
     const regex = new RegExp('^' + title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
     const links = await ExtractedLink.find({ title: regex })
-      .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
+      .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels sourceAccount')
       .sort({ quality: -1, size: -1 })
       .maxTimeMS(8000)
       .lean();
 
-    res.json({ title, count: links.length, links });
+    const variantAnalysis = analyzeVariantSet(links.map(link => ({ ...link, source: require('../utils/parser').detectSource(link.filename || '') })));
+    res.json({ title, count: links.length, links, variantAnalysis });
   } catch (err) {
     res.status(500).json({ error: err.message, links: [] });
   }
@@ -677,10 +680,10 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
 
     const [titleLinks, fileLinks] = await Promise.all([
       ExtractedLink.find(titleFilter)
-        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels sourceAccount')
         .lean(),
       ExtractedLink.find(fileFilter)
-        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels sourceAccount')
         .lean(),
     ]);
     const seenInit = new Set(titleLinks.map(l => l.url));
@@ -692,7 +695,7 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
       const looseFilter = { $or: [{ title: looseRegex }, { filename: looseRegex }] };
       if (year && /^\d{4}$/.test(year)) looseFilter.year = parseInt(year, 10);
       const looseLinks = await ExtractedLink.find(looseFilter)
-        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType')
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels sourceAccount')
         .lean();
       const seen2 = new Set(links.map(l => l.url));
       links = [...links, ...looseLinks.filter(l => !seen2.has(l.url))];
@@ -718,7 +721,8 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
     const titles = [...new Set(links.map(l => l.title).filter(Boolean))];
     const displayTitle = titles.sort((a, b) => a.length - b.length)[0] || q;
 
-    res.json({ query: q, year, displayTitle, count: links.length, links });
+    const variantAnalysis = analyzeVariantSet(links.map(link => ({ ...link, source: require('../utils/parser').detectSource(link.filename || '') })));
+    res.json({ query: q, year, displayTitle, count: links.length, links, variantAnalysis });
   } catch (err) {
     res.status(500).json({ error: err.message, links: [] });
   }
