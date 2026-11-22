@@ -119,6 +119,17 @@ function saveProgress(completedChannels, partialMessages, scanStats) {
   fs.renameSync(tmp, PROGRESS_FILE);
 }
 
+function normalizeScanStats(value, fallbackCaptured = 0) {
+  const stats = value && typeof value === 'object' ? value : {};
+  return {
+    scanned: Number.isFinite(Number(stats.scanned)) ? Number(stats.scanned) : 0,
+    captured: Number.isFinite(Number(stats.captured)) ? Number(stats.captured) : fallbackCaptured,
+    skipped: Number.isFinite(Number(stats.skipped)) ? Number(stats.skipped) : 0,
+    skippedReasons: Array.isArray(stats.skippedReasons) ? stats.skippedReasons : [],
+    channelErrors: Array.isArray(stats.channelErrors) ? stats.channelErrors : [],
+  };
+}
+
 function mergeScanStats(target, source) {
   target.scanned += Number(source && source.scanned || 0);
   target.captured += Number(source && source.captured || 0);
@@ -395,7 +406,7 @@ let client;
   const progress = loadProgress();
   const alreadyDone = new Set(progress.completedChannels || []);
   const survivedMessages = progress.partialMessages || [];
-  const scanStats = progress.scanStats || { scanned: 0, captured: survivedMessages.length, skipped: 0, skippedReasons: [], channelErrors: [] };
+  const scanStats = normalizeScanStats(progress.scanStats, survivedMessages.length);
 
   if (alreadyDone.size > 0) {
     logFn(`[Recovery] Found interrupted session. ${alreadyDone.size} channels already scraped.`);
@@ -441,13 +452,15 @@ let client;
     for (const result of results) {
       if (!result) continue;
       if (!result.ok) {
-        scanStats.channelErrors.push({ channel_id: result.channelId, error: result.error });
+        scanStats.channelErrors = scanStats.channelErrors.filter(item => Number(item.channel_id) !== Number(result.channelId));
+        scanStats.channelErrors.push({ channel_id: result.channelId, error: result.error, last_attempt_at: new Date().toISOString() });
         logFn(`   [CHANNEL ERROR] ${result.channelId}: ${result.error}`);
         continue;
       }
+      scanStats.channelErrors = scanStats.channelErrors.filter(item => Number(item.channel_id) !== Number(result.channelId));
       allNew.push(...result.messages);
       mergeScanStats(scanStats, result.stats);
-      completedChannels.push(result.channelId);
+      if (!completedChannels.includes(result.channelId)) completedChannels.push(result.channelId);
     }
 
     // Auto-save progress after every group
@@ -463,11 +476,20 @@ let client;
 
   // ── Final save ───────────────────────────────────────────
   const totalInFile = saveOutput(allNew, modeLabel, existingMessages, scanStats);
-  clearProgress(); // remove crash recovery file since we're done
-
   const mb = (fs.statSync(EXPORT_FILE).size / 1024 / 1024).toFixed(2);
 
-  logFn(`\nSCRAPE COMPLETE`);
+  if (scanStats.channelErrors.length) {
+    // Keep a resumable checkpoint for channels that did not finish.
+    const exportStat = fs.statSync(EXPORT_FILE);
+    BASE_EXPORT_SIGNATURE = `${exportStat.size}:${exportStat.mtimeMs}`;
+    saveProgress(completedChannels, allNew, scanStats);
+    logFn(`\nSCRAPE PARTIALLY COMPLETE — ${scanStats.channelErrors.length} channel(s) need retry.`);
+    logFn('   Re-run the same scrape command to retry only the incomplete channel(s).');
+    process.exitCode = 2;
+  } else {
+    clearProgress();
+    logFn(`\nSCRAPE COMPLETE`);
+  }
   logFn(`   Mode           : ${modeLabel.toUpperCase()}`);
   logFn(`   New messages   : ${allNew.length}`);
   logFn(`   Total in file  : ${totalInFile}`);
