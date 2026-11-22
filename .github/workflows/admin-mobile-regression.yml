@@ -7,6 +7,7 @@ on:
     paths:
       - 'public/admin/**'
       - 'routes/scrape.js'
+      - 'pipeline_full.js'
       - 'models/ExtractedLink.js'
       - 'package.json'
       - 'test/admin-mobile-regression.test.js'
