@@ -24,7 +24,8 @@
     "heal": "node heal_db.js",
     "share": "node share.js",
     "disable-sharing": "node scripts/disable-sharing.js",
-    "enable-sharing": "node scripts/enable-sharing.js"
+    "enable-sharing": "node scripts/enable-sharing.js",
+    "test:quickpaste": "node --test test/quick-paste-metadata.test.js"
   },
   "dependencies": {
     "axios": "^1.19.0",
