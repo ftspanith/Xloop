@@ -473,7 +473,8 @@
     .modal-cancel:hover{background:rgba(255,255,255,0.14);}
     .modal-confirm-wipe{background:#e50914;color:#fff;}
     .modal-confirm-wipe:hover{background:#b20710;transform:translateY(-1px);}
-    @media(max-width:680px){ .orch-modes{grid-template-columns:1fr;} .orch-actions{flex-direction:column;} .orch-btn{flex:none;width:100%;min-width:unset;} #logBox2{height:240px;} .orch-stats{flex-wrap:wrap;} .orch-stat{min-width:calc(33% - 1px);} }
+    @media(max-width:680px){ .orch-modes{grid-template-columns:1fr;} .orch-actions{flex-direction:column;} .orch-btn{flex:none;width:100%;min-width:unset;} .account-source-grid{grid-template-columns:1fr;} #logBox2{height:240px;} .orch-stats{flex-wrap:wrap;} .orch-stat{min-width:calc(33% - 1px);} }
+    .account-source-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
     /* Scope buttons */
     .scope-btn { display:inline-flex; align-items:center; gap:5px; padding:5px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.12); background:transparent; color:rgba(255,255,255,0.45); font-size:0.75rem; font-weight:600; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
     .scope-btn:hover { border-color:rgba(229,9,20,0.4); color:rgba(255,255,255,0.7); }
@@ -633,11 +634,12 @@
           <div id="dashExportStatus" style="font-size:0.73rem; color:rgba(255,255,255,.45);">Checking status...</div>
           <!-- Sync status badges -->
           <div id="syncStatusRow" style="display:flex; gap:10px; margin-top:6px; flex-wrap:wrap;"></div>
+      <p id="accountUploadHelp" style="font-size:0.72rem;color:rgba(255,255,255,.42);margin-top:8px;line-height:1.5;">Choose File Upload for either or both accounts, then tap Run Orchestrator below. Acc 1 replaces the extracted-link set; Acc 2 merges unique links.</p>
         </div>
       </div>
 
       <!-- ── Per-account Source Selectors ── -->
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+      <div class="account-source-grid">
 
         <!-- Acc 1 -->
         <div style="background:rgba(229,9,20,0.06); border:1px solid rgba(229,9,20,0.2); border-radius:10px; padding:12px;">
@@ -661,7 +663,7 @@
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               Choose file...
             </label>
-            <input type="file" id="dashExportFile" accept=".json" style="display:none;" onchange="dashPreviewExport(this)">
+            <input type="file" id="dashExportFile" accept="application/json,.json" style="display:none;" onchange="dashPreviewExport(this)">
             <span id="dashExportFileName" style="display:block; margin-top:5px; font-size:0.68rem; color:rgba(255,255,255,0.35);">No file selected</span>
           </div>
           <div id="acc1AutoInfo" style="font-size:0.68rem; color:rgba(255,255,255,0.35);">Uses existing auto-synced data</div>
@@ -689,7 +691,7 @@
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               Choose file...
             </label>
-            <input type="file" id="dashExportFile2" accept=".json" style="display:none;" onchange="dashPreviewExport2(this)">
+            <input type="file" id="dashExportFile2" accept="application/json,.json" style="display:none;" onchange="dashPreviewExport2(this)">
             <span id="dashExportFileName2" style="display:block; margin-top:5px; font-size:0.68rem; color:rgba(255,255,255,0.35);">No file selected</span>
           </div>
           <div id="acc2AutoInfo" style="font-size:0.68rem; color:rgba(255,255,255,0.35);">Merges with existing auto-synced data</div>
@@ -900,130 +902,25 @@
 
   function dashPreviewExport(input) {
     _dashRawFiles = Array.from(input.files || []);
-    if (!_dashRawFiles.length) return;
-    const mb = (_dashRawFiles[0].size / 1024 / 1024).toFixed(1);
     const nameEl = document.getElementById('dashExportFileName');
-    nameEl.innerHTML = `<span style="color:#e50914;font-weight:700;">Acc1:</span> ${_dashRawFiles[0].name} (${mb} MB)`;
+    if (!_dashRawFiles.length) { nameEl.textContent = 'No file selected'; updateOrchestratorButtonLabel(); return; }
+    const file = _dashRawFiles[0];
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    nameEl.textContent = `Acc 1: ${file.name} (${mb} MB)`;
     nameEl.style.color = '#fff';
-    document.getElementById('dashUploadBtn').style.display = 'inline-flex';
-    document.getElementById('dashUploadMsg').style.display = 'none';
-    document.getElementById('dashSafeClose').style.display = 'none';
-    document.getElementById('dashBothProgress').style.display = 'none';
-    // reset steps
-    ['ds1icon','ds2icon','ds3icon'].forEach(id => document.getElementById(id).textContent = '⬜');
-    ['ds1detail','ds2detail','ds3detail'].forEach(id => document.getElementById(id).textContent = '');
-    ['dBothStep1','dBothStep2','dBothStep3'].forEach(id => document.getElementById(id).style.color = 'rgba(255,255,255,.55)');
+    updateOrchestratorButtonLabel();
   }
 
   function dashPreviewExport2(input) {
     _dashRawFiles2 = Array.from(input.files || []);
-    if (!_dashRawFiles2.length) return;
-    const mb = (_dashRawFiles2[0].size / 1024 / 1024).toFixed(1);
     const nameEl = document.getElementById('dashExportFileName2');
-    nameEl.innerHTML = `<span style="color:#63b3ed;font-weight:700;">Acc2:</span> ${_dashRawFiles2[0].name} (${mb} MB)`;
+    if (!_dashRawFiles2.length) { nameEl.textContent = 'No file selected'; updateOrchestratorButtonLabel(); return; }
+    const file = _dashRawFiles2[0];
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    nameEl.textContent = `Acc 2: ${file.name} (${mb} MB)`;
     nameEl.style.color = '#fff';
-    // Show button if acc1 not already picked but acc2 is picked
-    if (!_dashRawFiles.length) document.getElementById('dashUploadBtn').style.display = 'inline-flex';
+    updateOrchestratorButtonLabel();
   }
-
-  function _dashDStep(n, state, detail='') {
-    const icons = { wait:'[ ]', running:'[~]', done:'[OK]', skip:'[--]', error:'[!]' };
-    const colors = { wait:'rgba(255,255,255,.55)', running:'#fff', done:'#22c55e', skip:'rgba(255,255,255,.35)', error:'#ef4444' };
-    document.getElementById(`ds${n}icon`).textContent = icons[state]||'⬜';
-    document.getElementById(`dBothStep${n}`).style.color = colors[state]||'';
-    document.getElementById(`ds${n}detail`).textContent = detail;
-  }
-
-  async function dashUploadBothAndRun() {
-    // Validate: if file mode selected, file must be chosen
-    if (_acc1Source === 'file' && !_dashRawFiles.length)  { alert('Acc 1 is set to File Upload — please choose a file first.'); return; }
-    if (_acc2Source === 'file' && !_dashRawFiles2.length) { alert('Acc 2 is set to File Upload — please choose a file first.'); return; }
-
-    const btn = document.getElementById('dashUploadBtn');
-    btn.disabled = true; btn.style.opacity = '0.7'; btn.textContent = 'Starting...';
-    document.getElementById('dashUploadMsg').style.display = 'none';
-    const token = localStorage.getItem('xloop_admin_token');
-    const readFile = f => new Promise((res,rej) => { const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=()=>rej(new Error('Read error')); r.readAsText(f,'utf-8'); });
-
-    // ── Step 1: Account 1 ─────────────────────────────────────────────────────
-    if (_acc1Source === 'file' && _dashRawFiles.length) {
-      _dashDStep(1,'running','parsing...');
-      try {
-        const text = await readFile(_dashRawFiles[0]);
-        let parsed; try { parsed = JSON.parse(text); } catch(e) { throw new Error('Invalid JSON'); }
-        const msgs = Array.isArray(parsed) ? parsed : (parsed.messages||[]);
-        const {links, skipped} = _parseMessages(msgs);
-        if (!links.length) throw new Error('No links found in Acc1 file');
-        const CHUNK=400, total=Math.ceil(links.length/CHUNK);
-        let batchId=null;
-        for (let ci=0;ci<total;ci++) {
-          _dashDStep(1,'running',`chunk ${ci+1}/${total}...`);
-          const chunk=links.slice(ci*CHUNK,(ci+1)*CHUNK);
-          const isFinal=ci===total-1;
-          const res = await fetch('/api/scrape/save-extracted',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
-          const d = await res.json().catch(()=>({}));
-          if (!res.ok) throw new Error(d.message||'Save failed');
-          if (!batchId) batchId=d.batchId;
-        }
-        _dashDStep(1,'done',`${links.length.toLocaleString()} links saved`);
-        fetch('/api/scrape/mark-sync', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ account:'1', source:'manual', links: links.length }) }).catch(()=>{});
-      } catch(err) { _dashDStep(1,'error',err.message); btn.disabled=false; btn.style.opacity='1'; return; }
-    } else {
-      // Auto sync — skip upload, just note it
-      _dashDStep(1,'done', _acc1Source === 'auto' ? 'using auto-synced data' : 'skipped');
-    }
-
-    // ── Step 2: Account 2 ─────────────────────────────────────────────────────
-    if (_acc2Source === 'file' && _dashRawFiles2.length) {
-      _dashDStep(2,'running','parsing...');
-      try {
-        const text = await readFile(_dashRawFiles2[0]);
-        let parsed; try { parsed = JSON.parse(text); } catch(e) { throw new Error('Invalid JSON'); }
-        const msgs = Array.isArray(parsed) ? parsed : (parsed.messages||[]);
-        const {links, skipped} = _parseMessages(msgs);
-        if (!links.length) throw new Error('No links found in Acc2 file');
-        const CHUNK=400, total=Math.ceil(links.length/CHUNK);
-        let batchId=null;
-        for (let ci=0;ci<total;ci++) {
-          _dashDStep(2,'running',`chunk ${ci+1}/${total}...`);
-          const chunk=links.slice(ci*CHUNK,(ci+1)*CHUNK);
-          const isFinal=ci===total-1;
-          const res = await fetch('/api/scrape/save-extracted?merge=true',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
-          const d = await res.json().catch(()=>({}));
-          if (!res.ok) throw new Error(d.message||'Merge failed');
-          if (!batchId) batchId=d.batchId;
-        }
-        _dashDStep(2,'done',`${links.length.toLocaleString()} links merged`);
-        fetch('/api/scrape/mark-sync', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ account:'2', source:'manual', links: links.length }) }).catch(()=>{});
-      } catch(err) { _dashDStep(2,'error',err.message); /* non-fatal, continue to pipeline */ }
-    } else {
-      _dashDStep(2,'done', _acc2Source === 'auto' ? 'using auto-synced data' : 'skipped');
-    }
-
-    // ── Step 3: Trigger Full Pipeline ─────────────────────────────────────────
-    try {
-      const res = await fetch('/api/orchestrator/start',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({skipScraper:true})});
-      const msg = document.getElementById('dashUploadMsg');
-      if (res.ok || res.status===409) {
-        msg.style.display = 'block'; msg.style.color = '#22c55e';
-        msg.textContent = 'Pipeline started on Vercel.';
-        dashCheckExportStatus();
-        setTimeout(syncOrchState2, 1000);
-      } else {
-        const d = await res.json().catch(()=>({}));
-        msg.style.display = 'block'; msg.style.color = '#f87171';
-        msg.textContent = 'Pipeline error: ' + (d.message||'unknown');
-      }
-    } catch(err) {
-      const msg = document.getElementById('dashUploadMsg');
-      msg.style.display = 'block'; msg.style.color = '#f87171';
-      msg.textContent = 'Error: ' + err.message;
-    }
-
-    btn.disabled=false; btn.style.opacity='1'; btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;"><polygon points="5 3 19 12 5 21 5 3"/></svg> Upload &amp; Start Pipeline';
-  }
-
-
   // ── Client-side URL classifier (mirrors utils/parser.js classifyUrl) ────────
   const _IGNORE_RE = [/t\.me\//i,/telegram\.me\//i,/youtube\.com/i,/youtu\.be/i,/drive\.google\.com/i,/image\.tmdb\.org/i,/m\.media-amazon\.com/i,/hotstar/i,/jiohotstar\./i,/jiocinema\./i,/primevideo\./i,/netflix\./i,/play\.google\./i,/mxplayer\./i,/zee5\./i,/aha\.(video|in|com)/i,/sonyliv\./i,/x\.com/i,/twitter\.com/i,/instagram\.com/i,/facebook\.com/i,/vflix\./i,/vifix\./i,/dtflix\./i,/dotflix\./i,/gofile\.io/i,/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i];
 
@@ -1089,7 +986,7 @@
   }
 
   // ── Lightweight client-side message parser ────────────────────────────────
-  function _parseMessages(messages) {
+  function _parseMessages(messages, sourceAccount = '') {
     const extracted = [], shortlinks = [];
     const seenUrls = new Set();
     let skipped = 0;
@@ -1129,7 +1026,7 @@
         const urlType = _classifyUrl(url);
         const clean = url.replace(/^http:\/\//i,'https://').replace(/\/$/,'');
         const entry = {
-          messageId: msg.id, title, year, contentType,
+          messageId: msg.id, sourceAccount: ['1', '2'].includes(String(sourceAccount)) ? String(sourceAccount) : '', title, year, contentType,
           isSeries: contentType==='series'||contentType==='anime'||season!==null,
           season, episode, language, quality, size,
           filename: fnLine||'',
@@ -1145,114 +1042,29 @@
     return { links: [...extracted,...shortlinks], skipped };
   }
 
-  async function dashUploadExport() {
-    if (!_dashRawFiles.length) { alert('No file selected.'); return; }
-    const btn = document.getElementById('dashUploadBtn');
-    const msg = document.getElementById('dashUploadMsg');
-    msg.style.display = 'block';
-    btn.disabled = true;
-    try {
-      const token = localStorage.getItem('xloop_admin_token');
-      msg.style.color = 'rgba(255,255,255,.6)';
-      const totalMB = (_dashRawFiles.reduce((s,f)=>s+f.size,0)/1024/1024).toFixed(1);
-      msg.textContent = ` Reading ${totalMB} MB file in browser…`;
-
-      // Read all files as text
-      let allMessages = [];
-      // ── Safari-safe file reader (File.text() can crash on large files in Safari) ──
-      const readFile = file => new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = e => resolve(e.target.result);
-        reader.onerror = () => reject(new Error('Could not read file: ' + file.name));
-        reader.readAsText(file, 'utf-8');
-      });
-
-      for (const file of _dashRawFiles) {
-        msg.textContent = ` Parsing ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)…`;
-        await new Promise(r=>setTimeout(r,20)); // yield to UI
-        const text = await readFile(file);
-        let parsed;
-        try { parsed = JSON.parse(text); }
-        catch(e) { throw new Error(`"${file.name}" is not valid JSON: ${e.message}`); }
-        const msgs = Array.isArray(parsed) ? parsed : (parsed.messages || []);
-        allMessages = allMessages.concat(msgs);
-      }
-      // Dedup by id
-      const msgMap = new Map();
-      for (const m of allMessages) { const k=`${m.channel_id||0}:${m.id}`; if(!msgMap.has(k)) msgMap.set(k,m); }
-      const messages = [...msgMap.values()];
-
-      msg.textContent = `Extracting links from ${messages.length.toLocaleString()} messages…`;
-      await new Promise(r=>setTimeout(r,30));
-
-      const { links, skipped } = _parseMessages(messages);
-      if (!links.length) throw new Error('No download links found in this export file.');
-
-      // ── Chunk send: 400 links/chunk ≈ 1MB — safely under Vercel's 4.5MB limit ──
-      const CHUNK = 400;
-      const totalChunks = Math.ceil(links.length / CHUNK);
-      let batchId = null;
-      // Store AbortController so Stop/Wipe can cancel the current in-flight fetch
-      window._uploadAbortController = new AbortController();
-      for (let ci = 0; ci < totalChunks; ci++) {
-        // Check if abort was triggered client-side (Stop/Wipe button clicked)
-        if (window._uploadAbortController.signal.aborted) {
-          msg.style.color = '#f59e0b';
-          msg.textContent = 'Upload cancelled.';
-          break;
-        }
-        const chunk = links.slice(ci * CHUNK, (ci + 1) * CHUNK);
-        const isFinal = ci === totalChunks - 1;
-        msg.textContent = ` Saving chunk ${ci+1}/${totalChunks} (${chunk.length} links)…`;
-        const body = JSON.stringify({
-          links: chunk, batchId, isFinal,
-          messageCount: isFinal ? messages.length : undefined,
-          skipped: isFinal ? skipped : undefined,
-        });
-        let res;
-        try {
-          res = await fetch('/api/scrape/save-extracted', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body,
-            signal: window._uploadAbortController.signal,
-          });
-        } catch (fetchErr) {
-          if (fetchErr.name === 'AbortError') {
-            msg.style.color = '#f59e0b';
-            msg.textContent = 'Upload cancelled — click "Choose File" to re-upload.';
-            break;
-          }
-          throw fetchErr;
-        }
-        // Safe parse — server may return plain text error (e.g. 413 from Vercel gateway)
-        const raw = await res.text();
-        let data;
-        try { data = JSON.parse(raw); } catch(_) { throw new Error(raw.slice(0,200)); }
-        // 409 = server-side abort (Stop/Wipe was clicked)
-        if (res.status === 409 && data?.aborted) {
-          msg.style.color = '#f59e0b';
-          msg.textContent = 'Upload cancelled by Stop/Wipe — click "Choose File" to re-upload.';
-          dashCheckExportStatus();
-          break;
-        }
-        if (!res.ok) throw new Error(data.message || 'Save failed');
-        if (!batchId) batchId = data.batchId;
-        if (isFinal) {
-          msg.style.color = '#22c55e';
-          msg.textContent = data.message;
-          dashCheckExportStatus();
-        }
-      }
-      window._uploadAbortController = null;
-    } catch (err) {
-      msg.style.color = '#ef4444';
-      msg.textContent = `Failed: ${err.message}`;
-    } finally { btn.disabled = false; }
-  }
-
   // ── Per-account Source Selector ──────────────────────────────────────────────
   var _acc1Source = 'auto', _acc2Source = 'auto';
+  let _isPreparingPipeline2 = false;
+
+  function updateOrchestratorButtonLabel() {
+    const button = document.getElementById('startBtn2');
+    if (!button || _isRunning2 || _isPreparingPipeline2) return;
+    const hasFileUpload = _acc1Source === 'file' || _acc2Source === 'file';
+    button.innerHTML = hasFileUpload
+      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg> Upload Selected Account(s) &amp; Run'
+      : '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Run Orchestrator';
+  }
+
+  function unlockPipelinePreparation2() {
+    _isPreparingPipeline2 = false;
+    if (!_isRunning2) {
+      const start = document.getElementById('startBtn2');
+      const resume = document.getElementById('resumeBtn2');
+      if (start) start.disabled = false;
+      if (resume) resume.disabled = false;
+      updateOrchestratorButtonLabel();
+    }
+  }
 
   function setAccSource(acc, source) {
     if (acc === 1) {
@@ -1286,6 +1098,7 @@
         picker.style.display = 'block'; info.style.display = 'none';
       }
     }
+    updateOrchestratorButtonLabel();
   }
 
   async function dashCheckExportStatus() {
@@ -1609,52 +1422,83 @@
     }
   }
 
-  async function startPipeline2(resume = false) {
-    if (_isRunning2) return;
+  function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = event => resolve(String(event.target.result || ''));
+      reader.onerror = () => reject(new Error('Could not read the selected file.'));
+      reader.readAsText(file, 'utf-8');
+    });
+  }
 
-    // ── If any account has File Upload selected, upload first ─────────────────
+  async function parseAccountExport(file, account) {
+    const raw = await readFileAsText(file);
+    let parsed;
+    try { parsed = JSON.parse(raw); }
+    catch (_) { throw new Error(`Account ${account}: selected file is not valid JSON.`); }
+    const messages = Array.isArray(parsed) ? parsed : parsed?.messages;
+    if (!Array.isArray(messages)) throw new Error(`Account ${account}: JSON must contain a messages array.`);
+    const result = _parseMessages(messages, String(account));
+    if (!result.links.length) throw new Error(`Account ${account}: no supported download links were found.`);
+    return { messages, links: result.links, skipped: result.skipped };
+  }
+
+  async function startPipeline2(resume = false) {
+    if (_isRunning2 || _isPreparingPipeline2) return;
+
+    // Validate and parse every selected file before replacing/merging stored data.
     const token = getToken();
-    const readFile = f => new Promise((res,rej) => { const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=()=>rej(new Error('Read error')); r.readAsText(f,'utf-8'); });
+    if (!token) { alert('Admin session missing. Please sign in again.'); return; }
+    if (_acc1Source === 'file' && (!_dashRawFiles || !_dashRawFiles.length)) { alert('Acc 1 is set to File Upload — please choose a file first.'); return; }
+    if (_acc2Source === 'file' && (!_dashRawFiles2 || !_dashRawFiles2.length)) { alert('Acc 2 is set to File Upload — please choose a file first.'); return; }
+
+    _isPreparingPipeline2 = true;
+    const startButton = document.getElementById('startBtn2');
+    const resumeButton = document.getElementById('resumeBtn2');
+    if (startButton) { startButton.disabled = true; startButton.textContent = 'Validating selected files…'; }
+    if (resumeButton) resumeButton.disabled = true;
+    const preparedUploads = {};
+    try {
+      if (_acc1Source === 'file') preparedUploads.acc1 = await parseAccountExport(_dashRawFiles[0], 1);
+      if (_acc2Source === 'file') preparedUploads.acc2 = await parseAccountExport(_dashRawFiles2[0], 2);
+    } catch (err) {
+      unlockPipelinePreparation2();
+      alert(err.message);
+      return;
+    }
     if (_acc1Source === 'file') {
       if (!_dashRawFiles || !_dashRawFiles.length) { alert('Acc 1 is set to File Upload — please choose a file first.'); return; }
       try {
         appendLog2 && appendLog2('[INFO] Uploading Acc 1 file...');
-        const text = await readFile(_dashRawFiles[0]);
-        let parsed; try { parsed = JSON.parse(text); } catch(e) { throw new Error('Invalid JSON in Acc 1 file'); }
-        const msgs = Array.isArray(parsed) ? parsed : (parsed.messages||[]);
-        const {links, skipped} = _parseMessages(msgs);
-        if (!links.length) throw new Error('No links found in Acc 1 file');
+        const { messages: msgs, links, skipped } = preparedUploads.acc1;
         const CHUNK=400, total=Math.ceil(links.length/CHUNK); let batchId=null;
         for (let ci=0;ci<total;ci++) {
           const chunk=links.slice(ci*CHUNK,(ci+1)*CHUNK), isFinal=ci===total-1;
-          const res = await fetch('/api/scrape/save-extracted',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
+          const res = await fetch('/api/scrape/save-extracted?account=1',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
           const d = await res.json().catch(()=>({})); if (!res.ok) throw new Error(d.message||'Save failed'); if (!batchId) batchId=d.batchId;
         }
         fetch('/api/scrape/mark-sync',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({account:'1',source:'manual',links:links.length})}).catch(()=>{});
         appendLog2 && appendLog2(`[INFO] Acc 1: ${links.length.toLocaleString()} links saved.`);
-      } catch(err) { alert('Acc 1 upload failed: ' + err.message); return; }
+      } catch(err) { unlockPipelinePreparation2(); alert('Acc 1 upload failed: ' + err.message); return; }
     }
     if (_acc2Source === 'file') {
       if (!_dashRawFiles2 || !_dashRawFiles2.length) { alert('Acc 2 is set to File Upload — please choose a file first.'); return; }
       try {
         appendLog2 && appendLog2('[INFO] Uploading Acc 2 file...');
-        const text = await readFile(_dashRawFiles2[0]);
-        let parsed; try { parsed = JSON.parse(text); } catch(e) { throw new Error('Invalid JSON in Acc 2 file'); }
-        const msgs = Array.isArray(parsed) ? parsed : (parsed.messages||[]);
-        const {links, skipped} = _parseMessages(msgs);
-        if (!links.length) throw new Error('No links found in Acc 2 file');
+        const { messages: msgs, links, skipped } = preparedUploads.acc2;
         const CHUNK=400, total=Math.ceil(links.length/CHUNK); let batchId=null;
         for (let ci=0;ci<total;ci++) {
           const chunk=links.slice(ci*CHUNK,(ci+1)*CHUNK), isFinal=ci===total-1;
-          const res = await fetch('/api/scrape/save-extracted?merge=true',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
+          const res = await fetch('/api/scrape/save-extracted?merge=true&account=2',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
           const d = await res.json().catch(()=>({})); if (!res.ok) throw new Error(d.message||'Merge failed'); if (!batchId) batchId=d.batchId;
         }
         fetch('/api/scrape/mark-sync',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({account:'2',source:'manual',links:links.length})}).catch(()=>{});
         appendLog2 && appendLog2(`[INFO] Acc 2: ${links.length.toLocaleString()} links merged.`);
-      } catch(err) { alert('Acc 2 upload failed: ' + err.message); return; }
+      } catch(err) { unlockPipelinePreparation2(); alert('Acc 2 upload failed: ' + err.message); return; }
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    _isPreparingPipeline2 = false;
     _isRunning2 = true; _cAdded2 = 0; _cUpdated2 = 0;
     document.getElementById('logBox2').innerHTML = '';
     document.getElementById('doneBanner2').classList.remove('visible');
@@ -1844,6 +1688,7 @@
       }
     } catch(_) {}
   }
+  updateOrchestratorButtonLabel();
   syncOrchState2();
 
 
