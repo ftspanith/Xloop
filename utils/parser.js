@@ -788,10 +788,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   };
 
   // ── Helper: extract size from a 'Size :' or 'File Size:' line ─────────────
-  const extractSizeFromMeta=l=>{
-    const m=(l||'').match(/(\d+(?:\.\d+)?\s*(?:GB|MB))/i);
-    return m?m[1].replace(/\s+/g,'').trim():'';
-  };
+  const extractSizeFromMeta = l => extractSize(l || '');
 
   // ── Build URL+filename pairs ──────────────────────────────────────────────
   // Each 'pair' = { rawFilename, size, url, urlType }
@@ -1159,8 +1156,9 @@ function parseManualInput(line) {
   const raw = line.trim();
 
   // Extract size  e.g. 1.2GB, 800MB, 1,200 MB
-  const sizeMatch = raw.match(/(\d[\d,.]*\s*(?:GB|MB))/i);
-  const size = sizeMatch ? sizeMatch[1].replace(/\s/g, '') : '';
+  // Use the same canonical extractor as Quick Paste so manual and bulk imports
+  // interpret commas, brackets, decimals and whitespace consistently.
+  const size = extractSize(raw);
 
   // Extract quality
   const quality = normalizeQuality(raw) || 'HD';
