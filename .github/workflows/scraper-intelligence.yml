@@ -42,6 +42,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: node --check scrape_api.js
+      - run: node --check utils/telegram-intelligence.js
+      - run: node --check import-telegram-json-to-mongodb.js
       - run: npm run test:scraper-intelligence
       - run: npm run test:telegram-import
       - run: npm run test:video-formats
