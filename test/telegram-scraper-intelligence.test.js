@@ -284,6 +284,37 @@ test('related album metadata fills missing descriptive fields but keeps per-file
   }]);
 });
 
+test('derives descriptive metadata from a linked parent post even when it has no download URL', () => {
+  const parent = {
+    id: 310,
+    channel_id: 1001,
+    raw_text: 'Example Movie (2026) 1080p WEB-DL',
+    classification: { is_download: false, is_promotion: false },
+  };
+  const child = {
+    id: 311,
+    channel_id: 999,
+    reply_to: { message_id: 310, peer: { type: 'channel', id: '1001' } },
+    content_metadata: {
+      title: null,
+      raw_title: null,
+      year: null,
+      language: '',
+      languages: [],
+      quality: '720p',
+      is_series: null,
+    },
+  };
+
+  const count = enrichRelatedMessageMetadata([parent, child]);
+  assert.equal(count, 1);
+  assert.equal(child.content_metadata.title, 'Example Movie');
+  assert.equal(child.content_metadata.year, 2026);
+  assert.equal(child.content_metadata.quality, '720p');
+  assert.equal(child.content_metadata.related_sources[0].channel_id, 1001);
+  assert.equal(child.content_metadata.related_sources[0].message_id, 310);
+});
+
 test('related reply metadata is isolated to the same Telegram channel', () => {
   const parent = {
     id: 301, channel_id: 999,
