@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 const adminDir = path.join(root, 'public', 'admin');
@@ -74,4 +75,24 @@ test('Server tags extracted-link uploads with the selected source account', () =
   assert.match(route, /const sourceAccount = \['1', '2'\]/);
   assert.match(route, /if \(sourceAccount\) e\.sourceAccount = sourceAccount/);
   assert.match(model, /sourceAccount:\s*\{\s*type:\s*String/);
+});
+
+test('Inline JavaScript on every admin page parses without syntax errors', () => {
+  const pages = fs.readdirSync(adminDir).filter(name => name.endsWith('.html'));
+  let checked = 0;
+
+  for (const page of pages) {
+    const html = fs.readFileSync(path.join(adminDir, page), 'utf8');
+    const scripts = [...html.matchAll(/<script\\b(?![^>]*\\bsrc=)[^>]*>([\\s\\S]*?)<\\/script>/gi)];
+
+    scripts.forEach((match, index) => {
+      checked += 1;
+      assert.doesNotThrow(
+        () => new vm.Script(match[1], { filename: page + ':inline-script-' + (index + 1) }),
+        page + ' inline script ' + (index + 1) + ' must parse'
+      );
+    });
+  }
+
+  assert.ok(checked > 0, 'inline scripts should be checked');
 });
