@@ -54,7 +54,7 @@ test('Telegram message extractor tags account source and deduplicates repeated m
   ];
   const result = extractLinksFromMessages(messages, '2');
   assert.equal(result.uniqueMessages, 1);
-  assert.ok(Array.isArray(result.links));
+  assert.ok(result.links.length > 0, 'sample Telegram post should produce at least one download link');
   for (const link of result.links) assert.equal(link.sourceAccount, '2');
 });
 
