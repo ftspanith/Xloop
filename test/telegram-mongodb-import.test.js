@@ -65,11 +65,12 @@ test('promotion-only messages are excluded while mixed download promotions retai
   };
   const mixed = {
     id: 21, channel_id: 999,
-    text: 'Example Film 2026 1080p [1.5GB]\nhttps://gdflix.dev/example-file\nhttps://bit.ly/join-channel\nhttps://unknown.example/extra',
+    text: 'Example Film 2026 1080p [1.5GB]\nhttps://gdflix.dev/example-file\nhttps://bit.ly/join-channel\nhttps://unknown.example/extra\nhttps://bit.ly/possibly-download',
     links: [
       { url: 'https://gdflix.dev/example-file', purpose: 'download' },
       { url: 'https://bit.ly/join-channel', purpose: 'promotion' },
       { url: 'https://unknown.example/extra', purpose: 'review' },
+      { url: 'https://bit.ly/possibly-download', purpose: 'unknown' },
     ],
     classification: { is_promotion: true, is_download: true, needs_review: true },
   };
