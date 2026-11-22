@@ -68,6 +68,13 @@ test('Dashboard supports selecting and validating both account exports before up
   assert.doesNotMatch(dashboard, /dashUploadBtn|dashUploadMsg|dashSafeClose|dashBothProgress/);
 });
 
+test('Account merge deduplicates URLs within a chunk and against MongoDB', () => {
+  const route = read('routes/scrape.js');
+  assert.match(route, /const incomingUrls = \[\.\.\.new Set\(slice\.map\(l => l\.url\)\.filter\(Boolean\)\)\]/);
+  assert.match(route, /const seenIncoming = new Set\(\)/);
+  assert.match(route, /existingUrls\.has\(l\.url\) \|\| seenIncoming\.has\(l\.url\)/);
+});
+
 test('Server tags extracted-link uploads with the selected source account', () => {
   const route = read('routes/scrape.js');
   const model = read('models/ExtractedLink.js');
