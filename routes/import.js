@@ -42,7 +42,7 @@ function normalizeQuality(str) {
 
 // Host detector
 function detectHost(url) {
-  if (/gdflix/i.test(url))         return 'GDFlix';
+  if (/gdfilx\.dev|gdflix/i.test(url)) return 'GDFlix';
   if (/hubcloud/i.test(url))       return 'HubCloud';
   if (/gdlink/i.test(url))         return 'GDLink';
   if (/terabox/i.test(url))        return 'TeraBox';
@@ -764,7 +764,7 @@ router.post('/manual-add', auth, async (req, res) => {
       codec:    link.codec    || detectCodec(fn)    || 'Other',
       hdr:      link.hdr      || detectHDR(fn)      || null,
       audio:    link.audio    || extractAudio(fn)   || null,
-      links: [{ host: detectHost(link.url), url: link.url, isFast: /gdflix|hubcloud|gdlink/i.test(link.url) }],
+      links: [{ host: detectHost(link.url), url: link.url, isFast: /gdfilx\.dev|gdflix|hubcloud|gdlink/i.test(link.url) }],
     };
   });
 
@@ -988,7 +988,7 @@ router.post('/manual-batch', auth, async (req, res) => {
           codec, hdr, audio,
           season:  item.season  ?? null,
           episode: item.episode ?? null,
-          links: [{ host, url: link.url, isFast: /gdflix|hubcloud|gdlink/i.test(link.url) }],
+          links: [{ host, url: link.url, isFast: /gdfilx\.dev|gdflix|hubcloud|gdlink/i.test(link.url) }],
         });
       }
     }
