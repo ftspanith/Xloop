@@ -16,7 +16,7 @@ cp .env.example .env
 nano .env
 ```
 
-First fill the Telegram API ID and API hash values in the local `.env` for both accounts. Get those credentials from `https://my.telegram.org/apps`. The recovered channel lists are already prefilled in `.env.example`: Account 1 has the 20 IDs from the existing scraper configuration; Account 2 has the 4 IDs recovered from its existing full export (including `$𝚝𝚘𝚠¥ 𝙴𝚗𝙲𝚘𝙳𝚎𝚂`, `PMi-XD`, `NAPA Pulse`, and `KiNGSMAN Official`). Keep or edit those comma-separated IDs as needed. Both `TG_CHANNELS_1` and `TG_CHANNELS_2` are mandatory: the scraper stops if either list is missing or invalid, and it never falls back to a built-in/default channel list.
+First fill the Telegram API ID and API hash values in the local `.env` for both accounts. Get those credentials from `https://my.telegram.org/apps`. The recovered channel lists are already prefilled in `.env.example`: Account 1 has 20 IDs and Account 2 has the 25 IDs from its historical `TG_CHANNELS_2` allowlist. The four channels visible in the old Account 2 JSON export were only a subset, not the full configured list. Keep or edit those comma-separated IDs as needed. Both `TG_CHANNELS_1` and `TG_CHANNELS_2` are mandatory: the scraper stops if either list is missing or invalid, and it never falls back to a built-in/default channel list.
 
 Do not paste API hashes, Telegram session strings, OTPs, 2-step passwords, or MongoDB connection strings into chat or commit them to Git.
 
@@ -50,7 +50,7 @@ This runs Account 1 first, then Account 2, each in full-history mode (`--mode=1`
 - `telegram_export.json` — Account 1
 - `telegram_export_2.json` — Account 2
 
-The scraper also writes dated human-readable copies into Termux's home Downloads folder when available. Do not run the two account scrapers simultaneously; their progress and export files are separate, but sequential execution is gentler on Telegram rate limits.
+The scraper also writes dated copies directly into Android's shared `Download` folder (`~/storage/downloads`). Run `termux-setup-storage` and allow the Android storage permission before scraping. It also keeps the canonical `telegram_export.json` / `telegram_export_2.json` files in the Xloop project folder for the importer. Do not run the two account scrapers simultaneously; their progress and export files are separate, but sequential execution is gentler on Telegram rate limits.
 
 If Telegram returns FloodWait, leave the process running; the scraper waits for Telegram's requested interval and has per-channel recovery checkpoints.
 
