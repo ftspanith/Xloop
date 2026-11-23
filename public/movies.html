@@ -151,10 +151,15 @@ let currentPage = 1;
       container.classList.remove('loading');
       
       try {
-        const res = await fetch(url);
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
+        const items = Array.isArray(data) ? data
+          : Array.isArray(data?.movies) ? data.movies
+          : Array.isArray(data?.results) ? data.results
+          : [];
         
-        if (!data.movies || data.movies.length === 0) {
+        if (!items.length) {
           container.innerHTML = '<div class="empty-state">No movies found</div>';
           document.getElementById('moviesPagination').innerHTML = '';
           container.classList.add('loaded');
@@ -162,14 +167,14 @@ let currentPage = 1;
         }
         
         let html = '';
-        data.movies.forEach((item, index) => {
+        items.forEach((item, index) => {
           html += createCard(item, item.type || 'movie', index);
         });
         container.innerHTML = html;
         container.classList.add('loaded');
         activateLazyImages();
         
-        const totalPages = Math.ceil(data.total / 20);
+        const totalPages = Math.ceil((Number(data?.total) || items.length) / 20);
         let pagHtml = '';
         if (totalPages > 1) {
           if (currentPage > 1) {
@@ -183,7 +188,8 @@ let currentPage = 1;
         document.getElementById('moviesPagination').innerHTML = pagHtml;
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (err) {
-        container.innerHTML = '<div class="empty-state">Error loading movies</div>';
+        console.error('Content page load failed:', err);
+        container.innerHTML = '<div class="empty-state">Unable to load content. <button type="button" onclick="loadMovies(currentPage)">Retry</button></div>';
         container.classList.add('loaded');
       }
     }
