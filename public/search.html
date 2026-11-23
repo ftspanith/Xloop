@@ -281,8 +281,30 @@
         document.querySelectorAll('.type-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         currentType = tab.dataset.type;
-        if (currentQuery) runSearch(currentQuery, 1);
+        runSearch(currentQuery, 1);
       });
+    });
+
+    mainInput.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown') {
+        const first = suggestBox.querySelector('.suggestion-item');
+        if (first) { event.preventDefault(); first.focus(); }
+      }
+    });
+    suggestBox.addEventListener('keydown', event => {
+      const items = [...suggestBox.querySelectorAll('.suggestion-item')];
+      const index = items.indexOf(document.activeElement);
+      if (event.key === 'ArrowDown' && index < items.length - 1) {
+        event.preventDefault(); items[index + 1].focus();
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (index > 0) items[index - 1].focus(); else mainInput.focus();
+      } else if (event.key === 'Enter' && index >= 0) {
+        event.preventDefault();
+        goToWatch(items[index].dataset.watchId, items[index].dataset.watchType || 'movie');
+      } else if (event.key === 'Escape') {
+        closeSuggestions(); mainInput.focus();
+      }
     });
 
     // ── Form submit ──────────────────────────────────────────────────────────────
