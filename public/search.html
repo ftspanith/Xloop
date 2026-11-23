@@ -342,7 +342,9 @@
 
     // ── Main search ──────────────────────────────────────────────────────────────
     function escapeSearchHtml(value) {
-      return String(value ?? '').replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[char]));
+      return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[char]));
     }
 
     function createSafeSearchCard(item, index) {
@@ -355,9 +357,9 @@
       const badge = type === 'anime' ? 'ANIME' : type === 'series' ? 'SERIES' : (item.quality === '4K' ? '4K' : 'HD');
       const delay = Math.min(index, 18);
       const image = poster
-        ? `<img src=\"${poster}\" alt=\"${title}\" class=\"card-img\" loading=\"lazy\" onerror=\"this.style.display='none';this.nextElementSibling.style.display='flex'\"><div class=\"card-no-poster\" style=\"display:none\"><div class=\"np-title\">${title}</div></div>`
-        : `<div class=\"card-no-poster\"><div class=\"np-title\">${title}</div></div>`;
-      return `<a href=\"/watch.html?id=${id}&amp;type=${type}\" class=\"card\" style=\"--card-index:${delay}\"><div class=\"card-badge\">${badge}</div>${image}<div class=\"card-info\"><div class=\"card-title\">${title}</div><div class=\"card-sub\">${year} • ${label}</div></div></a>`;
+        ? `<img src="${poster}" alt="${title}" class="card-img" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="card-no-poster" style="display:none"><div class="np-title">${title}</div></div>`
+        : `<div class="card-no-poster"><div class="np-title">${title}</div></div>`;
+      return `<a href="/watch.html?id=${id}&amp;type=${type}" class="card" style="--card-index:${delay}"><div class="card-badge">${badge}</div>${image}<div class="card-info"><div class="card-title">${title}</div><div class="card-sub">${year} • ${label}</div></div></a>`;
     }
 
     function renderSearchGrid(html) {
