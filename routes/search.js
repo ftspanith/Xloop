@@ -75,7 +75,7 @@ router.get('/', async (req, res) => {
 
     const filter = {};
     if (type === 'movie') filter.type = 'movie';
-    else if (type === 'series') filter.type = 'series';
+    else if (type === 'series') filter.type = { $in: ['series', 'anime'] };
     else if (type === 'anime') filter.type = 'anime';
     if (genre) filter.genre = { $in: [String(genre).slice(0, 60)] };
     if (year && /^\d{4}$/.test(String(year))) filter.year = Number(year);
