@@ -52,10 +52,56 @@ async function saveSyncStatus(history) {
 // ── GET /api/scrape/sync-status — return last sync timestamps (public, read-only) ────────────────
 router.get('/sync-status', async (req, res) => {
   try {
-    const data = await getSyncStatus();
-    res.json(data);
+    const history = await getSyncStatus();
+    const ExtractedLink = require('../models/ExtractedLink');
+    const grouped = await ExtractedLink.aggregate([
+      {
+        $group: {
+          _id: { $ifNull: ['$sourceAccount', ''] },
+          count: { $sum: 1 },
+          latestUpdatedAt: { $max: { $ifNull: ['$updatedAt', '$createdAt'] } }
+        }
+      }
+    ]);
+
+    const byAccount = new Map(grouped.map(item => [String(item._id || ''), item]));
+    const acc1Stats = byAccount.get('1') || { count: 0, latestUpdatedAt: null };
+    const acc2Stats = byAccount.get('2') || { count: 0, latestUpdatedAt: null };
+    const unassignedStats = byAccount.get('') || { count: 0, latestUpdatedAt: null };
+    const totalLinks = grouped.reduce((sum, item) => sum + Number(item.count || 0), 0);
+    const latestUpdatedAt = grouped.reduce((latest, item) => {
+      const date = item.latestUpdatedAt ? new Date(item.latestUpdatedAt) : null;
+      return date && (!latest || date > latest) ? date : latest;
+    }, null);
+
+    const makeAccountStatus = (stats, previous) => {
+      if (!stats.count) return previous || null;
+      const updatedAt = stats.latestUpdatedAt ? new Date(stats.latestUpdatedAt) : null;
+      return {
+        ...(previous || {}),
+        source: 'database',
+        links: Number(stats.count),
+        date: updatedAt ? updatedAt.toISOString() : previous?.date || null,
+        dateHuman: updatedAt
+          ? updatedAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })
+          : previous?.dateHuman || 'Imported into MongoDB'
+      };
+    };
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      acc1: makeAccountStatus(acc1Stats, history.acc1),
+      acc2: makeAccountStatus(acc2Stats, history.acc2),
+      database: {
+        totalLinks,
+        account1Links: Number(acc1Stats.count || 0),
+        account2Links: Number(acc2Stats.count || 0),
+        unassignedLinks: Number(unassignedStats.count || 0),
+        latestUpdatedAt: latestUpdatedAt ? latestUpdatedAt.toISOString() : null
+      }
+    });
   } catch (e) {
-    res.json({});
+    res.status(500).json({ error: 'Could not read live sync data', message: e.message });
   }
 });
 
@@ -408,12 +454,17 @@ router.get('/export-status', auth, async (req, res) => {
     }
 
     const tmpExists = fs.existsSync(path.join(os.tmpdir(), 'links_for_bypasser.json'));
+    const latestLink = realCount > 0
+      ? await ExtractedLink.findOne({}).sort({ updatedAt: -1, createdAt: -1 }).select('updatedAt createdAt').lean()
+      : null;
+    const savedAt = latestLink?.updatedAt || latestLink?.createdAt || cache?.savedAt || null;
     const available = realCount > 0 || tmpExists;
+    res.setHeader('Cache-Control', 'no-store');
     res.json({
       available,
       source: realCount > 0 ? 'mongodb' : tmpExists ? 'tmp' : 'none',
       count: realCount > 0 ? realCount : (cache?.count || 0),
-      savedAt: cache ? cache.savedAt : null,
+      savedAt,
     });
   } catch (err) {
     res.json({ available: false, source: 'error', error: err.message });
