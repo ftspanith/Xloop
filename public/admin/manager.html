@@ -914,9 +914,9 @@ function openEdit(movie) {
   dl.innerHTML = (movie.downloads || []).map((d, di) => `
     <div class="dl-item" id="dl-${di}">
       <div class="dl-item-head">
-        <div class="dl-item-name" title="${d.filename||''}">${d.filename || 'Unnamed file'}</div>
-        <span class="badge badge-blue">${d.quality||''}</span>
-        <span class="badge badge-green">${d.size||''}</span>
+        <div class="dl-item-name" title="${escapeHtml(d.filename || '')}">${escapeHtml(d.filename || 'Unnamed file')}</div>
+        <span class="badge badge-blue">${escapeHtml(d.quality || '')}</span>
+        <span class="badge badge-green">${escapeHtml(d.size || '')}</span>
         <button class="btn btn-danger btn-sm" onclick="removeDl(${di})" aria-label="Remove download"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg></button>
       </div>
       <div class="dl-link-list">
