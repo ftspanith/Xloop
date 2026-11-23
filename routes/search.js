@@ -8,7 +8,7 @@ function escapeRegex(value) {
 function normalize(value) {
   return String(value || '')
     .normalize('NFKD')
-    .replace(/[\\u0300-\\u036f]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
@@ -78,7 +78,7 @@ router.get('/', async (req, res) => {
     else if (type === 'series') filter.type = 'series';
     else if (type === 'anime') filter.type = 'anime';
     if (genre) filter.genre = { $in: [String(genre).slice(0, 60)] };
-    if (year && /^\\d{4}$/.test(String(year))) filter.year = Number(year);
+    if (year && /^\d{4}$/.test(String(year))) filter.year = Number(year);
     if (quality) filter.quality = String(quality).slice(0, 30);
     if (language) filter.language = { $regex: escapeRegex(String(language).slice(0, 50)), $options: 'i' };
 
