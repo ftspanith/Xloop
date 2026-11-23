@@ -28,4 +28,4 @@ jobs:
           node-version: 22.22.2
           cache: npm
       - run: npm ci
-      - run: npm run test:readiness
+      - run: npm run test:xloop-contracts
