@@ -269,6 +269,11 @@ async function loadHomepage() {
 
       renderHero();
       resetHeroInterval();
+    } else {
+      const heroContent = document.getElementById('heroContent');
+      if (heroContent) heroContent.innerHTML = '<div class="empty-state">No featured content available</div>';
+      const heroBg = document.getElementById('heroBg');
+      if (heroBg) heroBg.style.opacity = 0;
     }
 
     // Load Sliders
