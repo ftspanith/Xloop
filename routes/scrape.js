@@ -218,7 +218,7 @@ const upload  = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30
 router.post('/upload-export', auth, upload.array('files', 10), async (req, res) => {
   try {
     const PipelineCache = require('../models/PipelineCache');
-    const { parseMessageBlock, classifyUrl, isJunkTitle } = require('../utils/parser');
+    const { extractTelegramLinks } = require('../utils/telegram-ingestion');
 
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: 'No files received. Use multipart/form-data with field name "files".' });
@@ -268,80 +268,12 @@ router.post('/upload-export', auth, upload.array('files', 10), async (req, res) 
     const rawCount = allMessages.length;
     const dedupCount = rawCount - messages.length;
 
-    // ── Run extraction inline (same logic as extract_links.js) ───────────────
-    // We extract here instead of storing raw JSON (raw JSON = 50MB+ > MongoDB 16MB limit)
-    const HOST_PRIORITY = ['GDFlix','HubCloud','FilePress','DTFlix','TMBCloud','Direct','Download'];
-    // MAX_HOSTS removed — store ALL URLs per file, not just 3 per host type.
-    // The collection master needs every available cloud link for a given movie.
-    const hostRank = h => { const i = HOST_PRIORITY.indexOf(h); return i === -1 ? 99 : i; };
-    const CDN_RE = [/\.(m3u8|ts|m4s)(\?|$)/i, /\/(image|img|thumbnail|poster|banner|cover)\//i,
-      /\/(uploads?|wp-content|static|assets?)\//i, /cdn\.(hotstar|zee5|sonyliv)/i,
-      /vod\d*\./i, /img\d*\./i, /thumbs?\./i, /akamaized\.net/i, /cloudfront\.net/i];
-    const isJunkUrl = u => { if (!u) return true;
-      if (/workers\.dev/i.test(u)) return !/\.(mkv|mp4|avi|zip|rar)([?#]|$)/i.test(u);
-      return CDN_RE.some(r => r.test(u)); };
-    const slotKey = e => {
-      const sz = (e.size||'').replace(/\s/g,'').toLowerCase();
-      const fn = (e.filename||'').toLowerCase().trim().slice(0,80);
-      let d = '';
-      if (!sz && !fn) { try { d = new URL(e.url).hostname.replace('www.',''); } catch { d = e.url.slice(0,40); } }
-      return `${(e.quality||'HD').toLowerCase()}|${sz}|${fn}|${(e.language||'').toLowerCase()}|${e.season??''}|${e.episode??''}|${d}`;
-    };
-
-    const extracted = []; const shortlinks = [];
-    const seenUrls = new Set();
-    let skipped = 0;
-
-    for (const msg of messages) {
-      let rawText = '';
-      if (typeof msg.text === 'string') rawText = msg.text;
-      else if (Array.isArray(msg.text)) rawText = msg.text.map(p => {
-        if (typeof p === 'string') return p;
-        if (p.type === 'text_link' && p.href) return `${p.text}\n${p.href}\n`;
-        return p.text || '';
-      }).join('');
-      if (msg.reply_markup?.inline_keyboard) {
-        for (const row of msg.reply_markup.inline_keyboard)
-          for (const btn of (row||[])) if (btn.url) rawText += `\n${btn.url}`;
-      }
-      if (!rawText.trim()) { skipped++; continue; }
-      const parsed = parseMessageBlock(rawText, msg.id);
-      if (!parsed || !parsed.downloads?.length || !parsed.title || isJunkTitle(parsed.title)) { skipped++; continue; }
-
-      const msgSlots = new Map();
-      for (const dl of parsed.downloads) {
-        const lang = dl.language || parsed.language || '';
-        if (!dl.size && !dl.filename && !lang && dl.season === null && !parsed.title) continue;
-        for (const link of dl.links) {
-          const url = link.url.replace(/^http:\/\//i,'https://').replace(/\/$/,'');
-          if (isJunkUrl(url) || seenUrls.has(url)) continue;
-          const urlType = classifyUrl(url);
-          if (urlType === 'Ignore' || urlType === 'Paste') continue;
-          const entry = { messageId: parsed.messageId, title: parsed.title, year: parsed.year,
-            contentType: parsed.contentType, isSeries: parsed.isSeries,
-            season: dl.season??parsed.season, episode: dl.episode??parsed.episode,
-            language: lang, quality: dl.quality, size: dl.size, filename: dl.filename,
-            codec: dl.codec || '', hdr: dl.hdr || '', audio: dl.audio || '', bitDepth: dl.bitDepth || '', audioChannels: dl.audioChannels || '',
-            host: urlType, url, bypassedUrl: null,
-            isFast: /gdflix|hubcloud|gdlink|tmbcloud|fpgo|filebee/i.test(url),
-            imdbId: parsed.imdbId||null, tmdbIdHint: parsed.tmdbIdHint||null };
-          if (urlType === 'Shortlink') { shortlinks.push(entry); seenUrls.add(url); continue; }
-          const sk = slotKey(entry);
-          if (msgSlots.has(sk)) {
-            // Allow ALL URLs for the same file slot — same file can have multiple GDFlix/HubCloud links.
-            // Only skip true duplicates (already seen by global seenUrls check above).
-            msgSlots.get(sk).push(entry);
-          } else { msgSlots.set(sk, [entry]); }
-        }
-      }
-      for (const sl of msgSlots.values()) {
-        sl.sort((a,b)=>hostRank(a.host)-hostRank(b.host));
-        for (const e of sl) { seenUrls.add(e.url); extracted.push(e); }
-      }
-    }
-
-    // Merge shortlinks in
-    const allLinks = [...extracted, ...shortlinks];
+    // ── Shared extraction engine: identical to scrape-and-upload.js ──
+    const account = String(req.body?.account || req.query.account || '1');
+    const extraction = extractTelegramLinks(messages, account);
+    const allLinks = extraction.links;
+    const shortlinks = allLinks.filter(link => link.host === 'Shortlink');
+    const skipped = extraction.stats.skippedMessages;
 
     // ── Save to ExtractedLink collection (one doc per link — no 16MB limit) ──
     // Each upload gets a batch ID so we can atomically replace the previous batch.
