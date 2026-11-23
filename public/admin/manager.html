@@ -535,6 +535,7 @@ let totalPages  = 1;
 let currentFilter = 'all';
 let currentQuery  = '';
 let searchTimer   = null;
+let searchRequestId = 0;
 let previewMeta   = null;
 let editMovieData = null;
 
@@ -634,6 +635,7 @@ async function startLinkNormalization() {
 }
 
 async function loadSearch() {
+  const requestId = ++searchRequestId;
   const grid = document.getElementById('search-results');
   const totalEl = document.getElementById('stat-total');
   const showingEl = document.getElementById('stat-showing');
@@ -657,6 +659,7 @@ async function loadSearch() {
 
   try {
     const data = await apiCall('GET', '/api/movies?' + params.toString());
+    if (requestId !== searchRequestId) return; // Ignore stale responses after a newer search/filter.
     // The list API returns { movies, total, page, pages }; also accept a raw array.
     const movies = Array.isArray(data) ? data
       : Array.isArray(data?.movies) ? data.movies
@@ -700,6 +703,7 @@ async function loadSearch() {
     });
     renderPagination();
   } catch (err) {
+    if (requestId !== searchRequestId) return;
     totalEl.textContent = '—';
     showingEl.textContent = '—';
     grid.innerHTML = `<div class="empty" style="grid-column:1/-1;padding:24px;text-align:center">
