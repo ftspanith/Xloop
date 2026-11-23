@@ -86,7 +86,7 @@ router.get('/', async (req, res) => {
       const tokens = normalizedQuery.split(' ').filter(token => token.length > 1).slice(0, 8);
       const escaped = escapeRegex(q);
       // Match all but the final character too, so a one-character typo can still retrieve candidates.
-    const tokenPatterns = tokens.map(token => new RegExp(escapeRegex(token.slice(0, Math.max(2, token.length - 1))), 'i'));
+    const tokenPatterns = tokens.map(token => new RegExp(escapeRegex(token.slice(0, Math.min(3, token.length))), 'i'));
       const searchFilter = {
         ...filter,
         $or: [
