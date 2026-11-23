@@ -242,6 +242,7 @@
     let debounceTimer   = null;
     let suggestTimer    = null;
     let searchRequestId = 0;
+    let suggestRequestId = 0;
 
     // ── Elements ─────────────────────────────────────────────────────────────────
     const mainInput      = document.getElementById('mainSearchInput');
@@ -289,11 +290,14 @@
 
     // ── Suggestions (fast, small limit) ─────────────────────────────────────────
     async function loadSuggestions(q) {
+      const requestId = ++suggestRequestId;
       try {
         const url = `/api/search?q=${encodeURIComponent(q)}&limit=6${currentType ? '&type=' + currentType : ''}`;
         const res  = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        const items = data.results || [];
+        if (requestId !== suggestRequestId) return;
+        const items = Array.isArray(data.results) ? data.results : [];
         if (!items.length) { closeSuggestions(); return; }
 
         suggestBox.innerHTML = items.map(item => {
@@ -313,7 +317,11 @@
       } catch (_) { closeSuggestions(); }
     }
 
-    function closeSuggestions() { suggestBox.innerHTML = ''; suggestBox.classList.remove('open'); }
+    function closeSuggestions() {
+      suggestRequestId++;
+      suggestBox.innerHTML = '';
+      suggestBox.classList.remove('open');
+    }
     function goToWatch(id, type) { window.location.href = `/watch.html?id=${id}&type=${type}`; }
 
     // ── Main search ──────────────────────────────────────────────────────────────
