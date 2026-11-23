@@ -58,5 +58,5 @@ test('scraper merge and replace safety guards remain explicit', () => {
 
 test('series search keeps anime results in the legacy series category', () => {
   const route = read('routes/search.js');
-  assert.match(route, /type === 'series'\\) filter\\.type = \\{ \\$in: \\['series', 'anime'\\] \\}/);
+  assert.match(route, /type === 'series'\\)\\s*filter\\.type = \\{\\s*\\$in: \\['series', 'anime'\\]\\s*\\}/);
 });
