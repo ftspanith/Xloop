@@ -31,7 +31,8 @@
     "test:scraper-intelligence": "node --test tests/scraper-intelligence.test.js test/variant-intelligence.test.js",
     "test:xloop-contracts": "node --test test/xloop-data-contract.test.js",
     "test:mobile-admin": "node --test tests/mobile-admin-readiness.test.js tests/admin-inline-script-syntax.test.js",
-    "test:readiness": "npm run test:xloop-contracts && npm run test:mobile-admin && npm run test:quickpaste && npm run test:video-formats && npm run test:analytics-html && npm run test:scraper-intelligence"
+    "test:readiness": "npm run test:xloop-contracts && npm run test:mobile-admin && npm run test:quickpaste && npm run test:video-formats && npm run test:analytics-html && npm run test:scraper-intelligence && npm run test:source-syntax",
+    "test:source-syntax": "node --check public/js/app.js && node --check public/js/admin.js && node --check routes/import.js && node --check routes/movies.js && node --check routes/search.js"
   },
   "dependencies": {
     "axios": "^1.19.0",
