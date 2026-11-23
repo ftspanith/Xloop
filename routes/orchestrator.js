@@ -396,11 +396,15 @@ router.post('/start', auth, async (req, res) => {
 // Each call processes batchSize groups with real poster/metadata lookup.
 // Frontend chains: offset=0 => offset+=batchSize => ... until done=true
 router.post('/import-batch', auth, async (req, res) => {
-  const { offset = 0, batchSize = 1 } = req.body || {};
+  const body = req.body || {};
+  const offset = Math.max(0, Number.parseInt(body.offset, 10) || 0);
+  const requestedBatchSize = Number.parseInt(body.batchSize, 10) || 1;
+  const batchSize = Math.min(5, Math.max(1, requestedBatchSize));
   const mongoose = require('mongoose');
   const ExtractedLinkM = require('../models/ExtractedLink');
   const Movie = require('../models/Movie');
-  const { cleanTitleForApi, detectHost } = require('../utils/parser');
+  const { cleanTitleForApi, detectHost, classifyUrl } = require('../utils/parser');
+  const { normalizeTelegramUrl } = require('../utils/telegram-ingestion');
   const { searchTMDB, searchOMDB, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates, searchGoogleImage } = require('../pipeline_full');
 
   try {
@@ -413,21 +417,26 @@ router.post('/import-batch', auth, async (req, res) => {
       return res.json({ done: true, added: 0, updated: 0, skipped: 0, total: 0, nextOffset: 0, message: 'No links cached. Run Full Pipeline first.' });
     }
 
-    // Group by clean title + year — fix: also allow direct-URL-tagged-as-Shortlink
-    const DIRECT_URL_RE = /gdflix|hubcloud|gdlink|drivehub|filepress|dtflix|dotflix|tmbcloud|pixeldrain|gofile|streamtape|buzzheavier|1fichier/i;
-    const groups = {};
+    // Normalize and validate legacy/new records consistently before import.
+    // This also repairs stale host labels when the URL itself identifies the real host.
+    const groups = new Map();
+    const seenImportUrls = new Set();
     for (const item of links) {
-      // Skip genuine unresolved shortlinks but keep:
-      // 1. Items that have a bypassed URL
-      // 2. Items whose raw URL is actually a direct link (mis-tagged as Shortlink)
-      if (item.host === 'Shortlink' && !item.bypassedUrl && !DIRECT_URL_RE.test(item.url)) continue;
+      const normalizedUrl = normalizeTelegramUrl(item.url);
+      if (!normalizedUrl) continue;
+      const actualHost = classifyUrl(normalizedUrl);
+      if (actualHost === 'Ignore' || actualHost === 'Paste') continue;
+      if (actualHost === 'Shortlink' && !item.bypassedUrl) continue;
+      if (seenImportUrls.has(normalizedUrl)) continue;
+      seenImportUrls.add(normalizedUrl);
+
       const cTitle = cleanTitleForApi(item.title || '', item.year);
-      if (!cTitle) continue;
+      if (!cTitle || cTitle.length < 2) continue;
       const key = cTitle.toLowerCase() + '__' + (item.year || '');
-      if (!groups[key]) groups[key] = { items: [], msgDate: item.date || null };
-      groups[key].items.push(item);
+      if (!groups.has(key)) groups.set(key, { items: [], msgDate: item.date || null });
+      groups.get(key).items.push({ ...item, url: normalizedUrl, host: detectHost(normalizedUrl) });
     }
-    const groupEntries = Object.entries(groups);
+    const groupEntries = [...groups.entries()];
     const total = groupEntries.length;
     const thisBatch = groupEntries.slice(offset, offset + batchSize);
     const nextOffset = offset + thisBatch.length;
