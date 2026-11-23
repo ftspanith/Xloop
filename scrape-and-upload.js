@@ -230,8 +230,9 @@ async function uploadExport(token, mergeMode = false) {
   const allLinks = extraction.links;
   const dedupedMsgs = extraction.messages;
   const skipped = extraction.stats.skippedMessages;
+  const rejectedLinks = extraction.stats.rejectedLinks || 0;
   log(`After message dedup: ${dedupedMsgs.length} unique messages (${extraction.stats.duplicateMessages} duplicates removed)`);
-  log(`Parsed ${extraction.stats.parsedMessages} messages; extracted ${allLinks.length} links; skipped ${skipped} messages`);
+  log(`Parsed ${extraction.stats.parsedMessages} messages; kept ${allLinks.length} approved provider links; rejected ${rejectedLinks} other website/provider links; skipped ${skipped} messages`);
 
   // ── Upload in chunks of 400 links (~150-250KB each, well under 4.5MB limit) ──
   const CHUNK = 400;
