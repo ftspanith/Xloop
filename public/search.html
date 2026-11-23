@@ -268,6 +268,13 @@
     const statusEl       = document.getElementById('searchStatus');
     const suggestBox     = document.getElementById('searchSuggestions');
 
+    // Suggestions use text/attribute escaping and delegated clicks (no HTML event handlers).
+    suggestBox.addEventListener('click', event => {
+      const item = event.target.closest('.suggestion-item[data-watch-id]');
+      if (!item) return;
+      goToWatch(item.dataset.watchId, item.dataset.watchType || 'movie');
+    });
+
     // ── Type tab wiring ──────────────────────────────────────────────────────────
     document.querySelectorAll('.type-tab').forEach(tab => {
       tab.addEventListener('click', () => {
@@ -318,13 +325,18 @@
 
         suggestBox.innerHTML = items.map(item => {
           const badge = item.type === 'movie' ? 'MOVIE' : item.type === 'anime' ? 'ANIME' : 'SERIES';
-          const poster = item.poster || '';
+          const id = escapeSearchHtml(item._id || '');
+          const type = ['movie', 'series', 'anime'].includes(item.type) ? item.type : 'movie';
+          const poster = escapeSearchHtml(item.poster || '');
+          const title = escapeSearchHtml(item.title || 'Untitled');
+          const year = escapeSearchHtml(item.year || '');
+          const rating = escapeSearchHtml(item.rating || '');
           return `
-            <div class="suggestion-item" onclick="goToWatch('${item._id}','${item.type || 'movie'}')">
-              <img src="${poster}" onerror="this.style.display='none'" alt="${item.title}" loading="lazy">
+            <div class="suggestion-item" role="option" tabindex="0" data-watch-id="${id}" data-watch-type="${type}">
+              <img src="${poster}" onerror="this.style.display='none'" alt="${title}" loading="lazy">
               <div class="suggestion-item-info">
-                <div class="suggestion-item-title">${item.title}</div>
-                <div class="suggestion-item-meta">${item.year || ''} ${item.rating ? ' ' + item.rating : ''}</div>
+                <div class="suggestion-item-title">${title}</div>
+                <div class="suggestion-item-meta">${year} ${rating}</div>
               </div>
               <span class="suggestion-badge">${badge}</span>
             </div>`;
