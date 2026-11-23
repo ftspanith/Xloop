@@ -651,9 +651,10 @@ router.post('/telegram-sync/finalize', auth, async (req, res) => {
     res.json({ ok: true, status: 'completed', counts: state.received });
   } catch (err) {
     console.error('[telegram-sync] finalize failed:', err);
-    if (state && syncId && !swapped) {
-      state.status = 'replace_failed';
-      state.verificationError = 'Atomic collection replacement failed; existing live links remain active.';
+    if (state && syncId) {
+      state.status = swapped ? 'completed' : 'replace_failed';
+      if (swapped) state.completedAt = state.completedAt || new Date().toISOString();
+      else state.verificationError = 'Atomic collection replacement failed; existing live links remain active.';
       try {
         await PipelineCache.findOneAndUpdate(
           { key: '_telegram_sync_' + syncId },
