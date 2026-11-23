@@ -255,6 +255,7 @@
 <div class="toast" id="toast">Message</div>
 <script src="/js/admin.js"></script>
 <script>
+  checkAuth();
   const TOKEN = localStorage.getItem('xloop_admin_token');
   if (!TOKEN) window.location.href = '/admin/login.html';
   const AH = { 'Authorization': 'Bearer ' + TOKEN };
