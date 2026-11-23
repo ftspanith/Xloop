@@ -101,7 +101,7 @@ router.get('/sync-status', async (req, res) => {
       }
     });
   } catch (e) {
-    res.status(500).json({ error: 'Could not read live sync data', message: e.message });
+    res.status(500).json({ error: 'Could not read live sync data' });
   }
 });
 
@@ -480,7 +480,7 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
     return res.status(409).json({ aborted: true, message: 'Upload was cancelled. Please re-upload your file.' });
   }
   try {
-    const { links, batchId: incomingBatchId, isFinal, messageCount, skipped } = req.body;
+    const { links, batchId: incomingBatchId, isFinal, messageCount, skipped, sourceAccount: incomingSourceAccount } = req.body;
     if (!Array.isArray(links)) {
       return res.status(400).json({ message: 'No links array provided.' });
     }
@@ -494,8 +494,15 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
     const batchId = incomingBatchId || `batch_${Date.now()}`;
     const mergeMode = req.query.merge === 'true';
 
-    // Tag and insert this chunk
-    links.forEach(e => { e.uploadBatch = batchId; });
+    // Tag and insert this chunk. The admin uploader supplies the account explicitly;
+    // scraper clients that already tag individual links remain compatible.
+    const sourceAccount = ['1', '2'].includes(String(incomingSourceAccount))
+      ? String(incomingSourceAccount)
+      : '';
+    links.forEach(e => {
+      e.uploadBatch = batchId;
+      if (sourceAccount) e.sourceAccount = sourceAccount;
+    });
     if (links.length > 0) {
       const CHUNK = 500;
       for (let i = 0; i < links.length; i += CHUNK) {
