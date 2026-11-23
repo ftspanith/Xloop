@@ -911,7 +911,7 @@ router.post('/manual-add', auth, async (req, res) => {
 // ── PATCH /api/import/update-movie/:id ──────────────────────
 router.patch('/update-movie/:id', auth, async (req, res) => {
   try {
-    const movie = await Movie.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true });
+    const movie = await Movie.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
     if (!movie) return res.status(404).json({ message: 'Movie not found' });
     res.json({ message: 'Updated', movie });
   } catch (e) { res.status(500).json({ message: e.message }); }
