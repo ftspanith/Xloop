@@ -496,6 +496,11 @@ function openMobileNav() {
       <a href="/shows.html" onclick="closeMobileNav()">TV Shows</a>
       <a href="/anime.html" onclick="closeMobileNav()">Anime</a>
       <a href="/search.html" onclick="closeMobileNav()">Search</a>
+      <a href="/admin/login.html" onclick="closeMobileNav()">Admin</a>
+      <div class="mobile-nav-search">
+        <input type="text" id="mobileNavSearchInput" placeholder="Search titles..." />
+        <button type="button" onclick="mobileNavSearch()">Go</button>
+      </div>
     `;
     document.body.appendChild(menu);
   }
@@ -508,3 +513,39 @@ function closeMobileNav() {
   if (menu) menu.classList.remove('open');
   document.body.style.overflow = '';
 }
+
+
+// Centralized mobile navigation search and keyboard/backdrop controls.
+function mobileNavSearch() {
+  const input = document.getElementById('mobileNavSearchInput');
+  const query = input ? input.value.trim() : '';
+  if (!query) return;
+
+  if (
+    window.location.pathname.endsWith('/search.html') &&
+    typeof window.runSearch === 'function'
+  ) {
+    window.runSearch(query, 1);
+    closeMobileNav();
+    return;
+  }
+
+  window.location.href = `/search.html?q=${encodeURIComponent(query)}`;
+}
+
+document.addEventListener('keydown', function (event) {
+  if (event.key === 'Escape') {
+    closeMobileNav();
+    return;
+  }
+
+  if (event.key === 'Enter' && event.target && event.target.id === 'mobileNavSearchInput') {
+    event.preventDefault();
+    mobileNavSearch();
+  }
+});
+
+document.addEventListener('click', function (event) {
+  const menu = document.getElementById('mobileNavOverlay');
+  if (menu && event.target === menu) closeMobileNav();
+});
