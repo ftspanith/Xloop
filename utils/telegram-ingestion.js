@@ -1,7 +1,42 @@
 'use strict';
 const { parseMessageBlock, classifyUrl, isJunkTitle, normalizeGdflixUrl } = require('./parser');
 
-const HOST_PRIORITY = ['GDFlix', 'HubCloud', 'FilePress', 'DTFlix', 'TMBCloud', 'Direct', 'Download'];
+const HOST_PRIORITY = ['GDFlix', 'HubCloud', 'TMBCloud'];
+
+// Only approved Telegram download providers are retained for extraction/upload.
+// Website links, generic direct-file URLs, shorteners and other hosts are rejected.
+const ALLOWED_PROVIDER_DOMAINS = {
+  GDFlix: [
+    'gdflix.dev', 'gdflix.to', 'gdflix.one', 'gdflix.link',
+    'gdflix.net', 'gdflix.dad', 'gdflix.cfd', 'gdflix.io',
+    'gdlink.dev', 'gdtot.dad', 'gdtot.one', 'gdtot.sbs',
+    'extralink.cfd', 'neolinks.sbs', 'gtlinks.me',
+  ],
+  HubCloud: [
+    'hubcloud.foo', 'hubcloud.one', 'hubcloud.art', 'hubcloud.cx',
+    'hubcloud.lol', 'hubcloud.bz', 'hubcloud.club', 'hubcloud.in',
+    'hubcloud.to', 'hubcloud.work', 'hubcloud.zone', 'hubcloud.dev',
+    'hubcloud.me', 'hubcloud.best',
+    'drivehub.dev', 'drivehub.to', 'drivehub.in', 'drivehub.online',
+  ],
+  TMBCloud: ['tmbcloud.dev', 'tmbcloud.online', 'tmbcloud.lol'],
+};
+const ALLOWED_PROVIDER_HOSTS = new Set(Object.keys(ALLOWED_PROVIDER_DOMAINS));
+
+function isAllowedTelegramDownloadUrl(value) {
+  let parsed;
+  try { parsed = new URL(String(value || '').trim()); }
+  catch (_) { return false; }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+
+  const category = classifyUrl(parsed.toString());
+  if (!ALLOWED_PROVIDER_HOSTS.has(category)) return false;
+
+  const hostname = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  return ALLOWED_PROVIDER_DOMAINS[category].some((domain) =>
+    hostname === domain || hostname.endsWith('.' + domain)
+  );
+}
 const CDN_RE = [
   /\.(m3u8|ts|m4s)(\?|$)/i, /\/(image|img|thumbnail|poster|banner|cover)\//i,
   /\/(uploads?|wp-content|static|assets?)\//i, /cdn\.(hotstar|zee5|sonyliv)/i,
@@ -74,6 +109,7 @@ function extractTelegramLinks(inputMessages, account = '1') {
   const links = [];
   let skipped = 0;
   let parsedMessages = 0;
+  let rejectedLinks = 0;
 
   for (const message of messages) {
     const rawText = telegramMessageText(message);
@@ -86,14 +122,16 @@ function extractTelegramLinks(inputMessages, account = '1') {
     parsedMessages++;
 
     const slots = new Map();
-    const shortlinks = [];
     for (const download of parsed.downloads) {
       const language = download.language || parsed.language || '';
       for (const link of (download.links || [])) {
         const url = normalizeTelegramUrl(link && link.url);
         if (!url || isJunkTelegramUrl(url) || seenUrls.has(url)) continue;
         const host = classifyUrl(url);
-        if (host === 'Ignore' || host === 'Paste') continue;
+        if (!isAllowedTelegramDownloadUrl(url)) {
+          rejectedLinks++;
+          continue;
+        }
         const entry = {
           messageId: parsed.messageId, title: parsed.title,
           year: parsed.year == null ? null : parsed.year,
@@ -110,8 +148,7 @@ function extractTelegramLinks(inputMessages, account = '1') {
           imdbId: parsed.imdbId || null, tmdbIdHint: parsed.tmdbIdHint || null,
           date: message.date || message.date_unixtime || null,
         };
-        if (host === 'Shortlink') { shortlinks.push(entry); seenUrls.add(url); continue; }
-    const key = String(message.channel_id || '0') + ':' + String(message.id);
+        const key = String(message.channel_id || '0') + ':' + String(message.id);
         if (!slots.has(key)) slots.set(key, []);
         slots.get(key).push(entry);
       }
@@ -127,7 +164,6 @@ function extractTelegramLinks(inputMessages, account = '1') {
         links.push(entry);
       }
     }
-    for (const entry of shortlinks) links.push(entry);
   }
 
   return {
@@ -135,12 +171,12 @@ function extractTelegramLinks(inputMessages, account = '1') {
     stats: {
       rawMessages: rawMessages.length, uniqueMessages: messages.length,
       duplicateMessages: rawMessages.length - messages.length,
-      parsedMessages, skippedMessages: skipped, extractedLinks: links.length,
+      parsedMessages, skippedMessages: skipped, extractedLinks: links.length, rejectedLinks,
     },
   };
 }
 
 module.exports = {
   extractTelegramLinks, dedupeTelegramMessages, normalizeTelegramUrl,
-  isJunkTelegramUrl, telegramMessageText,
+  isJunkTelegramUrl, telegramMessageText, isAllowedTelegramDownloadUrl,
 };

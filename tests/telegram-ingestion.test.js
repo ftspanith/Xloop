@@ -8,6 +8,7 @@ const {
   isJunkTelegramUrl,
   telegramMessageText,
   extractTelegramLinks,
+  isAllowedTelegramDownloadUrl,
 } = require('../utils/telegram-ingestion');
 
 test('dedupes overlapping Telegram exports by channel and message id', () => {
@@ -48,4 +49,56 @@ test('returns a safe empty extraction for malformed message arrays', () => {
   assert.equal(result.links.length, 0);
   assert.equal(result.stats.uniqueMessages, 1);
   assert.equal(result.stats.skippedMessages, 1);
+});
+
+
+test('allowlist keeps only GDFlix, HubCloud and TMBCloud provider domains', () => {
+  const allowed = [
+    'https://gdflix.dev/file/abc',
+    'https://new5.gdflix.io/file/abc',
+    'https://gdtot.one/file/abc',
+    'https://extralink.cfd/file/abc',
+    'https://hubcloud.foo/file/abc',
+    'https://drivehub.online/file/abc',
+    'https://tmbcloud.dev/file/abc',
+  ];
+  for (const url of allowed) assert.equal(isAllowedTelegramDownloadUrl(url), true, url);
+});
+
+test('allowlist rejects website links, other direct hosts and shorteners', () => {
+  const rejected = [
+    'https://example.com/watch/movie',
+    'https://example.com/download/movie.mkv',
+    'https://filepress.in/file/abc',
+    'https://dtflix.ink/file/abc',
+    'https://streamtape.com/v/abc',
+    'https://gplinks.co/abc',
+    'https://not-a-provider.example/path?next=https://gdflix.dev/file/abc',
+  ];
+  for (const url of rejected) assert.equal(isAllowedTelegramDownloadUrl(url), false, url);
+});
+
+test('shared Telegram extraction retains approved providers and rejects all other hosts', () => {
+  const message = {
+    channel_id: '123',
+    id: 99,
+    text: [
+      'Example Movie (2024)',
+      'Example.Movie.2024.1080p.WEB-DL.mkv',
+      'GDFlix',
+      'https://gdflix.dev/file/one',
+      'HubCloud',
+      'https://hubcloud.foo/file/two',
+      'TMBCloud',
+      'https://tmbcloud.dev/file/three',
+      'FilePress',
+      'https://filepress.in/file/four',
+      'Website',
+      'https://example.com/download/five.mkv',
+    ].join('\n'),
+  };
+  const result = extractTelegramLinks([message], '1');
+  assert.deepEqual(new Set(result.links.map((link) => link.host)), new Set(['GDFlix', 'HubCloud', 'TMBCloud']));
+  assert.equal(result.links.length, 3);
+  assert.equal(result.stats.rejectedLinks, 2);
 });
