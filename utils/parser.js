@@ -1185,7 +1185,7 @@ module.exports = {
   parseMessageBlock,classifyUrl,stripEmojis,cleanTitleForApi,normalizeQuality,
   extractSize,toMB,detectHost,detectLanguage,detectAllLanguages,detectContentType,
   extractSeasonEpisode,detectCodec,detectContainer,detectHDR,detectBitDepth,detectAudioChannels,extractAudio,detectSource,isJunkTitle,isMetadataLine,
-  extractTitleFromStreamingUrl,
+  extractTitleFromStreamingUrl, normalizeGdflixUrl,
   parseManualInput,
 };
 
