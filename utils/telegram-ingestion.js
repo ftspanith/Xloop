@@ -1,5 +1,5 @@
 'use strict';
-const { parseMessageBlock, classifyUrl, isJunkTitle } = require('./parser');
+const { parseMessageBlock, classifyUrl, isJunkTitle, normalizeGdflixUrl } = require('./parser');
 
 const HOST_PRIORITY = ['GDFlix', 'HubCloud', 'FilePress', 'DTFlix', 'TMBCloud', 'Direct', 'Download'];
 const CDN_RE = [
@@ -11,7 +11,7 @@ const CDN_RE = [
 function normalizeTelegramUrl(value) {
   const raw = String(value || '').trim().replace(/^http:\/\//i, 'https://');
   if (!raw) return '';
-  try { return new URL(raw).toString().replace(/\/$/, ''); }
+  try { return normalizeGdflixUrl(new URL(raw).toString()).replace(/\/$/, ''); }
   catch (_) { return raw.replace(/\/$/, ''); }
 }
 
