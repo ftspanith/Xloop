@@ -2141,3 +2141,16 @@ ul { list-style: none; }
   opacity: 1;
   pointer-events: auto;
 }
+
+
+/* Admin navigation icon alignment */
+.admin-nav a > svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  opacity: .82;
+}
+.admin-nav a.active > svg { opacity: 1; }
+.admin-nav a > span { min-width: 0; }
+.search-icon svg { display: block; }
+.mobile-menu-btn svg, .sidebar-close-btn svg { display: block; flex: 0 0 auto; }
