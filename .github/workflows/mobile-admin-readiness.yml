@@ -1,0 +1,33 @@
+name: Mobile Admin Readiness
+
+on:
+  push:
+    branches:
+      - test/xloop-readiness-contracts
+    paths:
+      - 'public/admin/**'
+      - 'routes/scrape.js'
+      - 'scrape-and-upload.js'
+      - 'tests/mobile-admin-readiness.test.js'
+      - 'package.json'
+      - '.github/workflows/mobile-admin-readiness.yml'
+  pull_request:
+    paths:
+      - 'public/admin/**'
+      - 'routes/scrape.js'
+      - 'scrape-and-upload.js'
+      - 'tests/mobile-admin-readiness.test.js'
+      - 'package.json'
+      - '.github/workflows/mobile-admin-readiness.yml'
+
+jobs:
+  mobile-admin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mobile-admin
