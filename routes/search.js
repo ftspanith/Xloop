@@ -40,7 +40,7 @@ function relevanceScore(movie, query, tokens) {
   let score = 0;
   const compactTitle = title.replace(/\s+/g, '');
   const compactQuery = query.replace(/\s+/g, '');
-  if (compactQuery.length >= 5 && levenshtein(compactTitle, compactQuery) <= Math.max(1, Math.floor(compactQuery.length * 0.2))) score += 62;
+  if (compactQuery.length >= 5 && levenshtein(compactTitle.slice(0, compactQuery.length), compactQuery) <= Math.max(1, Math.floor(compactQuery.length * 0.2))) score += 62;
   const description = normalize(movie.description);
   const genres = normalize((movie.genre || []).join(' '));
   const languages = normalize([movie.language, ...(movie.languages || [])].join(' '));
