@@ -920,8 +920,9 @@ router.patch('/update-movie/:id', auth, async (req, res) => {
 // ── DELETE /api/import/delete-movie/:id ─────────────────────
 router.delete('/delete-movie/:id', auth, async (req, res) => {
   try {
-    await Movie.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Deleted' });
+    const deleted = await Movie.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: 'Content not found' });
+    res.json({ success: true, message: 'Deleted' });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
