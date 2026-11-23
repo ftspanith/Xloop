@@ -32,7 +32,7 @@ function telegramMessageText(message) {
     text = message.text.map((part) => {
       if (typeof part === 'string') return part;
       if (!part || typeof part !== 'object') return '';
-      if (part.type === 'text_link' && part.href) return \`\${part.text || ''}\n\${part.href}\n\`;
+      if (part.type === 'text_link' && part.href) return String(part.text || '') + '\n' + part.href + '\n';
       if (part.type === 'link' && part.text) return part.text;
       return part.text || '';
     }).join('');
@@ -40,7 +40,7 @@ function telegramMessageText(message) {
   const keyboard = message.reply_markup && message.reply_markup.inline_keyboard;
   if (Array.isArray(keyboard)) {
     for (const row of keyboard) for (const button of (row || [])) {
-      if (button && button.url) text += \`\n\${button.url}\`;
+      if (button && button.url) text += '\n' + button.url;
     }
   }
   return text.trim();
@@ -50,7 +50,7 @@ function dedupeTelegramMessages(messages) {
   const map = new Map();
   for (const message of (Array.isArray(messages) ? messages : [])) {
     if (!message || typeof message !== 'object' || message.id == null) continue;
-    const key = \`\${message.channel_id || '0'}:\${message.id}\`;
+    const key = String(message.channel_id || '0') + ':' + String(message.id);
     if (!map.has(key)) map.set(key, message);
   }
   return [...map.values()];
@@ -111,7 +111,7 @@ function extractTelegramLinks(inputMessages, account = '1') {
           date: message.date || message.date_unixtime || null,
         };
         if (host === 'Shortlink') { shortlinks.push(entry); seenUrls.add(url); continue; }
-        const key = slotKey(entry);
+    const key = String(message.channel_id || '0') + ':' + String(message.id);
         if (!slots.has(key)) slots.set(key, []);
         slots.get(key).push(entry);
       }
