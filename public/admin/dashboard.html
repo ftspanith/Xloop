@@ -822,7 +822,7 @@
     const grid = document.getElementById('recentGrid');
     if (!grid) return;
     if (!items.length) {
-      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:rgba(255,255,255,.3);font-size:0.9rem;">No content yet — run Full Pipeline to import</div>';
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:rgba(255,255,255,.3);font-size:0.9rem;">No published titles found. Your saved Telegram link records are separate and remain untouched.</div>';
       return;
     }
     grid.innerHTML = items.map((item, idx) => {
@@ -880,7 +880,12 @@
       renderRecentGrid(combined);
 
     } catch (err) {
-      showToast('Error loading dashboard', true);
+      const grid = document.getElementById('recentGrid');
+      if (grid) {
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:rgba(255,255,255,.55);font-size:.9rem;">Dashboard content could not load.<br><button type="button" id="retryDashboardLoad" style="margin-top:12px;padding:9px 16px;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:rgba(255,255,255,.06);color:#fff;cursor:pointer;">Retry</button></div>';
+        document.getElementById('retryDashboardLoad')?.addEventListener('click', loadDashboard);
+      }
+      showToast('Error loading dashboard: ' + (err.message || 'API request failed'), true);
     }
   }
 
