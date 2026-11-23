@@ -1,4 +1,5 @@
 name: Mobile Admin Readiness
+# Run the offline UI and data-safety regression suite on the isolated test branch.
 
 on:
   push:
