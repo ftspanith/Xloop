@@ -2154,3 +2154,23 @@ ul { list-style: none; }
 .admin-nav a > span { min-width: 0; }
 .search-icon svg { display: block; }
 .mobile-menu-btn svg, .sidebar-close-btn svg { display: block; flex: 0 0 auto; }
+
+
+/* Admin navigation icon alignment — keep icons visible and consistent on all admin pages. */
+.admin-nav a > svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: currentColor;
+  overflow: visible;
+}
+.admin-nav a > span {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.mobile-menu-btn > svg,
+.sidebar-close-btn > svg {
+  display: block;
+  flex: 0 0 auto;
+}
