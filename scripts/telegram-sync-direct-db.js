@@ -65,7 +65,7 @@ function makeDocument(item, account, batch, now) {
 async function main() {
   if (!fs.existsSync(ENV_FILE)) throw new Error('Missing local env file: ' + ENV_FILE);
   if (!fs.existsSync(HELPER)) throw new Error('Missing parser helper: ' + HELPER);
-  dotenv.config({ path: ENV_FILE, override: false });
+  dotenv.config({ path: ENV_FILE, override: true });
   if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is not set in the local env file.');
 
   const { readExport, extractLinksFromMessages } = require(HELPER);
