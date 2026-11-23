@@ -281,7 +281,7 @@
       </div>
     </div>
     <div class="search-bar">
-      <span class="search-icon"></span>
+      <span class="search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></span>
       <input type="text" id="search-input" placeholder="Search by title, language, genre, year..." oninput="debounceSearch()">
     </div>
 
@@ -312,7 +312,7 @@
     
     <!-- QUICK PASTE SECTION -->
     <div class="card" style="margin-bottom:20px; border-color:var(--accent);">
-      <div class="card-title"><span></span> Quick Paste Auto-Import</div>
+      <div class="card-title"><span aria-hidden="true">↳</span> Quick Paste Auto-Import</div>
       <p style="font-size:0.85rem; color:var(--text2); margin-bottom:12px;">
         Paste text exactly as you would send it on Telegram (filename + URL). The system will automatically detect the movie, fetch TMDB posters, and publish it immediately.
       </p>
@@ -325,7 +325,7 @@
 
     <!-- MANUAL ADD SECTION -->
     <div class="card">
-      <div class="card-title"><span></span> Manual Entry (Overrides)</div>
+      <div class="card-title"><span aria-hidden="true">✎</span> Manual Entry (Overrides)</div>
 
       <div class="form-row">
         <div class="form-group" style="margin-bottom:0">
@@ -744,7 +744,7 @@ function addLinkRow(url='', filename='', size='', lang='Telugu') {
     <div><label style="display:${c.children.length>0?'none':'block'}">Size</label>
       <input type="text" placeholder="2.1 GB" value="${escapeHtml(size)}" style="width:100px;"></div>
     <div style="padding-top:${c.children.length>0?0:22}px">
-      <button class="btn btn-danger btn-sm" onclick="this.closest('.link-row').remove()"></button>
+      <button class="btn btn-danger btn-sm" onclick="this.closest('.link-row').remove()" aria-label="Remove link"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg></button>
     </div>
   `;
   c.appendChild(div);
