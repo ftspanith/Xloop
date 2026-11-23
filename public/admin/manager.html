@@ -418,7 +418,7 @@
 <!--  EDIT MODAL  -->
 <div class="modal-overlay" id="edit-modal">
   <div class="modal">
-    <button class="modal-close" onclick="closeModal()"></button>
+    <button class="modal-close" onclick="closeModal()" aria-label="Close editor"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button>
     <div class="modal-title"> Edit Movie</div>
 
     <input type="hidden" id="edit-id">
@@ -894,7 +894,7 @@ function openEdit(movie) {
         <div class="dl-item-name" title="${d.filename||''}">${d.filename || 'Unnamed file'}</div>
         <span class="badge badge-blue">${d.quality||''}</span>
         <span class="badge badge-green">${d.size||''}</span>
-        <button class="btn btn-danger btn-sm" onclick="removeDl(${di})"></button>
+        <button class="btn btn-danger btn-sm" onclick="removeDl(${di})" aria-label="Remove download"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg></button>
       </div>
       <div class="dl-link-list">
         ${(d.links||[]).map((l,li) => `
