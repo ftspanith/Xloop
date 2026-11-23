@@ -105,7 +105,7 @@ function extractTelegramLinks(inputMessages, account = '1') {
           codec: download.codec || '', hdr: download.hdr || '', audio: download.audio || '',
           bitDepth: download.bitDepth || '', audioChannels: download.audioChannels || '',
           host, url, bypassedUrl: null,
-          sourceAccount: String(account || message.sourceAccount || '1'),
+          sourceAccount: String(message.sourceAccount || account || '1'),
           isFast: /gdflix|hubcloud|gdlink|tmbcloud|fpgo|filebee/i.test(url),
           imdbId: parsed.imdbId || null, tmdbIdHint: parsed.tmdbIdHint || null,
           date: message.date || message.date_unixtime || null,
