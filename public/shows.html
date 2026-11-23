@@ -256,10 +256,14 @@
         if (year)    url += `&year=${year}`;
         if (quality) url += `&quality=${quality}`;
         if (lang)    url += `&language=${encodeURIComponent(lang)}`;
-        const res  = await fetch(url);
+        const res  = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        const items = data.movies || [];
-        const total = data.total  || 0;
+        const items = Array.isArray(data) ? data
+          : Array.isArray(data?.movies) ? data.movies
+          : Array.isArray(data?.results) ? data.results
+          : [];
+        const total = Number(data?.total) || items.length;
 
         // Stats bar
         document.getElementById('showsStats').innerHTML =
@@ -293,8 +297,9 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
 
       } catch (err) {
-        console.error(err);
-        container.innerHTML = '<div class="empty-state">Error loading shows</div>';
+        console.error('Shows page load failed:', err);
+        container.classList.remove('loading');
+        container.innerHTML = '<div class="empty-state">Unable to load TV shows. <button type="button" onclick="loadShows(currentPage)">Retry</button></div>';
         container.classList.add('loaded');
       }
     }
