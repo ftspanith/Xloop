@@ -628,16 +628,30 @@
         <div>
           <div style="font-size:0.87rem; font-weight:700; color:#fff; display:flex; align-items:center; gap:7px; margin-bottom:3px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#63b3ed" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            Upload Accounts &amp; Run Pipeline
+            Telegram Link Sync
           </div>
-          <div id="dashExportStatus" style="font-size:0.73rem; color:rgba(255,255,255,.45);">Checking status...</div>
-          <!-- Sync status badges -->
-          <div id="syncStatusRow" style="display:flex; gap:10px; margin-top:6px; flex-wrap:wrap;"></div>
+          <div style="font-size:0.73rem;color:rgba(255,255,255,.45);">Large Telegram exports are uploaded from Termux. This page only monitors sync progress.</div>
+          <div id="dashExportStatus" style="display:none;">Termux sync</div>
+          <div id="syncStatusRow" style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap;"></div>
+          <div id="telegramSyncMonitor" style="margin-top:12px;padding:12px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.09);">
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">
+              <strong id="telegramSyncLabel" style="font-size:.78rem;color:#fff;">Waiting for Termux sync</strong>
+              <span id="telegramSyncPercent" style="font-size:.75rem;color:rgba(255,255,255,.55);">0%</span>
+            </div>
+            <div style="height:6px;border-radius:8px;background:rgba(255,255,255,.08);overflow:hidden;margin:9px 0;">
+              <div id="telegramSyncBar" style="height:100%;width:0%;background:#22c55e;border-radius:8px;transition:width .25s;"></div>
+            </div>
+            <div id="telegramSyncCounts" style="font-size:.7rem;color:rgba(255,255,255,.48);">Account 1: — · Account 2: — · Total: —</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+              <button type="button" onclick="copyTelegramSyncToken()" style="padding:6px 10px;border:1px solid rgba(99,179,237,.35);border-radius:7px;background:rgba(99,179,237,.08);color:#8ecbff;font-size:.7rem;font-weight:700;cursor:pointer;">Copy Termux Token</button>
+              <span id="telegramSyncUpdated" style="font-size:.66rem;color:rgba(255,255,255,.3);">Live status refreshes every 3 seconds</span>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- ── Per-account Source Selectors ── -->
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+      <div style="display:none;">
 
         <!-- Acc 1 -->
         <div style="background:rgba(229,9,20,0.06); border:1px solid rgba(229,9,20,0.2); border-radius:10px; padding:12px;">
@@ -1317,6 +1331,58 @@
     }
   }
 
+  async function copyTelegramSyncToken() {
+    const token = localStorage.getItem('xloop_admin_token');
+    if (!token) { alert('Admin session token not found. Please log in again.'); return; }
+    try {
+      await navigator.clipboard.writeText(token);
+      const el = document.getElementById('telegramSyncUpdated');
+      if (el) el.textContent = 'Admin token copied — paste it only into your Termux prompt.';
+    } catch (_) {
+      prompt('Copy this admin token into your Termux prompt. Do not share it:', token);
+    }
+  }
+
+  async function loadTelegramSyncStatus() {
+    try {
+      const res = await fetch('/api/scrape/telegram-sync/status', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Status unavailable');
+      const d = await res.json();
+      const expected = d.expected || { account1: 0, account2: 0, total: 0 };
+      const received = d.received || { account1: 0, account2: 0, total: 0 };
+      const total = Number(expected.total || received.total || 0);
+      const done = Number(received.total || 0);
+      const pct = total ? Math.min(100, Math.round(done / total * 100)) : (d.status === 'completed' ? 100 : 0);
+      const labels = {
+        idle: 'Waiting for Termux sync',
+        uploading: 'Uploading from Termux…',
+        finalizing: 'Verifying and replacing active links…',
+        completed: 'Telegram sync completed',
+        verification_failed: 'Count verification failed — live data unchanged',
+        replace_failed: 'Replacement failed — live data unchanged',
+      };
+      const label = document.getElementById('telegramSyncLabel');
+      const percent = document.getElementById('telegramSyncPercent');
+      const bar = document.getElementById('telegramSyncBar');
+      const counts = document.getElementById('telegramSyncCounts');
+      if (label) label.textContent = labels[d.status] || (d.status || 'Sync status');
+      if (percent) percent.textContent = pct + '%';
+      if (bar) {
+        bar.style.width = pct + '%';
+        bar.style.background = d.status === 'completed' ? '#22c55e' : d.status === 'verification_failed' || d.status === 'replace_failed' ? '#ef4444' : '#63b3ed';
+      }
+      if (counts) counts.textContent =
+        'Account 1: ' + Number(received.account1 || 0).toLocaleString() + ' / ' + Number(expected.account1 || 0).toLocaleString() +
+        ' · Account 2: ' + Number(received.account2 || 0).toLocaleString() + ' / ' + Number(expected.account2 || 0).toLocaleString() +
+        ' · Total: ' + done.toLocaleString() + ' / ' + Number(expected.total || 0).toLocaleString();
+      const updated = document.getElementById('telegramSyncUpdated');
+      if (updated && d.updatedAt) updated.textContent = 'Updated ' + new Date(d.updatedAt).toLocaleTimeString();
+    } catch (_) {
+      const label = document.getElementById('telegramSyncLabel');
+      if (label) label.textContent = 'Unable to read sync status';
+    }
+  }
+
   async function loadSyncStatus() {
     try {
       const res = await fetch('/api/scrape/sync-status');
@@ -1444,6 +1510,8 @@
       loadDashboard();
       setInterval(loadDashboard, 5000);
       connectOrchestratorStream();
+      loadTelegramSyncStatus();
+      setInterval(loadTelegramSyncStatus, 3000);
       // Sync badge & buttons immediately on load (fixes OFFLINE after page refresh mid-run)
       syncOrchestratorStatus();
       // Keep badge in sync every 5s regardless of SSE state
