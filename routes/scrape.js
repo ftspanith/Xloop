@@ -420,6 +420,237 @@ router.get('/export-status', auth, async (req, res) => {
   }
 });
 
+// ── Termux Telegram sync: stage, verify, then atomically swap collections ──
+const TELEGRAM_SYNC_CURRENT_KEY = '_telegram_sync_current';
+
+async function saveTelegramSyncState(PipelineCache, state) {
+  await PipelineCache.findOneAndUpdate(
+    { key: TELEGRAM_SYNC_CURRENT_KEY },
+    { $set: { data: state, updatedAt: new Date() } },
+    { upsert: true, new: true }
+  );
+}
+
+router.get('/telegram-sync/status', async (_req, res) => {
+  try {
+    const PipelineCache = require('../models/PipelineCache');
+    const current = await PipelineCache.findOne({ key: TELEGRAM_SYNC_CURRENT_KEY }).lean();
+    res.json(current && current.data ? current.data : { status: 'idle' });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+router.post('/telegram-sync/start', auth, async (req, res) => {
+  const mongoose = require('mongoose');
+  const PipelineCache = require('../models/PipelineCache');
+  try {
+    const { syncId, expectedTotal, account1Count, account2Count } = req.body || {};
+    if (typeof syncId !== 'string' || !/^[a-zA-Z0-9_-]{8,64}$/.test(syncId)) {
+      return res.status(400).json({ message: 'Invalid syncId.' });
+    }
+    const a1 = Number(account1Count), a2 = Number(account2Count), total = Number(expectedTotal);
+    if (!Number.isInteger(a1) || !Number.isInteger(a2) || !Number.isInteger(total) ||
+        a1 < 1 || a2 < 1 || total !== a1 + a2 || total > 150000) {
+      return res.status(400).json({ message: 'Invalid expected account counts.' });
+    }
+
+    const currentDoc = await PipelineCache.findOne({ key: TELEGRAM_SYNC_CURRENT_KEY }).lean();
+    const current = currentDoc && currentDoc.data;
+    if (current && current.status === 'uploading') {
+      return res.status(409).json({ message: 'Another Telegram sync is already uploading.', current });
+    }
+
+    const suffix = syncId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 32);
+    const stageCollection = 'extractedlinks_stage_' + suffix;
+    const db = mongoose.connection.db;
+    const exists = await db.listCollections({ name: stageCollection }, { nameOnly: true }).hasNext();
+    if (exists) return res.status(409).json({ message: 'This syncId already exists. Generate a new syncId.' });
+
+    await db.createCollection(stageCollection);
+    const stage = db.collection(stageCollection);
+    await stage.createIndex({ url: 1 }, { unique: true });
+    await stage.createIndex({ sourceAccount: 1 });
+    await stage.createIndex({ uploadBatch: 1 });
+
+    const state = {
+      syncId, status: 'uploading', source: 'termux',
+      expected: { account1: a1, account2: a2, total },
+      received: { account1: 0, account2: 0, total: 0 },
+      startedAt: new Date().toISOString(),
+      stageCollection,
+    };
+    await PipelineCache.findOneAndUpdate(
+      { key: '_telegram_sync_' + syncId },
+      { $set: { data: state, updatedAt: new Date() } },
+      { upsert: true, new: true }
+    );
+    await saveTelegramSyncState(PipelineCache, state);
+    res.json({ ok: true, syncId, chunkSize: 300, expected: state.expected });
+  } catch (err) {
+    res.status(500).json({ message: 'Telegram sync start failed: ' + err.message });
+  }
+});
+
+router.post('/telegram-sync/chunk', auth, express.json({ limit: '3mb' }), async (req, res) => {
+  try {
+    const { syncId, links } = req.body || {};
+    if (typeof syncId !== 'string' || !Array.isArray(links) || !links.length || links.length > 300) {
+      return res.status(400).json({ message: 'Provide syncId and 1–300 links per chunk.' });
+    }
+    const PipelineCache = require('../models/PipelineCache');
+    const mongoose = require('mongoose');
+    const sessionDoc = await PipelineCache.findOne({ key: '_telegram_sync_' + syncId }).lean();
+    const state = sessionDoc && sessionDoc.data;
+    if (!state || state.status !== 'uploading') return res.status(409).json({ message: 'Sync session is not accepting chunks.' });
+
+    const stage = mongoose.connection.db.collection(state.stageCollection);
+    const batch = 'telegram_' + syncId;
+    const now = new Date();
+    const allowedString = (v, max = 500) => typeof v === 'string' ? v.slice(0, max) : '';
+    const ops = [];
+    for (const item of links) {
+      if (!item || typeof item.url !== 'string' || !/^https?:\/\//i.test(item.url) ||
+          !['1', '2'].includes(String(item.sourceAccount))) {
+        return res.status(400).json({ message: 'Every link needs a valid http(s) URL and sourceAccount 1 or 2.' });
+      }
+      const doc = {
+        url: item.url.trim(),
+        host: allowedString(item.host, 80) || 'Other',
+        title: allowedString(item.title, 500),
+        year: item.year == null ? null : Number(item.year),
+        quality: allowedString(item.quality, 40) || 'HD',
+        size: allowedString(item.size, 40),
+        language: allowedString(item.language, 80),
+        season: item.season == null ? null : Number(item.season),
+        episode: item.episode == null ? null : Number(item.episode),
+        type: allowedString(item.type, 30) || 'movie',
+        filename: allowedString(item.filename, 1000),
+        codec: allowedString(item.codec, 80),
+        hdr: allowedString(item.hdr, 80),
+        audio: allowedString(item.audio, 120),
+        bitDepth: allowedString(item.bitDepth, 40),
+        audioChannels: allowedString(item.audioChannels, 40),
+        bypassedUrl: allowedString(item.bypassedUrl, 2000),
+        isSeries: !!item.isSeries,
+        contentType: allowedString(item.contentType, 40),
+        date: allowedString(item.date, 100),
+        imdbId: allowedString(item.imdbId, 40),
+        tmdbIdHint: item.tmdbIdHint == null ? null : Number(item.tmdbIdHint),
+        sourceAccount: String(item.sourceAccount),
+        uploadBatch: batch,
+        createdAt: now,
+        updatedAt: now,
+      };
+      ops.push({ updateOne: { filter: { url: doc.url }, update: { $setOnInsert: doc }, upsert: true } });
+    }
+    await stage.bulkWrite(ops, { ordered: false });
+
+    const grouped = await stage.aggregate([
+      { $group: { _id: '$sourceAccount', count: { $sum: 1 } } }
+    ]).toArray();
+    const counts = { account1: 0, account2: 0 };
+    for (const row of grouped) {
+      if (row._id === '1') counts.account1 = row.count;
+      if (row._id === '2') counts.account2 = row.count;
+    }
+    counts.total = counts.account1 + counts.account2;
+    state.received = counts;
+    state.updatedAt = new Date().toISOString();
+    await PipelineCache.findOneAndUpdate(
+      { key: '_telegram_sync_' + syncId },
+      { $set: { data: state, updatedAt: new Date() } }
+    );
+    await saveTelegramSyncState(PipelineCache, state);
+    res.json({ ok: true, received: counts, expected: state.expected });
+  } catch (err) {
+    res.status(500).json({ message: 'Telegram sync chunk failed: ' + err.message });
+  }
+});
+
+router.post('/telegram-sync/finalize', auth, async (req, res) => {
+  const mongoose = require('mongoose');
+  const PipelineCache = require('../models/PipelineCache');
+  try {
+    const { syncId } = req.body || {};
+    const sessionDoc = await PipelineCache.findOne({ key: '_telegram_sync_' + syncId }).lean();
+    const state = sessionDoc && sessionDoc.data;
+    if (!state || !['uploading', 'replace_failed'].includes(state.status)) {
+      return res.status(409).json({ message: 'Sync session is not ready to finalize.' });
+    }
+
+    const db = mongoose.connection.db;
+    const stage = db.collection(state.stageCollection);
+    const [total, a1, a2] = await Promise.all([
+      stage.countDocuments({}),
+      stage.countDocuments({ sourceAccount: '1' }),
+      stage.countDocuments({ sourceAccount: '2' }),
+    ]);
+    const expected = state.expected;
+    if (total !== expected.total || a1 !== expected.account1 || a2 !== expected.account2) {
+      state.status = 'verification_failed';
+      state.received = { account1: a1, account2: a2, total };
+      state.verificationError = 'Uploaded counts do not match expected counts. Live data was not changed.';
+      await PipelineCache.findOneAndUpdate(
+        { key: '_telegram_sync_' + syncId },
+        { $set: { data: state, updatedAt: new Date() } }
+      );
+      await saveTelegramSyncState(PipelineCache, state);
+      return res.status(409).json({ message: state.verificationError, expected, received: state.received });
+    }
+
+    state.status = 'finalizing';
+    state.received = { account1: a1, account2: a2, total };
+    await saveTelegramSyncState(PipelineCache, state);
+
+    const dbName = db.databaseName;
+    await db.admin().command({
+      renameCollection: dbName + '.' + state.stageCollection,
+      to: dbName + '.extractedlinks',
+      dropTarget: true,
+    });
+
+    const now = new Date();
+    const uploadBatch = 'telegram_' + syncId;
+    await PipelineCache.findOneAndUpdate(
+      { key: 'extracted_links' },
+      {
+        $set: {
+          key: 'extracted_links',
+          data: { batchId: uploadBatch, count: total, mergeMode: false, source: 'termux-telegram-sync' },
+          count: total,
+          savedAt: now,
+        },
+      },
+      { upsert: true, new: true }
+    ).catch(err => console.error('[telegram-sync] PipelineCache update failed after atomic swap:', err.message));
+
+    const history = await getSyncStatus();
+    for (const [account, count] of [['1', a1], ['2', a2]]) {
+      history['acc' + account] = {
+        date: now.toISOString(),
+        dateHuman: now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }),
+        source: 'termux',
+        links: count,
+      };
+    }
+    await saveSyncStatus(history);
+
+    state.status = 'completed';
+    state.completedAt = now.toISOString();
+    state.received = { account1: a1, account2: a2, total };
+    await PipelineCache.findOneAndUpdate(
+      { key: '_telegram_sync_' + syncId },
+      { $set: { data: state, updatedAt: now } }
+    );
+    await saveTelegramSyncState(PipelineCache, state);
+    res.json({ ok: true, status: 'completed', counts: state.received });
+  } catch (err) {
+    console.error('[telegram-sync] finalize failed:', err);
+    res.status(500).json({ message: 'Telegram sync finalize failed: ' + err.message });
+  }
+});
+
 // ── POST /api/scrape/save-extracted — save pre-extracted links from client-side parsing ──
 // Supports chunked uploads: client sends 400 links at a time with the same batchId.
 // On isFinal=true, cleans up old batches and updates PipelineCache.
