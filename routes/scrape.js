@@ -571,10 +571,13 @@ router.post('/telegram-sync/chunk', auth, express.json({ limit: '3mb' }), async 
 router.post('/telegram-sync/finalize', auth, async (req, res) => {
   const mongoose = require('mongoose');
   const PipelineCache = require('../models/PipelineCache');
+  let state = null;
+  let swapped = false;
+  let syncId = '';
   try {
-    const { syncId } = req.body || {};
+    syncId = (req.body || {}).syncId || '';
     const sessionDoc = await PipelineCache.findOne({ key: '_telegram_sync_' + syncId }).lean();
-    const state = sessionDoc && sessionDoc.data;
+    state = sessionDoc && sessionDoc.data;
     if (!state || !['uploading', 'replace_failed'].includes(state.status)) {
       return res.status(409).json({ message: 'Sync session is not ready to finalize.' });
     }
@@ -588,9 +591,9 @@ router.post('/telegram-sync/finalize', auth, async (req, res) => {
     ]);
     const expected = state.expected;
     if (total !== expected.total || a1 !== expected.account1 || a2 !== expected.account2) {
-      state.status = 'verification_failed';
+      state.status = 'uploading';
       state.received = { account1: a1, account2: a2, total };
-      state.verificationError = 'Uploaded counts do not match expected counts. Live data was not changed.';
+      state.verificationError = 'Uploaded counts do not match expected counts. Live data was not changed. Upload remaining chunks and retry finalize.';
       await PipelineCache.findOneAndUpdate(
         { key: '_telegram_sync_' + syncId },
         { $set: { data: state, updatedAt: new Date() } }
@@ -609,6 +612,7 @@ router.post('/telegram-sync/finalize', auth, async (req, res) => {
       to: dbName + '.extractedlinks',
       dropTarget: true,
     });
+    swapped = true;
 
     const now = new Date();
     const uploadBatch = 'telegram_' + syncId;
@@ -647,7 +651,22 @@ router.post('/telegram-sync/finalize', auth, async (req, res) => {
     res.json({ ok: true, status: 'completed', counts: state.received });
   } catch (err) {
     console.error('[telegram-sync] finalize failed:', err);
-    res.status(500).json({ message: 'Telegram sync finalize failed: ' + err.message });
+    if (state && syncId && !swapped) {
+      state.status = 'replace_failed';
+      state.verificationError = 'Atomic collection replacement failed; existing live links remain active.';
+      try {
+        await PipelineCache.findOneAndUpdate(
+          { key: '_telegram_sync_' + syncId },
+          { $set: { data: state, updatedAt: new Date() } }
+        );
+        await saveTelegramSyncState(PipelineCache, state);
+      } catch (_) {}
+    }
+    res.status(500).json({
+      message: swapped
+        ? 'Links were swapped successfully, but a follow-up status update failed: ' + err.message
+        : 'Telegram sync finalize failed; existing live links were not replaced: ' + err.message
+    });
   }
 });
 
