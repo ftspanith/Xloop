@@ -965,7 +965,7 @@
           _dashDStep(1,'running',`chunk ${ci+1}/${total}...`);
           const chunk=links.slice(ci*CHUNK,(ci+1)*CHUNK);
           const isFinal=ci===total-1;
-          const res = await fetch('/api/scrape/save-extracted',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
+          const res = await fetch('/api/scrape/save-extracted',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,sourceAccount:'1',messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
           const d = await res.json().catch(()=>({}));
           if (!res.ok) throw new Error(d.message||'Save failed');
           if (!batchId) batchId=d.batchId;
@@ -993,7 +993,7 @@
           _dashDStep(2,'running',`chunk ${ci+1}/${total}...`);
           const chunk=links.slice(ci*CHUNK,(ci+1)*CHUNK);
           const isFinal=ci===total-1;
-          const res = await fetch('/api/scrape/save-extracted?merge=true',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
+          const res = await fetch('/api/scrape/save-extracted?merge=true',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,sourceAccount:'2',messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
           const d = await res.json().catch(()=>({}));
           if (!res.ok) throw new Error(d.message||'Merge failed');
           if (!batchId) batchId=d.batchId;
