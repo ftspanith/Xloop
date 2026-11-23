@@ -663,10 +663,11 @@ router.post('/telegram-sync/finalize', auth, async (req, res) => {
         await saveTelegramSyncState(PipelineCache, state);
       } catch (_) {}
     }
+    if (swapped) {
+      return res.json({ ok: true, status: 'completed', counts: state && state.received, warning: 'Collection replacement succeeded; a follow-up status write failed.' });
+    }
     res.status(500).json({
-      message: swapped
-        ? 'Links were swapped successfully, but a follow-up status update failed: ' + err.message
-        : 'Telegram sync finalize failed; existing live links were not replaced: ' + err.message
+      message: 'Telegram sync finalize failed; existing live links were not replaced: ' + err.message
     });
   }
 });
