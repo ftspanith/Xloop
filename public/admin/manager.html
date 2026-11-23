@@ -1010,12 +1010,13 @@ async function saveEdit() {
     downloads:   editMovieData.downloads,
   };
   showStatus('edit-status', ' Saving...', 'loading');
-  const data = await apiCall('PATCH', `/api/import/update-movie/${id}`, body);
-  if (data.movie) {
-    showStatus('edit-status', ' Saved successfully!', 'success');
-    setTimeout(() => { closeModal(); loadSearch(); }, 1000);
-  } else {
-    showStatus('edit-status', data.message || 'Error saving.', 'error');
+  try {
+    const data = await apiCall('PATCH', `/api/import/update-movie/${id}`, body);
+    if (!data.movie) throw new Error(data.message || 'The server did not confirm the update.');
+    showStatus('edit-status', 'Saved successfully!', 'success');
+    window.setTimeout(() => { closeModal(); loadSearch(); }, 700);
+  } catch (err) {
+    showStatus('edit-status', err.message || 'Unable to save changes. Please try again.', 'error');
   }
 }
 
@@ -1023,9 +1024,14 @@ async function deleteMovie() {
   if (!confirm(' Are you sure you want to PERMANENTLY delete this movie and all its download links?')) return;
   const id = document.getElementById('edit-id').value;
   showStatus('edit-status', ' Deleting...', 'loading');
-  const data = await apiCall('DELETE', `/api/import/delete-movie/${id}`);
-  showStatus('edit-status', data.message || 'Deleted!', 'success');
-  setTimeout(() => { closeModal(); loadSearch(); }, 800);
+  try {
+    const data = await apiCall('DELETE', `/api/import/delete-movie/${id}`);
+    if (data.success === false || data.error) throw new Error(data.message || 'The server did not confirm deletion.');
+    showStatus('edit-status', data.message || 'Deleted successfully!', 'success');
+    window.setTimeout(() => { closeModal(); loadSearch(); }, 700);
+  } catch (err) {
+    showStatus('edit-status', err.message || 'Unable to delete this item. Please try again.', 'error');
+  }
 }
 
 //  Init 
