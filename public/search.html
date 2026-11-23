@@ -425,7 +425,11 @@
         } else {
           renderSearchGrid(items.map((item, i) => createSafeSearchCard(item, i)).join(''));
           activateLazyImages();
-          setStatus(`Found <strong>${Number(data.total ?? items.length).toLocaleString()}</strong> results for "<strong>${escapeSearchHtml(q)}</strong>"`);
+          const visibleCount = Number(data.total ?? items.length).toLocaleString();
+          const countMessage = data.truncated
+            ? `Showing the top <strong>${visibleCount}</strong> of <strong>${Number(data.matchedTotal).toLocaleString()}</strong> matches`
+            : `Found <strong>${visibleCount}</strong> results`;
+          setStatus(`${countMessage} for "<strong>${escapeSearchHtml(q)}</strong>"`);
           buildPagination(data.total || items.length, page, 24);
         }
       } catch (err) {
