@@ -224,76 +224,14 @@ async function uploadExport(token, mergeMode = false) {
   const msgs = raw.messages || raw;
   log(`Parsing ${msgs.length} messages locally (avoids 413 upload limit)...`);
 
-  // ── Local extraction (mirrors server-side upload-export logic) ──────────────
-  const { parseMessageBlock, isJunkTitle, classifyUrl } = (() => {
-    try { return require('./utils/parser'); } catch { return require('./utils/parser.js'); }
-  })();
-
-  const HOST_PRIORITY = ['GDFlix','HubCloud','FilePress','DTFlix','TMBCloud','Direct','Download'];
-  const hostRank = h => { const i = HOST_PRIORITY.indexOf(h); return i === -1 ? 99 : i; };
-  const CDN_RE = [/\.(m3u8|ts|m4s)(\?|$)/i, /\/(image|img|thumbnail|poster|banner|cover)\//i,
-    /\/(uploads?|wp-content|static|assets?)\//i, /cdn\.(hotstar|zee5|sonyliv)/i,
-    /vod\d*\./i, /img\d*\./i, /thumbs?\./i, /akamaized\.net/i, /cloudfront\.net/i];
-  const isJunkUrl = u => { if (!u) return true;
-    if (/workers\.dev/i.test(u)) return !/\.(mkv|mp4|avi|zip|rar)([?#]|$)/i.test(u);
-    return CDN_RE.some(r => r.test(u)); };
-
-  // Dedup messages by channel:msgId
-  const msgMap = new Map();
-  for (const m of msgs) { const k = `${m.channel_id||'0'}:${m.id}`; if (!msgMap.has(k)) msgMap.set(k, m); }
-  const dedupedMsgs = [...msgMap.values()];
-  log(`After message dedup: ${dedupedMsgs.length} unique messages (${msgs.length - dedupedMsgs.length} duplicates removed)`);
-
-  const extracted = []; const shortlinks = [];
-  const seenUrls  = new Set();
-  let   skipped   = 0;
-
-  for (const msg of dedupedMsgs) {
-    let rawText = '';
-    if (typeof msg.text === 'string') rawText = msg.text;
-    else if (Array.isArray(msg.text)) rawText = msg.text.map(p => {
-      if (typeof p === 'string') return p;
-      if (p.type === 'text_link' && p.href) return `${p.text}\n${p.href}\n`;
-      return p.text || '';
-    }).join('');
-    if (msg.reply_markup?.inline_keyboard) {
-      for (const row of msg.reply_markup.inline_keyboard)
-        for (const btn of (row||[])) if (btn.url) rawText += `\n${btn.url}`;
-    }
-    if (!rawText.trim()) { skipped++; continue; }
-    let parsed;
-    try { parsed = parseMessageBlock(rawText, msg.id); } catch { skipped++; continue; }
-    if (!parsed || !parsed.downloads?.length || !parsed.title || isJunkTitle(parsed.title)) { skipped++; continue; }
-
-    const msgSlots = new Map();
-    for (const dl of parsed.downloads) {
-      const lang = dl.language || parsed.language || '';
-      for (const link of dl.links) {
-        const url = link.url.replace(/^http:\/\//i,'https://').replace(/\/$/,'');
-        if (isJunkUrl(url) || seenUrls.has(url)) continue;
-        const urlType = typeof classifyUrl === 'function' ? classifyUrl(url) : (/gdflix|hubcloud|gdlink|fpgo/i.test(url) ? 'GDFlix' : 'Direct');
-        if (urlType === 'Ignore' || urlType === 'Paste') continue;
-        const entry = { messageId: parsed.messageId, title: parsed.title, year: parsed.year,
-          contentType: parsed.contentType, isSeries: parsed.isSeries,
-          season: dl.season??parsed.season, episode: dl.episode??parsed.episode,
-          language: lang, quality: dl.quality, size: dl.size, filename: dl.filename,
-          codec: dl.codec || '', hdr: dl.hdr || '', audio: dl.audio || '', bitDepth: dl.bitDepth || '', audioChannels: dl.audioChannels || '',
-          host: urlType, url, bypassedUrl: null, sourceAccount: account,
-          isFast: /gdflix|hubcloud|gdlink|tmbcloud|fpgo|filebee/i.test(url),
-          imdbId: parsed.imdbId||null, tmdbIdHint: parsed.tmdbIdHint||null };
-        const sk = `${dl.quality||''}|${(dl.size||'').replace(/\s/g,'')}|${(dl.filename||'').slice(0,80)}|${lang}`;
-        if (urlType === 'Shortlink') { shortlinks.push(entry); seenUrls.add(url); continue; }
-        if (msgSlots.has(sk)) msgSlots.get(sk).push(entry);
-        else msgSlots.set(sk, [entry]);
-      }
-    }
-    for (const sl of msgSlots.values()) {
-      sl.sort((a,b)=>hostRank(a.host)-hostRank(b.host));
-      for (const e of sl) { seenUrls.add(e.url); extracted.push(e); }
-    }
-  }
-  const allLinks = [...extracted, ...shortlinks];
-  log(`Extracted ${allLinks.length} links (${skipped} messages skipped)`);
+  // ── Shared extraction engine: same parser + filters as website upload ──
+  const { extractTelegramLinks } = require('./utils/telegram-ingestion');
+  const extraction = extractTelegramLinks(msgs, account);
+  const allLinks = extraction.links;
+  const dedupedMsgs = extraction.messages;
+  const skipped = extraction.stats.skippedMessages;
+  log(`After message dedup: ${dedupedMsgs.length} unique messages (${extraction.stats.duplicateMessages} duplicates removed)`);
+  log(`Parsed ${extraction.stats.parsedMessages} messages; extracted ${allLinks.length} links; skipped ${skipped} messages`);
 
   // ── Upload in chunks of 400 links (~150-250KB each, well under 4.5MB limit) ──
   const CHUNK = 400;
@@ -343,7 +281,7 @@ async function uploadExport(token, mergeMode = false) {
   try {
     const exportRes = await apiRequest('POST',
       `/api/scrape/upload-export${mergeMode ? '?merge=true' : ''}`,
-      { messages: dedupedMsgs }, token);
+      { messages: dedupedMsgs, account: String(account) }, token);
     if (exportRes.status === 200) {
       log('Search index updated.');
     } else if (exportRes.status === 413) {
