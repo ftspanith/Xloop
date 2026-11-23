@@ -231,6 +231,21 @@ router.post('/upload-export', auth, upload.array('files', 10), async (req, res) 
         } catch (e) {
           return res.status(400).json({ message: `File "${file.originalname}" is invalid JSON: ${e.message}` });
         }
+        const fileAccount = /(?:account|acc)[_-]?2|telegram_export_2/i.test(file.originalname)
+          ? '2'
+          : String(req.body?.account || '1');
+        if (Array.isArray(parsed)) {
+          parsed = parsed.map(item => {
+            if (item && Array.isArray(item.messages)) {
+              return { ...item, messages: item.messages.map(message => ({ ...message, sourceAccount: message.sourceAccount || fileAccount })) };
+            }
+            return item && typeof item === 'object'
+              ? { ...item, sourceAccount: item.sourceAccount || fileAccount }
+              : item;
+          });
+        } else if (parsed && Array.isArray(parsed.messages)) {
+          parsed.messages = parsed.messages.map(message => ({ ...message, sourceAccount: message.sourceAccount || fileAccount }));
+        }
         allExports.push(parsed);
       }
       const data = allExports.length === 1 ? allExports[0] : allExports;
