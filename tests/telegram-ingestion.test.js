@@ -95,7 +95,7 @@ test('shared Telegram extraction retains approved providers and rejects all othe
       'https://filepress.in/file/four',
       'Website',
       'https://example.com/download/five.mkv',
-    ].join('\\n'),
+    ].join('\n'),
   };
   const result = extractTelegramLinks([message], '1');
   assert.deepEqual(new Set(result.links.map((link) => link.host)), new Set(['GDFlix', 'HubCloud', 'TMBCloud']));
