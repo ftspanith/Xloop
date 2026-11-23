@@ -307,7 +307,7 @@ router.get('/', async (req, res) => {
         { genre:           { $regex: s, $options: 'i' } },
         { 'downloads.language': { $regex: s, $options: 'i' } }
       ];
-      if (/^\\d{4}$/.test(search.trim())) textMatches.push({ year: Number(search.trim()) });
+      if (/^\d{4}$/.test(search.trim())) textMatches.push({ year: Number(search.trim()) });
       filter.$or = textMatches;
     }
 
