@@ -299,11 +299,16 @@ router.get('/', async (req, res) => {
 
     if (search) {
       const s = escapeRegex(search.slice(0, 200)); // clamp + escape for safety
-      filter.$or = [
-        { title:    { $regex: s, $options: 'i' } },
-        { language: { $regex: s, $options: 'i' } },
-        { genre:    { $regex: s, $options: 'i' } }
+      const textMatches = [
+        { title:           { $regex: s, $options: 'i' } },
+        { language:        { $regex: s, $options: 'i' } },
+        { originalLanguage:{ $regex: s, $options: 'i' } },
+        { languages:       { $regex: s, $options: 'i' } },
+        { genre:           { $regex: s, $options: 'i' } },
+        { 'downloads.language': { $regex: s, $options: 'i' } }
       ];
+      if (/^\\d{4}$/.test(search.trim())) textMatches.push({ year: Number(search.trim()) });
+      filter.$or = textMatches;
     }
 
     const sortObj = sort === 'updatedAt'  ? { updatedAt: -1 }
