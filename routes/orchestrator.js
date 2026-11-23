@@ -438,6 +438,9 @@ router.post('/import-batch', auth, async (req, res) => {
     }
     const groupEntries = [...groups.entries()];
     const total = groupEntries.length;
+    if (!total) {
+      return res.json({ done: true, added: 0, updated: 0, skipped: links.length, total: 0, nextOffset: 0, message: 'No valid importable Telegram links found.' });
+    }
     const thisBatch = groupEntries.slice(offset, offset + batchSize);
     const nextOffset = offset + thisBatch.length;
     const done = nextOffset >= total;
@@ -450,7 +453,8 @@ router.post('/import-batch', auth, async (req, res) => {
       broadcast(c);
     };
 
-    emit('[PROGRESS] ' + nextOffset + ' / ' + total + ' (' + Math.round(nextOffset / total * 100) + '%)');
+    const progressPercent = total ? Math.round(nextOffset / total * 100) : 100;
+    emit('[PROGRESS] ' + nextOffset + ' / ' + total + ' (' + progressPercent + '%)');
     emit('Batch ' + (Math.floor(offset / batchSize) + 1) + ': groups ' + (offset + 1) + '-' + nextOffset + ' of ' + total);
     // Persist progress so /status and UI can show resume point
     pipelineProgress = { offset: nextOffset, total, label: 'Skip Scraper (import-only)' };
