@@ -342,43 +342,59 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
 
   if (rows.length === 0) return '';
 
-  // ─ Sort: quality → language priority → size desc → host rank ────────────
+  // ─ Sort: episode → resolution → numeric size desc → language → host ───────
   const Q_ORDER = {'4K':0,'1080p':1,'720p':2,'480p':3,'360p':4,'HD':5};
 
-  // Language display priority: Multi-audio first, then common languages
+  // Language priority is deliberately a tie-breaker, not a primary grouping.
+  // This lets larger Telugu/Hindi files rank above smaller MULTI files.
   const LANG_ORDER = { 'multi':0, 'telugu':1, 'tamil':2, 'hindi':3, 'malayalam':4, 'kannada':5 };
   function langPriority(lang) {
     if (!lang) return 99;
-    const l = lang.toLowerCase();
+    const l = String(lang).toLowerCase();
     if (/multi|dual|4-in-1|5-in-1/i.test(l)) return 0;
     for (const [key, val] of Object.entries(LANG_ORDER)) { if (l.includes(key)) return val; }
     return 99;
   }
 
-  // Parse size string to MB for numeric comparison
-  function sizeToMB(s) {
-    if (!s) return 0;
-    const n = parseFloat(s);
-    return /GB/i.test(s) ? n * 1024 : (n || 0);
+  // Convert every supported file-size unit to bytes before comparing.
+  // Unsuffixed legacy values and numeric values retain the old MB interpretation.
+  function sizeToBytes(value) {
+    if (value == null || value === '') return 0;
+    if (typeof value === 'number') {
+      return Number.isFinite(value) && value > 0 ? value * 1024 ** 2 : 0;
+    }
+
+    const normalized = String(value).replace(/,/g, '').trim();
+    const match = normalized.match(/(\d+(?:\.\d+)?)\s*(TB|TIB|GB|GIB|MB|MIB|KB|KIB|BYTES?|B)?/i);
+    if (!match) return 0;
+
+    const amount = Number(match[1]);
+    if (!Number.isFinite(amount) || amount <= 0) return 0;
+    const unit = (match[2] || 'MB').toUpperCase();
+    const power = unit.startsWith('T') ? 4
+      : unit.startsWith('G') ? 3
+      : unit.startsWith('M') ? 2
+      : unit.startsWith('K') ? 1 : 0;
+    return amount * (1024 ** power);
   }
 
   rows.sort((a, b) => {
-    // 1. Season/Episode order for series
+    // 1. Preserve season/episode ordering for series.
     if (a.season != null || b.season != null) {
       const seA = (a.season||0)*1000 + (a.episode||0);
       const seB = (b.season||0)*1000 + (b.episode||0);
       if (seA !== seB) return seA - seB;
     }
-    // 2. Quality (4K > 1080p > 720p ...)
+    // 2. Keep resolution tiers intact: 4K > 1080p > 720p ...
     const qa = Q_ORDER[a.quality]??9, qb = Q_ORDER[b.quality]??9;
     if (qa !== qb) return qa - qb;
-    // 3. Language priority (Multi-audio first, then by language)
+    // 3. Compare actual byte counts first within a resolution, largest first.
+    const sa = sizeToBytes(a.size), sb = sizeToBytes(b.size);
+    if (sb !== sa) return sb - sa;
+    // 4. Language is only used when file sizes tie.
     const la = langPriority(a.lang), lb = langPriority(b.lang);
     if (la !== lb) return la - lb;
-    // 4. File size descending (larger = higher quality variant shown first)
-    const sa = sizeToMB(a.size), sb = sizeToMB(b.size);
-    if (sb !== sa) return sb - sa;
-    // 5. Host rank (GDFlix > HubCloud > ...)
+    // 5. Retain the existing provider preference as the final tie-breaker.
     return a.rank - b.rank;
   });
 
