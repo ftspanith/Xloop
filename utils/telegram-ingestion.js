@@ -11,8 +11,11 @@ const CDN_RE = [
 function normalizeTelegramUrl(value) {
   const raw = String(value || '').trim().replace(/^http:\/\//i, 'https://');
   if (!raw) return '';
-  try { return normalizeGdflixUrl(new URL(raw).toString()).replace(/\/$/, ''); }
-  catch (_) { return raw.replace(/\/$/, ''); }
+  try {
+    const parsed = new URL(raw);
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+    return normalizeGdflixUrl(parsed.toString());
+  } catch (_) { return raw.replace(/\/$/, ''); }
 }
 
 function isJunkTelegramUrl(value) {
@@ -29,7 +32,7 @@ function telegramMessageText(message) {
     text = message.text.map((part) => {
       if (typeof part === 'string') return part;
       if (!part || typeof part !== 'object') return '';
-      if (part.type === 'text_link' && part.href) return \`\${part.text || ''}\\n\${part.href}\\n\`;
+      if (part.type === 'text_link' && part.href) return \`\${part.text || ''}\n\${part.href}\n\`;
       if (part.type === 'link' && part.text) return part.text;
       return part.text || '';
     }).join('');
@@ -37,7 +40,7 @@ function telegramMessageText(message) {
   const keyboard = message.reply_markup && message.reply_markup.inline_keyboard;
   if (Array.isArray(keyboard)) {
     for (const row of keyboard) for (const button of (row || [])) {
-      if (button && button.url) text += \`\\n\${button.url}\`;
+      if (button && button.url) text += \`\n\${button.url}\`;
     }
   }
   return text.trim();
@@ -56,7 +59,7 @@ function dedupeTelegramMessages(messages) {
 function slotKey(entry) {
   return [
     String(entry.quality || 'HD').toLowerCase(),
-    String(entry.size || '').replace(/\\s/g, '').toLowerCase(),
+    String(entry.size || '').replace(/\s/g, '').toLowerCase(),
     String(entry.filename || '').toLowerCase().trim().slice(0, 120),
     String(entry.language || '').toLowerCase(),
     entry.season == null ? '' : entry.season,
