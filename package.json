@@ -29,7 +29,8 @@
     "test:video-formats": "node tests/video-format-detection.test.js",
     "test:analytics-html": "node test/analytics-html.test.js",
     "test:scraper-intelligence": "node --test tests/scraper-intelligence.test.js test/variant-intelligence.test.js",
-    "test:telegram-sync": "node --test test/telegram-sync-contract.test.js"
+    "test:telegram-sync": "node --test test/telegram-sync-contract.test.js",
+    "test:telegram-ingestion": "node --test tests/telegram-ingestion.test.js"
   },
   "dependencies": {
     "axios": "^1.19.0",
