@@ -10,6 +10,7 @@ on:
       - 'routes/scrape.js'
       - 'scrape-and-upload.js'
       - 'tests/mobile-admin-readiness.test.js'
+      - 'tests/admin-inline-script-syntax.test.js'
       - 'package.json'
       - '.github/workflows/mobile-admin-readiness.yml'
   pull_request:
