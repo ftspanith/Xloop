@@ -241,6 +241,7 @@
     let currentPage     = 1;
     let debounceTimer   = null;
     let suggestTimer    = null;
+    let searchRequestId = 0;
 
     // ── Elements ─────────────────────────────────────────────────────────────────
     const mainInput      = document.getElementById('mainSearchInput');
@@ -316,9 +317,18 @@
     function goToWatch(id, type) { window.location.href = `/watch.html?id=${id}&type=${type}`; }
 
     // ── Main search ──────────────────────────────────────────────────────────────
+    function renderSearchGrid(html) {
+      resultsGrid.classList.remove('loading', 'loaded');
+      resultsGrid.innerHTML = html;
+      // Restart the grid entrance animation for every completed search.
+      void resultsGrid.offsetWidth;
+      resultsGrid.classList.add('loaded');
+    }
+
     async function runSearch(q, page = 1) {
       currentQuery = q;
       currentPage  = page;
+      const requestId = ++searchRequestId;
 
       // Sync the input
       mainInput.value = q;
@@ -328,7 +338,8 @@
       const urlQ = new URLSearchParams({ q, ...(currentType ? { type: currentType } : {}) });
       window.history.replaceState({}, '', `?${urlQ}`);
 
-      // Show spinner
+      // Keep the spinner visible while the new request is in flight.
+      resultsGrid.classList.remove('loading', 'loaded');
       resultsGrid.innerHTML = '<div class="spinner"></div>';
       paginationEl.innerHTML = '';
       setStatus('Searching...');
@@ -340,27 +351,29 @@
         const res  = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
+        if (requestId !== searchRequestId) return;
 
         const items = Array.isArray(data.results) && data.results.length > 0
           ? data.results
           : [...(data.movies || []), ...(data.series || [])];
 
         if (!items.length) {
-          resultsGrid.innerHTML = `
+          renderSearchGrid(`
             <div class="search-empty">
               <div class="search-empty-icon"></div>
               <h3>No results for "<strong>${q}</strong>"</h3>
               <p>Try different keywords, or check the spelling.</p>
-            </div>`;
+            </div>`);
           setStatus(`No results found for "<strong>${q}</strong>"`);
         } else {
-          resultsGrid.innerHTML = items.map((item, i) => createCard(item, item.type || 'movie', i)).join('');
+          renderSearchGrid(items.map((item, i) => createCard(item, item.type || 'movie', i)).join(''));
           activateLazyImages();
           setStatus(`Found <strong>${data.total || items.length}</strong> results for "<strong>${q}</strong>"`);
           buildPagination(data.total || items.length, page, 24);
         }
       } catch (err) {
-        resultsGrid.innerHTML = `<div class="search-empty"><div class="search-empty-icon"></div><h3>Search failed</h3><p>${err.message}</p></div>`;
+        if (requestId !== searchRequestId) return;
+        renderSearchGrid(`<div class="search-empty"><div class="search-empty-icon"></div><h3>Search failed</h3><p>${err.message}</p></div>`);
         setStatus('Search failed. Please try again.');
       }
     }
