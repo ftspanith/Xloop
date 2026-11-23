@@ -75,12 +75,17 @@ router.get('/sync-status', async (req, res) => {
     }, null);
 
     const makeAccountStatus = (stats, previous) => {
-      if (!stats.count) return previous || null;
-      const updatedAt = stats.latestUpdatedAt ? new Date(stats.latestUpdatedAt) : null;
+      // Legacy imports may not have sourceAccount tags. If the account-specific
+      // aggregate is empty but the collection has records, show the real latest
+      // database activity instead of leaving an obsolete cached date (e.g. Oct 9).
+      const updatedAt = stats.latestUpdatedAt
+        ? new Date(stats.latestUpdatedAt)
+        : (totalLinks > 0 && latestUpdatedAt ? new Date(latestUpdatedAt) : null);
+      if (!stats.count && !updatedAt) return previous || null;
       return {
         ...(previous || {}),
         source: 'database',
-        links: Number(stats.count),
+        links: Number(stats.count || 0),
         date: updatedAt ? updatedAt.toISOString() : previous?.date || null,
         dateHuman: updatedAt
           ? updatedAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })
