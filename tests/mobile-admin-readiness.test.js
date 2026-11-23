@@ -47,7 +47,7 @@ test('admin API calls use same-origin relative routes, not localhost', () => {
 
 test('scraper merge and replace safety guards remain explicit', () => {
   const route = read('routes/scrape.js');
-  assert.ok(route.includes("else if (type === 'series') filter.type = { $in: ['series', 'anime'] };"));
+  assert.match(route, /const mergeMode = req\.query\.merge === 'true'/);
   assert.match(route, /if \(mergeMode\)[\s\S]*?existingUrls/);
   assert.match(route, /if \(!mergeMode\)[\s\S]*?deleteMany\(\{ uploadBatch: \{ \$ne: batchId \} \}\)/);
 
@@ -58,5 +58,5 @@ test('scraper merge and replace safety guards remain explicit', () => {
 
 test('series search keeps anime results in the legacy series category', () => {
   const route = read('routes/search.js');
-  assert.match(route, /type === 'series'\\)\\s*filter\\.type = \\{\\s*\\$in: \\['series', 'anime'\\]\\s*\\}/);
+  assert.ok(route.includes("else if (type === 'series') filter.type = { $in: ['series', 'anime'] };"));
 });
