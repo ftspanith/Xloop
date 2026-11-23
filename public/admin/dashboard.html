@@ -965,7 +965,7 @@
           _dashDStep(1,'running',`chunk ${ci+1}/${total}...`);
           const chunk=links.slice(ci*CHUNK,(ci+1)*CHUNK);
           const isFinal=ci===total-1;
-          const res = await fetch('/api/scrape/save-extracted',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
+          const res = await fetch('/api/scrape/save-extracted',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,sourceAccount:'1',messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
           const d = await res.json().catch(()=>({}));
           if (!res.ok) throw new Error(d.message||'Save failed');
           if (!batchId) batchId=d.batchId;
@@ -993,7 +993,7 @@
           _dashDStep(2,'running',`chunk ${ci+1}/${total}...`);
           const chunk=links.slice(ci*CHUNK,(ci+1)*CHUNK);
           const isFinal=ci===total-1;
-          const res = await fetch('/api/scrape/save-extracted?merge=true',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
+          const res = await fetch('/api/scrape/save-extracted?merge=true',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({links:chunk,batchId,isFinal,sourceAccount:'2',messageCount:isFinal?msgs.length:undefined,skipped:isFinal?skipped:undefined})});
           const d = await res.json().catch(()=>({}));
           if (!res.ok) throw new Error(d.message||'Merge failed');
           if (!batchId) batchId=d.batchId;
@@ -1303,7 +1303,7 @@
       if (d.available) {
         const date = d.savedAt ? new Date(d.savedAt).toLocaleDateString() : '';
         el.style.color = '#22c55e';
-        el.textContent = ` Ready — ${(d.count||0).toLocaleString()} messages${date ? ' · saved '+date : ''}`;
+        el.textContent = ` Ready — ${(d.count||0).toLocaleString()} links in MongoDB${date ? ' · updated '+date : ''}`;
       } else {
         el.style.color = 'rgba(255,200,0,.8)';
         el.textContent = 'Not uploaded yet — choose a file to upload before running Full Pipeline';
@@ -1319,7 +1319,8 @@
 
   async function loadSyncStatus() {
     try {
-      const res = await fetch('/api/scrape/sync-status');
+      const res = await fetch('/api/scrape/sync-status', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Sync status request failed');
       const data = await res.json();
       const row = document.getElementById('syncStatusRow');
       if (!row) return;
@@ -1328,34 +1329,48 @@
         if (!info) {
           return `<div style="display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:9px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
             <span style="width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,0.18);flex-shrink:0;"></span>
-            <span style="font-size:0.72rem;">
-              <span style="color:rgba(255,255,255,0.4);font-weight:700;">${accLabel}</span>
-              <span style="color:rgba(255,255,255,0.22);margin-left:4px;">— Never synced</span>
-            </span>
+            <span style="font-size:0.72rem;color:rgba(255,255,255,0.4);">${accLabel} — No account-tagged links</span>
           </div>`;
         }
 
-        const isAuto   = info.source === 'auto';
-        const srcLabel = isAuto ? 'Auto Synced' : 'Manual Upload';
-        const srcIcon  = isAuto
+        const isAuto = info.source === 'auto';
+        const isDatabase = info.source === 'database';
+        const srcLabel = isDatabase ? 'MongoDB' : isAuto ? 'Auto Synced' : 'Manual Upload';
+        const srcIcon = isAuto
           ? `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`
-          : `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`;
+          : `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;"><path d="M21 15v4a2 2 0 0 1-2 2H5v-4"/><polyline points="17 8 12 3 7 8"/></svg>`;
 
-        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 13px;border-radius:9px;background:rgba(${accentRgb},0.07);border:1px solid rgba(${accentRgb},0.25);" title="${info.links ? Number(info.links).toLocaleString() + ' links' : ''}">
+        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 13px;border-radius:9px;background:rgba(${accentRgb},0.07);border:1px solid rgba(${accentRgb},0.25);" title="${Number(info.links || 0).toLocaleString()} links">
           <span style="width:7px;height:7px;border-radius:50%;background:rgb(${accentRgb});flex-shrink:0;box-shadow:0 0 5px rgba(${accentRgb},0.5);"></span>
           <span style="font-size:0.72rem;line-height:1.6;">
             <span style="font-weight:800;color:#fff;">${accLabel}</span>
             <span style="display:inline-flex;align-items:center;gap:3px;margin:0 5px;padding:1px 7px;border-radius:10px;background:rgba(${accentRgb},0.15);font-size:0.66rem;font-weight:700;color:rgb(${accentRgb});">${srcIcon} ${srcLabel}</span>
             <br>
-            <span style="color:rgba(255,255,255,0.45);font-size:0.69rem;">${info.dateHuman}${info.links ? ' &middot; ' + Number(info.links).toLocaleString() + ' links' : ''}</span>
+            <span style="color:rgba(255,255,255,0.45);font-size:0.69rem;">${info.dateHuman || 'Imported'} &middot; ${Number(info.links || 0).toLocaleString()} links</span>
           </span>
         </div>`;
       }
 
-      row.innerHTML =
+      const db = data.database || {};
+      const dbDate = db.latestUpdatedAt
+        ? new Date(db.latestUpdatedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+        : 'No import timestamp';
+      const dbBadge = `<div style="display:flex;align-items:center;gap:8px;padding:8px 13px;border-radius:9px;background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.22);">
+        <span style="width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>
+        <span style="font-size:0.72rem;line-height:1.6;">
+          <span style="font-weight:800;color:#fff;">MongoDB Total</span>
+          <span style="color:#4ade80;font-weight:800;margin-left:6px;">${Number(db.totalLinks || 0).toLocaleString()} links</span>
+          <br><span style="color:rgba(255,255,255,0.45);font-size:0.69rem;">Updated: ${dbDate} · Acc 1: ${Number(db.account1Links || 0).toLocaleString()} · Acc 2: ${Number(db.account2Links || 0).toLocaleString()} · Untagged: ${Number(db.unassignedLinks || 0).toLocaleString()}</span>
+        </span>
+      </div>`;
+
+      row.innerHTML = dbBadge +
         makeBadge('Acc 1', '229,9,20', data.acc1) +
         makeBadge('Acc 2', '99,179,237', data.acc2);
-    } catch(_) {}
+    } catch(err) {
+      const row = document.getElementById('syncStatusRow');
+      if (row) row.textContent = 'Live MongoDB sync status unavailable';
+    }
   }
 
   // ── Scrape Mode Selector ─────────────────────────────────────────────────────
@@ -1901,28 +1916,10 @@
 </script>
 
 <script>
-  // Load sync badges immediately on page load — no auth needed (endpoint is public)
+  // One renderer only: read the live MongoDB counts and sync metadata.
   window.addEventListener('DOMContentLoaded', function() {
-    fetch('/api/scrape/sync-status')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        var row = document.getElementById('syncStatusRow');
-        if (!row) return;
-        function badge(label, rgb, info) {
-          if (!info) return '<div style="display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:9px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);"><span style="width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,0.18);flex-shrink:0;"></span><span style="font-size:0.72rem;color:rgba(255,255,255,0.4);">' + label + ' <span style="color:rgba(255,255,255,0.22);">— Never synced</span></span></div>';
-          var isAuto = info.source === 'auto';
-          var srcLabel = isAuto ? 'Auto Synced' : 'Manual Upload';
-          var links = info.links ? ' &middot; ' + Number(info.links).toLocaleString() + ' links' : '';
-          return '<div style="display:flex;align-items:center;gap:8px;padding:7px 13px;border-radius:9px;background:rgba(' + rgb + ',0.07);border:1px solid rgba(' + rgb + ',0.25);"><span style="width:7px;height:7px;border-radius:50%;background:rgb(' + rgb + ');flex-shrink:0;box-shadow:0 0 5px rgba(' + rgb + ',0.5);"></span><span style="font-size:0.72rem;line-height:1.6;"><span style="font-weight:800;color:#fff;">' + label + '</span><span style="display:inline-flex;align-items:center;gap:3px;margin:0 5px;padding:1px 7px;border-radius:10px;background:rgba(' + rgb + ',0.15);font-size:0.66rem;font-weight:700;color:rgb(' + rgb + ');">' + srcLabel + '</span><br><span style="color:rgba(255,255,255,0.45);font-size:0.69rem;">' + info.dateHuman + links + '</span></span></div>';
-        }
-        row.innerHTML = badge('Acc 1', '229,9,20', data.acc1) + badge('Acc 2', '99,179,237', data.acc2);
-        var status = document.getElementById('dashExportStatus');
-        if (status && status.textContent === 'Checking status...') {
-          status.style.color = 'rgba(255,255,255,0.3)';
-          status.textContent = 'Ready';
-        }
-      })
-      .catch(function() {});
+    if (typeof dashCheckExportStatus === 'function') dashCheckExportStatus();
+    else if (typeof loadSyncStatus === 'function') loadSyncStatus();
   });
 </script>
 
