@@ -11,10 +11,10 @@ const dashboard = fs.readFileSync(path.join(root, 'public/admin/dashboard.html')
 const uploader = fs.readFileSync(path.join(root, 'scripts/telegram-sync-upload.js'), 'utf8');
 
 test('Termux Telegram sync exposes authenticated staged upload endpoints', () => {
-  assert.match(routes, /router\.post\('\\/telegram-sync\\/start', auth,/);
-  assert.match(routes, /router\.post\('\\/telegram-sync\\/chunk', auth,/);
-  assert.match(routes, /router\.post\('\\/telegram-sync\\/finalize', auth,/);
-  assert.match(routes, /router\.get\('\\/telegram-sync\\/status'/);
+  assert.match(routes, /router\.post\('\/telegram-sync\/start', auth,/);
+  assert.match(routes, /router\.post\('\/telegram-sync\/chunk', auth,/);
+  assert.match(routes, /router\.post\('\/telegram-sync\/finalize', auth,/);
+  assert.match(routes, /router\.get\('\/telegram-sync\/status'/);
 });
 
 test('Telegram sync stages and verifies account-tagged records before atomic swap', () => {
