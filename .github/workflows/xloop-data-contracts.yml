@@ -1,0 +1,31 @@
+name: Xloop Data Contract Tests
+
+on:
+  push:
+    branches:
+      - test/xloop-readiness-contracts
+    paths:
+      - 'models/**'
+      - 'test/xloop-data-contract.test.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/xloop-data-contracts.yml'
+  pull_request:
+    paths:
+      - 'models/**'
+      - 'test/xloop-data-contract.test.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/xloop-data-contracts.yml'
+
+jobs:
+  data-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:xloop-contracts
