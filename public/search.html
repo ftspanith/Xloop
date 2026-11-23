@@ -116,6 +116,22 @@
     .search-pg-btn:disabled { opacity: 0.3; cursor: not-allowed; }
     .search-pg-info { padding: 8px 16px; color: var(--text2); font-size: 0.85rem; font-weight: 600; }
 
+    /* Results motion and loading feedback */
+    #searchResults { min-height: 120px; }
+    #searchResults.loaded .card { animation: searchCardIn .38s both; animation-delay: calc(var(--card-index, 0) * 35ms); }
+    #searchResults.loading { opacity: .72; transition: opacity .18s ease; }
+    .search-suggestions { transform-origin: top center; }
+    .search-suggestions.open { animation: suggestionIn .16s ease-out both; }
+    .suggestion-item { border-bottom: 1px solid rgba(255,255,255,.045); }
+    .suggestion-item:last-child { border-bottom: 0; }
+    .search-empty { grid-column: 1 / -1; animation: searchCardIn .28s ease both; }
+    @keyframes searchCardIn { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes suggestionIn { from { opacity: 0; transform: translateY(-6px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @media (prefers-reduced-motion: reduce) {
+      #searchResults.loaded .card, .search-suggestions.open, .search-empty { animation: none !important; }
+      .search-input-wrap, .type-tab, .suggestion-item { transition: none !important; }
+    }
+
     /* Empty state */
     .search-empty {
       text-align: center; padding: 80px 20px; color: var(--text2);
@@ -325,10 +341,28 @@
     function goToWatch(id, type) { window.location.href = `/watch.html?id=${id}&type=${type}`; }
 
     // ── Main search ──────────────────────────────────────────────────────────────
+    function escapeSearchHtml(value) {
+      return String(value ?? '').replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[char]));
+    }
+
+    function createSafeSearchCard(item, index) {
+      const id = encodeURIComponent(String(item._id || ''));
+      const type = ['movie', 'series', 'anime'].includes(item.type) ? item.type : 'movie';
+      const title = escapeSearchHtml(item.title || 'Untitled');
+      const poster = escapeSearchHtml(item.poster || '');
+      const year = escapeSearchHtml(item.year || '');
+      const label = type === 'movie' ? 'Movie' : type === 'anime' ? 'Anime' : 'Series';
+      const badge = type === 'anime' ? 'ANIME' : type === 'series' ? 'SERIES' : (item.quality === '4K' ? '4K' : 'HD');
+      const delay = Math.min(index, 18);
+      const image = poster
+        ? `<img src=\"${poster}\" alt=\"${title}\" class=\"card-img\" loading=\"lazy\" onerror=\"this.style.display='none';this.nextElementSibling.style.display='flex'\"><div class=\"card-no-poster\" style=\"display:none\"><div class=\"np-title\">${title}</div></div>`
+        : `<div class=\"card-no-poster\"><div class=\"np-title\">${title}</div></div>`;
+      return `<a href=\"/watch.html?id=${id}&amp;type=${type}\" class=\"card\" style=\"--card-index:${delay}\"><div class=\"card-badge\">${badge}</div>${image}<div class=\"card-info\"><div class=\"card-title\">${title}</div><div class=\"card-sub\">${year} • ${label}</div></div></a>`;
+    }
+
     function renderSearchGrid(html) {
       resultsGrid.classList.remove('loading', 'loaded');
       resultsGrid.innerHTML = html;
-      // Restart the grid entrance animation for every completed search.
       void resultsGrid.offsetWidth;
       resultsGrid.classList.add('loaded');
     }
@@ -366,22 +400,23 @@
           : [...(data.movies || []), ...(data.series || [])];
 
         if (!items.length) {
+          const safeQuery = escapeSearchHtml(q);
           renderSearchGrid(`
             <div class="search-empty">
-              <div class="search-empty-icon"></div>
-              <h3>No results for "<strong>${q}</strong>"</h3>
-              <p>Try different keywords, or check the spelling.</p>
+              <div class="search-empty-icon">⌕</div>
+              <h3>No results for "<strong>${safeQuery}</strong>"</h3>
+              <p>Try a shorter title, alternate spelling, or another content type.</p>
             </div>`);
-          setStatus(`No results found for "<strong>${q}</strong>"`);
+          setStatus(`No results found for "<strong>${safeQuery}</strong>"`);
         } else {
-          renderSearchGrid(items.map((item, i) => createCard(item, item.type || 'movie', i)).join(''));
+          renderSearchGrid(items.map((item, i) => createSafeSearchCard(item, i)).join(''));
           activateLazyImages();
-          setStatus(`Found <strong>${data.total || items.length}</strong> results for "<strong>${q}</strong>"`);
+          setStatus(`Found <strong>${Number(data.total ?? items.length).toLocaleString()}</strong> results for "<strong>${escapeSearchHtml(q)}</strong>"`);
           buildPagination(data.total || items.length, page, 24);
         }
       } catch (err) {
         if (requestId !== searchRequestId) return;
-        renderSearchGrid(`<div class="search-empty"><div class="search-empty-icon"></div><h3>Search failed</h3><p>${err.message}</p></div>`);
+        renderSearchGrid(`<div class="search-empty"><div class="search-empty-icon">!</div><h3>Search failed</h3><p>${escapeSearchHtml(err.message)}</p><button class="search-pg-btn" type="button" onclick="runSearch(currentQuery,currentPage)">Try again</button></div>`);
         setStatus('Search failed. Please try again.');
       }
     }
