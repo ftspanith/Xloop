@@ -2133,3 +2133,11 @@ ul { list-style: none; }
   .watch-main { padding: 16px 12px; }
   .hero-title { font-size: 1.6rem; }
 }
+
+
+/* Mobile navigation: the legacy ID selector above uses .visible,
+   while the current menu controller toggles .open. Keep both states in sync. */
+#mobileNavOverlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
