@@ -81,6 +81,7 @@ router.get('/', async (req, res) => {
 
     let results = [];
     let total = 0;
+    let matchedTotal = null;
     if (q) {
       const normalizedQuery = normalize(q);
       const tokens = normalizedQuery.split(' ').filter(token => token.length > 1).slice(0, 8);
@@ -101,10 +102,11 @@ router.get('/', async (req, res) => {
         ]
       };
       const [candidates, count] = await Promise.all([
-        Movie.find(searchFilter).sort({ createdAt: -1 }).limit(400).select('-__v -downloads').lean(),
+        Movie.find(searchFilter).sort({ createdAt: -1 }).limit(1000).select('-__v -downloads').lean(),
         Movie.countDocuments(searchFilter)
       ]);
-      total = count;
+      matchedTotal = count;
+      total = candidates.length;
       results = candidates
         .map(movie => ({ movie, score: relevanceScore(movie, normalizedQuery, tokens) }))
         .sort((a, b) => b.score - a.score || (Number(b.movie.rating) || 0) - (Number(a.movie.rating) || 0) || new Date(b.movie.createdAt) - new Date(a.movie.createdAt))
@@ -120,7 +122,7 @@ router.get('/', async (req, res) => {
     }
 
     res.json({
-      results, total, page, pages: Math.ceil(total / limit),
+      results, total, matchedTotal, truncated: matchedTotal !== null && matchedTotal > total, page, pages: Math.ceil(total / limit),
       movies: results.filter(item => item.type === 'movie'),
       series: results.filter(item => item.type === 'series' || item.type === 'anime')
     });
