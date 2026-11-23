@@ -271,6 +271,7 @@ router.post('/upload-export', auth, upload.array('files', 10), async (req, res) 
     // Global dedup by channel_id:message_id (handles overlapping files)
     const msgMap = new Map();
     for (const m of allMessages) {
+      if (!m || typeof m !== 'object' || m.id == null) continue;
       const key = `${m.channel_id || '0'}:${m.id}`;
       if (!msgMap.has(key)) msgMap.set(key, m);
     }
