@@ -598,7 +598,7 @@ function setFilter(el, val) {
 }
 
 
-async function startLinkNormalization() {
+async async function startLinkNormalization() {
   if (!confirm('Normalize all existing GDFlix and HubCloud links in the database? This will update stored URLs and host labels.')) return;
   const button = document.getElementById('normalize-links-btn');
   const status = document.getElementById('normalize-links-status');
