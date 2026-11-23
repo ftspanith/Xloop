@@ -37,13 +37,13 @@ function levenshtein(a, b) {
 function relevanceScore(movie, query, tokens) {
   const title = normalize(movie.title);
   const words = title.split(' ').filter(Boolean);
-  const compactTitle = title.replace(/\\s+/g, '');
-  const compactQuery = query.replace(/\\s+/g, '');
+  let score = 0;
+  const compactTitle = title.replace(/\s+/g, '');
+  const compactQuery = query.replace(/\s+/g, '');
   if (compactQuery.length >= 5 && levenshtein(compactTitle, compactQuery) <= Math.max(1, Math.floor(compactQuery.length * 0.2))) score += 62;
   const description = normalize(movie.description);
   const genres = normalize((movie.genre || []).join(' '));
   const languages = normalize([movie.language, ...(movie.languages || [])].join(' '));
-  let score = 0;
 
   if (title === query) score += 160;
   else if (title.startsWith(query)) score += 115;
