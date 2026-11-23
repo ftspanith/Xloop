@@ -30,12 +30,12 @@ test('Telegram sync stages and verifies account-tagged records before atomic swa
   assert.doesNotMatch(block, /deleteMany\s*\(/, 'staging sync must not delete live records directly');
 });
 
-test('Admin dashboard monitors Termux sync without browser-side JSON upload controls', () => {
-  assert.match(dashboard, /id="telegramSyncMonitor"/);
-  assert.match(dashboard, /loadTelegramSyncStatus/);
-  assert.match(dashboard, /setInterval\(loadTelegramSyncStatus, 3000\)/);
-  assert.match(dashboard, /copyTelegramSyncToken/);
-  assert.match(dashboard, /<div style="display:none;">\s*<!-- Acc 1 -->/);
+test('Admin dashboard shows MongoDB link status without the removed Termux sync monitor', () => {
+  assert.match(dashboard, /MongoDB Link Status/);
+  assert.match(dashboard, /id="syncStatusRow"/);
+  assert.doesNotMatch(dashboard, /telegramSyncMonitor|telegramSyncLabel|telegramSyncPercent|telegramSyncBar|telegramSyncCounts/);
+  assert.doesNotMatch(dashboard, /loadTelegramSyncStatus|copyTelegramSyncToken|telegram-sync\/status/);
+  assert.doesNotMatch(dashboard, /Waiting for Termux sync|Copy Termux Token|Live status refreshes every 3 seconds/);
 });
 
 test('Termux uploader enforces expected export counts and uses small retryable chunks', () => {
