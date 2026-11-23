@@ -14,18 +14,18 @@ test('inline JavaScript on admin pages parses without syntax errors', () => {
 
   for (const file of files) {
     const html = fs.readFileSync(path.join(adminDir, file), 'utf8');
-    const scriptTag = /<script\\b([^>]*)>([\\s\\S]*?)<\\/script>/gi;
+    const scriptTag = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
     let match;
     let index = 0;
 
     while ((match = scriptTag.exec(html))) {
       const attributes = match[1] || '';
       const source = match[2] || '';
-      if (/\\bsrc\\s*=/.test(attributes) || !source.trim()) continue;
+      if (/\bsrc\s*=/.test(attributes) || !source.trim()) continue;
 
-      const type = attributes.match(/\\btype\\s*=\\s*["']([^"']+)["']/i)?.[1] || '';
+      const type = attributes.match(/\btype\s*=\s*["']([^"']+)["']/i)?.[1] || '';
       if (type && !/(?:java|ecma)script/i.test(type)) continue;
-      if (/\\btype\\s*=\\s*["']module["']/i.test(attributes)) continue;
+      if (/\btype\s*=\s*["']module["']/i.test(attributes)) continue;
 
       index += 1;
       try {
@@ -36,5 +36,5 @@ test('inline JavaScript on admin pages parses without syntax errors', () => {
     }
   }
 
-  assert.deepEqual(failures, [], failures.join('\\n'));
+  assert.deepEqual(failures, [], failures.join('\n'));
 });
