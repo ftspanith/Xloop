@@ -66,13 +66,25 @@ function openMobileSidebar() {
   const sb = document.getElementById('adminSidebar');
   const bd = document.getElementById('sidebarBackdrop');
   if (sb) sb.classList.add('open');
-  if (bd) bd.classList.add('visible');
+  if (bd) {
+    bd.classList.add('visible');
+    bd.setAttribute('aria-hidden', 'false');
+  }
   document.body.style.overflow = 'hidden';
 }
 function closeMobileSidebar() {
   const sb = document.getElementById('adminSidebar');
   const bd = document.getElementById('sidebarBackdrop');
   if (sb) sb.classList.remove('open');
-  if (bd) bd.classList.remove('visible');
+  if (bd) {
+    bd.classList.remove('visible');
+    bd.setAttribute('aria-hidden', 'true');
+  }
   document.body.style.overflow = '';
 }
+
+
+// Close the admin drawer with the Escape key on mobile.
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeMobileSidebar();
+});

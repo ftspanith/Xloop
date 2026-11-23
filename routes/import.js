@@ -911,7 +911,7 @@ router.post('/manual-add', auth, async (req, res) => {
 // ── PATCH /api/import/update-movie/:id ──────────────────────
 router.patch('/update-movie/:id', auth, async (req, res) => {
   try {
-    const movie = await Movie.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true });
+    const movie = await Movie.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
     if (!movie) return res.status(404).json({ message: 'Movie not found' });
     res.json({ message: 'Updated', movie });
   } catch (e) { res.status(500).json({ message: e.message }); }
@@ -920,8 +920,9 @@ router.patch('/update-movie/:id', auth, async (req, res) => {
 // ── DELETE /api/import/delete-movie/:id ─────────────────────
 router.delete('/delete-movie/:id', auth, async (req, res) => {
   try {
-    await Movie.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Deleted' });
+    const deleted = await Movie.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: 'Content not found' });
+    res.json({ success: true, message: 'Deleted' });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
