@@ -9,24 +9,25 @@
 <body>
   <div class="admin-layout">
     <aside class="admin-sidebar" id="adminSidebar">
-      <div class="admin-logo"><button class="sidebar-close-btn" onclick="closeMobileSidebar()" aria-label="Close menu"></button></div>
+      <div class="admin-logo"><button class="sidebar-close-btn" onclick="closeMobileSidebar()" aria-label="Close menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button></div>
           <nav class="admin-nav">
-      <a href="/admin/dashboard.html">Dashboard</a>
-      <a href="/admin/add-movie.html">+ Add Movie</a>
-      <a href="/admin/add-series.html">+ Add Series</a>
-      <a href="/admin/add-manual.html">Smart Add</a>
-      <a href="/admin/bulk-import.html" class="active">Bulk Import</a>
-      <a href="/admin/manager.html">Content Manager</a>
-      <a href="/admin/fix-posters.html">Fix Posters</a>
-      <a href="/admin/collection.html">Collection Master</a>
-      <a href="/admin/scraper.html">Scraper</a>
-      <a href="/" target="_blank" style="margin-top:auto;border-top:1px solid var(--border);border-radius:0;padding-top:16px;">View Site ↗</a>
-      <a href="#" onclick="logout()" style="color:var(--red);">Logout</a>
+      <a href="/admin/dashboard.html"><svg fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Dashboard</span></a>
+      <a href="/admin/add-movie.html"><svg fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><span>+ Add Movie</span></a>
+      <a href="/admin/add-series.html"><svg fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4V2m8 2V2M8 20v2m8-2v2M3 9h18"/></svg><span>+ Add Series</span></a>
+      <a href="/admin/add-manual.html"><svg fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg><span>Smart Add</span></a>
+      <a href="/admin/bulk-import.html" class="active"><svg fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M4 17v3h16v-3"/></svg><span>Bulk Import</span></a>
+      <a href="/admin/manager.html"><svg fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg><span>Content Manager</span></a>
+      <a href="/admin/fix-posters.html"><svg fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>Fix Posters</span></a>
+      <a href="/admin/collection.html"><svg fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></svg><span>Collection Master</span></a>
+      <a href="/admin/scraper.html"><svg fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="m8 9 3 3-3 3m5 0h3"/></svg><span>Scraper</span></a>
+      <a href="/" target="_blank" style="margin-top:auto;border-top:1px solid var(--border);border-radius:0;padding-top:16px;"><svg fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>View Site ↗</span></a>
+      <a href="#" onclick="logout()" style="color:var(--red);"><svg fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M21 3v18"/></svg><span>Logout</span></a>
     </nav>
     </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeMobileSidebar()" aria-hidden="true"></div>
     
     <main class="admin-content">
-      <button class="mobile-menu-btn" onclick="openMobileSidebar()" aria-label="Open menu"></button>
+      <button class="mobile-menu-btn" onclick="openMobileSidebar()" aria-label="Open menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
     Telegram Bulk Importer</h1>
       
       <div class="form-card">
@@ -281,7 +282,7 @@
     Dashboard
   </a>
   <a href="/admin/dashboard.html" id="bnav-orchestrator">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/></svg>
     Pipeline
   </a>
   <a href="/admin/manager.html" id="bnav-manager">

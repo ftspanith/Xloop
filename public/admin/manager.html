@@ -62,6 +62,7 @@
     .form-group { margin-bottom: 16px; }
 
     /*  Buttons  */
+    .btn svg { width: 16px; height: 16px; flex: 0 0 auto; }
     .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px; border-radius: 9px; border: none; font-family: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
     .btn-primary { background: var(--accent); color: #fff; }
     .btn-primary:hover { background: #ff1f2a; }
@@ -254,8 +255,8 @@
 
   <!-- Tabs -->
   <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('search')"> Search & Manage</button>
-    <button class="tab-btn" onclick="switchTab('add')"> Add Movie</button>
+    <button class="tab-btn active" onclick="switchTab('search')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg> Search &amp; Manage</button>
+    <button class="tab-btn" onclick="switchTab('add')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Add Movie</button>
   </div>
 
   <!--  SEARCH TAB  -->
@@ -268,7 +269,7 @@
         Updates old links in the database in small batches. GDFlix subdomains become <strong>gdflix.dev</strong> and HubCloud subdomains become <strong>hubcloud.one</strong>. Other hosts and their links are left unchanged.
       </p>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-        <button class="btn btn-secondary" id="normalize-links-btn" onclick="startLinkNormalization()">Normalize All Existing Links</button>
+        <button class="btn btn-secondary" id="normalize-links-btn" onclick="startLinkNormalization()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="m10 13 4-4m-7 8-2 2a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m5-5 2-2a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></svg>Normalize All Existing Links</button>
         <span id="normalize-links-status" style="font-size:0.83rem;color:var(--muted);">Ready — this may take a while.</span>
       </div>
       <div id="normalize-progress-wrap" style="display:none;margin-top:16px;">
@@ -281,7 +282,7 @@
       </div>
     </div>
     <div class="search-bar">
-      <span class="search-icon"></span>
+      <span class="search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></span>
       <input type="text" id="search-input" placeholder="Search by title, language, genre, year..." oninput="debounceSearch()">
     </div>
 
@@ -312,20 +313,20 @@
     
     <!-- QUICK PASTE SECTION -->
     <div class="card" style="margin-bottom:20px; border-color:var(--accent);">
-      <div class="card-title"><span></span> Quick Paste Auto-Import</div>
+      <div class="card-title"><span aria-hidden="true">↳</span> Quick Paste Auto-Import</div>
       <p style="font-size:0.85rem; color:var(--text2); margin-bottom:12px;">
         Paste text exactly as you would send it on Telegram (filename + URL). The system will automatically detect the movie, fetch TMDB posters, and publish it immediately.
       </p>
       <textarea id="quick-paste-text" rows="5" class="form-input" placeholder="Pushpa.2.The.Rule.2024.1080p.mkv&#10;https://gdflix.com/..."></textarea>
       <div style="margin-top:12px; display:flex; align-items:center; gap:15px;">
-        <button class="btn btn-primary" onclick="submitQuickPaste()"> Auto Process & Publish</button>
+        <button class="btn btn-primary" onclick="submitQuickPaste()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M3 12h18"/><path d="m5 5 2 2m10 10 2 2"/></svg>Auto Process &amp; Publish</button>
         <span id="quick-paste-status" style="font-size:0.85rem; font-weight:600;"></span>
       </div>
     </div>
 
     <!-- MANUAL ADD SECTION -->
     <div class="card">
-      <div class="card-title"><span></span> Manual Entry (Overrides)</div>
+      <div class="card-title"><span aria-hidden="true">✎</span> Manual Entry (Overrides)</div>
 
       <div class="form-row">
         <div class="form-group" style="margin-bottom:0">
@@ -379,8 +380,8 @@
       </div>
 
       <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
-        <button class="btn btn-secondary" onclick="fetchPreview()"> Fetch from TMDB</button>
-        <button class="btn btn-secondary btn-sm" onclick="clearPreview()" style="opacity:0.6">Clear</button>
+        <button class="btn btn-secondary" onclick="fetchPreview()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M4 19h16"/></svg>Fetch from TMDB</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearPreview()" style="opacity:0.6"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 6-12 12M6 6l12 12"/></svg>Clear</button>
       </div>
 
       <!-- Preview -->
@@ -404,12 +405,12 @@
         <!-- dynamic rows -->
       </div>
 
-      <button class="btn btn-secondary btn-sm" onclick="addLinkRow()" style="margin-top:8px;">+ Add another link</button>
+      <button class="btn btn-secondary btn-sm" onclick="addLinkRow()" style="margin-top:8px;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add another link</button>
     </div>
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;">
-      <button class="btn btn-primary" onclick="submitManualAdd()"> Create / Update Movie</button>
-      <button class="btn btn-secondary" onclick="submitManualAdd(true)"> Force Overwrite Metadata</button>
+      <button class="btn btn-primary" onclick="submitManualAdd()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h12l4 4v14H3V3z"/><path d="M7 3v6h10V3M7 21v-7h10v7"/></svg>Create / Update Movie</button>
+      <button class="btn btn-secondary" onclick="submitManualAdd(true)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.5 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.5-3"/></svg>Force Overwrite Metadata</button>
     </div>
     <div id="add-status" class="status"></div>
   </div>
@@ -418,7 +419,7 @@
 <!--  EDIT MODAL  -->
 <div class="modal-overlay" id="edit-modal">
   <div class="modal">
-    <button class="modal-close" onclick="closeModal()"></button>
+    <button class="modal-close" onclick="closeModal()" aria-label="Close editor"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button>
     <div class="modal-title"> Edit Movie</div>
 
     <input type="hidden" id="edit-id">
@@ -514,17 +515,18 @@
         <div><label>Quality</label><select id="new-link-quality"><option>1080p</option><option>4K</option><option>720p</option><option>480p</option></select></div>
         <div><label>Language</label><input type="text" id="new-link-lang" placeholder="Telugu"></div>
       </div>
-      <button class="btn btn-green btn-sm" onclick="addNewDownload()">+ Add Link</button>
+      <button class="btn btn-green btn-sm" onclick="addNewDownload()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add Link</button>
     </div>
 
     <div style="margin-top:20px;display:flex;gap:12px;flex-wrap:wrap;">
-      <button class="btn btn-primary" onclick="saveEdit()"> Save Changes</button>
-      <button class="btn btn-danger" onclick="deleteMovie()"> Delete Movie</button>
+      <button class="btn btn-primary" onclick="saveEdit()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h12l4 4v14H3V3z"/><path d="M7 3v6h10V3M7 21v-7h10v7"/></svg>Save Changes</button>
+      <button class="btn btn-danger" onclick="deleteMovie()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg>Delete Movie</button>
     </div>
     <div id="edit-status" class="status"></div>
   </div>
 </div>
 
+<script src="/js/admin.js"></script>
 <script>
 //  Globals 
 let token = localStorage.getItem('xloop_admin_token') || '';
@@ -533,13 +535,12 @@ let totalPages  = 1;
 let currentFilter = 'all';
 let currentQuery  = '';
 let searchTimer   = null;
+let searchRequestId = 0;
 let previewMeta   = null;
 let editMovieData = null;
 
-//  Auth check 
-if (!token) {
-  window.location.href = '/admin/login.html';
-}
+// Verify the stored admin token before loading or mutating content.
+checkAuth();
 
 //  Tab switching 
 function switchTab(id) {
@@ -572,7 +573,14 @@ async function apiCall(method, path, body) {
   let data;
   try { data = raw ? JSON.parse(raw) : {}; }
   catch { throw new Error(`API returned non-JSON response (HTTP ${r.status})`); }
-  if (!r.ok) throw new Error(data.message || `Request failed (HTTP ${r.status})`);
+  if (!r.ok) {
+    if (r.status === 401 || r.status === 403) {
+      localStorage.removeItem('xloop_admin_token');
+      window.location.href = '/admin/login.html';
+      throw new Error('Your admin session expired. Please sign in again.');
+    }
+    throw new Error(data.message || `Request failed (HTTP ${r.status})`);
+  }
   return data;
 }
 
@@ -634,6 +642,7 @@ async function startLinkNormalization() {
 }
 
 async function loadSearch() {
+  const requestId = ++searchRequestId;
   const grid = document.getElementById('search-results');
   const totalEl = document.getElementById('stat-total');
   const showingEl = document.getElementById('stat-showing');
@@ -657,6 +666,7 @@ async function loadSearch() {
 
   try {
     const data = await apiCall('GET', '/api/movies?' + params.toString());
+    if (requestId !== searchRequestId) return; // Ignore stale responses after a newer search/filter.
     // The list API returns { movies, total, page, pages }; also accept a raw array.
     const movies = Array.isArray(data) ? data
       : Array.isArray(data?.movies) ? data.movies
@@ -678,12 +688,14 @@ async function loadSearch() {
     grid.innerHTML = movies.map(m => {
       const id = String(m._id || '');
       const title = m.title || 'Untitled';
-      const files = Array.isArray(m.downloads) ? m.downloads.length : 0;
+      const files = Array.isArray(m.downloads)
+        ? m.downloads.reduce((sum, download) => sum + (Array.isArray(download.links) ? download.links.length : 0), 0)
+        : 0;
       return `<article class="movie-card">
         <img class="movie-card-img" src="${escapeHtml(m.poster || '/images/placeholder.svg')}" onerror="this.onerror=null;this.src='/images/placeholder.svg'" alt="${escapeHtml(title)}" loading="lazy">
         <div class="movie-card-body">
           <div class="movie-card-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
-          <div class="movie-card-meta">${escapeHtml(m.year || '')} · ${escapeHtml(m.language || '')} · ${escapeHtml(m.quality || '')} · ${files} files</div>
+          <div class="movie-card-meta">${escapeHtml(m.year || '')} · ${escapeHtml(m.language || '')} · ${escapeHtml(m.quality || '')} · ${files} links</div>
           <div class="movie-card-actions">
             <button class="btn btn-secondary btn-sm" type="button" data-edit-id="${escapeHtml(id)}">Edit</button>
             <a class="btn btn-secondary btn-sm" href="/watch.html?id=${encodeURIComponent(id)}" target="_blank" rel="noopener">View</a>
@@ -700,6 +712,7 @@ async function loadSearch() {
     });
     renderPagination();
   } catch (err) {
+    if (requestId !== searchRequestId) return;
     totalEl.textContent = '—';
     showingEl.textContent = '—';
     grid.innerHTML = `<div class="empty" style="grid-column:1/-1;padding:24px;text-align:center">
@@ -744,7 +757,7 @@ function addLinkRow(url='', filename='', size='', lang='Telugu') {
     <div><label style="display:${c.children.length>0?'none':'block'}">Size</label>
       <input type="text" placeholder="2.1 GB" value="${escapeHtml(size)}" style="width:100px;"></div>
     <div style="padding-top:${c.children.length>0?0:22}px">
-      <button class="btn btn-danger btn-sm" onclick="this.closest('.link-row').remove()"></button>
+      <button class="btn btn-danger btn-sm" onclick="this.closest('.link-row').remove()" aria-label="Remove link"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg></button>
     </div>
   `;
   c.appendChild(div);
@@ -756,7 +769,12 @@ async function fetchPreview() {
   if (!title) return showStatus('fetch-status', 'Please enter a title first.', 'error');
   const { tmdbKey, omdbKey } = getKeys();
   showStatus('fetch-status', ' Fetching from TMDB...', 'loading');
-  const data = await apiCall('POST', '/api/import/fetch-meta', { title, year: year ? parseInt(year) : null, tmdbKey, omdbKey });
+  let data;
+  try {
+    data = await apiCall('POST', '/api/import/fetch-meta', { title, year: year ? parseInt(year) : null, tmdbKey, omdbKey });
+  } catch (err) {
+    return showStatus('fetch-status', err.message || 'Metadata lookup failed. Please try again.', 'error');
+  }
   if (data.message) return showStatus('fetch-status', data.message, 'error');
   previewMeta = data;
   document.getElementById('preview-poster').src = data.poster || '/images/placeholder.svg';
@@ -807,7 +825,12 @@ async function submitManualAdd(overwrite=false) {
     links, tmdbKey, omdbKey, overwrite
   };
 
-  const data = await apiCall('POST', '/api/import/manual-add', payload);
+  let data;
+  try {
+    data = await apiCall('POST', '/api/import/manual-add', payload);
+  } catch (err) {
+    return showStatus('add-status', err.message || 'Unable to add this content. Please try again.', 'error');
+  }
   if (data.movie) {
     showStatus('add-status', data.message, 'success');
     document.getElementById('links-container').innerHTML = '';
@@ -891,10 +914,10 @@ function openEdit(movie) {
   dl.innerHTML = (movie.downloads || []).map((d, di) => `
     <div class="dl-item" id="dl-${di}">
       <div class="dl-item-head">
-        <div class="dl-item-name" title="${d.filename||''}">${d.filename || 'Unnamed file'}</div>
-        <span class="badge badge-blue">${d.quality||''}</span>
-        <span class="badge badge-green">${d.size||''}</span>
-        <button class="btn btn-danger btn-sm" onclick="removeDl(${di})"></button>
+        <div class="dl-item-name" title="${escapeHtml(d.filename || '')}">${escapeHtml(d.filename || 'Unnamed file')}</div>
+        <span class="badge badge-blue">${escapeHtml(d.quality || '')}</span>
+        <span class="badge badge-green">${escapeHtml(d.size || '')}</span>
+        <button class="btn btn-danger btn-sm" onclick="removeDl(${di})" aria-label="Remove download"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg></button>
       </div>
       <div class="dl-link-list">
         ${(d.links||[]).map((l,li) => `
@@ -958,7 +981,7 @@ function addNewDownload() {
 
 function detectHostJS(url) {
   if (/^(?:https?:\/\/)?(?:[^/]+\.)?gdflix\.dev(?:[/:?#]|$)/i.test(url)) return 'GDFlix';
-  if (/^(?:https?:\\/\\/)?(?:[^/]+\\.)?hubcloud\\.one(?:[/:?#]|$)/i.test(url) || /hubcloud/i.test(url)) return 'HubCloud';
+  if (/^(?:https?:\/\/)?(?:[^/]+\.)?hubcloud\.one(?:[/:?#]|$)/i.test(url)) return 'HubCloud';
   if (/gdlink/i.test(url)) return 'GDLink';
   if (/terabox/i.test(url)) return 'TeraBox';
   if (/drive\.google/i.test(url)) return 'Google Drive';
@@ -997,12 +1020,13 @@ async function saveEdit() {
     downloads:   editMovieData.downloads,
   };
   showStatus('edit-status', ' Saving...', 'loading');
-  const data = await apiCall('PATCH', `/api/import/update-movie/${id}`, body);
-  if (data.movie) {
-    showStatus('edit-status', ' Saved successfully!', 'success');
-    setTimeout(() => { closeModal(); loadSearch(); }, 1000);
-  } else {
-    showStatus('edit-status', data.message || 'Error saving.', 'error');
+  try {
+    const data = await apiCall('PATCH', `/api/import/update-movie/${id}`, body);
+    if (!data.movie) throw new Error(data.message || 'The server did not confirm the update.');
+    showStatus('edit-status', 'Saved successfully!', 'success');
+    window.setTimeout(() => { closeModal(); loadSearch(); }, 700);
+  } catch (err) {
+    showStatus('edit-status', err.message || 'Unable to save changes. Please try again.', 'error');
   }
 }
 
@@ -1010,9 +1034,14 @@ async function deleteMovie() {
   if (!confirm(' Are you sure you want to PERMANENTLY delete this movie and all its download links?')) return;
   const id = document.getElementById('edit-id').value;
   showStatus('edit-status', ' Deleting...', 'loading');
-  const data = await apiCall('DELETE', `/api/import/delete-movie/${id}`);
-  showStatus('edit-status', data.message || 'Deleted!', 'success');
-  setTimeout(() => { closeModal(); loadSearch(); }, 800);
+  try {
+    const data = await apiCall('DELETE', `/api/import/delete-movie/${id}`);
+    if (data.success === false || data.error) throw new Error(data.message || 'The server did not confirm deletion.');
+    showStatus('edit-status', data.message || 'Deleted successfully!', 'success');
+    window.setTimeout(() => { closeModal(); loadSearch(); }, 700);
+  } catch (err) {
+    showStatus('edit-status', err.message || 'Unable to delete this item. Please try again.', 'error');
+  }
 }
 
 //  Init 
@@ -1028,7 +1057,7 @@ addLinkRow();
     Dashboard
   </a>
   <a href="/admin/dashboard.html" id="bnav-orchestrator">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/></svg>
     Pipeline
   </a>
   <a href="/admin/manager.html" id="bnav-manager">

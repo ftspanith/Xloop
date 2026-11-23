@@ -101,12 +101,17 @@
 
   <!-- Mobile Nav Overlay -->
   <div class="mobile-nav-overlay" id="mobileNavOverlay">
-    <button class="mobile-nav-close" onclick="closeMobileNav()" aria-label="Close menu"></button>
+    <button class="mobile-nav-close" onclick="closeMobileNav()" aria-label="Close menu">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/>
+    </svg>
+  </button>
     <a href="/" onclick="closeMobileNav()"> Home</a>
     <a href="/movies.html" onclick="closeMobileNav()"> Movies</a>
     <a href="/shows.html" onclick="closeMobileNav()"> TV Shows</a>
     <a href="/anime.html" onclick="closeMobileNav()"> Anime</a>
     <a href="/search.html" onclick="closeMobileNav()"> Search</a>
+  <a href="/admin/login.html" onclick="closeMobileNav()">Admin</a>
     <div class="mobile-nav-search">
       <input type="text" id="mobileNavSearchInput" placeholder="Search titles..."/>
       <button onclick="mobileNavSearch()">Go</button>
@@ -120,24 +125,7 @@
       const q = document.getElementById('navSearchInput').value.trim();
       if (q) window.location.href = `/search.html?q=${encodeURIComponent(q)}`;
     });
-
-    function openMobileNav() {
-      document.getElementById('mobileNavOverlay').classList.add('open');
-      document.body.style.overflow = 'hidden';
-    }
-    function closeMobileNav() {
-      document.getElementById('mobileNavOverlay').classList.remove('open');
-      document.body.style.overflow = '';
-    }
-    function mobileNavSearch() {
-      const q = document.getElementById('mobileNavSearchInput').value.trim();
-      if (q) window.location.href = `/search.html?q=${encodeURIComponent(q)}`;
-    }
-    document.getElementById('mobileNavSearchInput').addEventListener('keydown', e => {
-      if (e.key === 'Enter') mobileNavSearch();
-    });
-    
-    let currentPage = 1;
+let currentPage = 1;
     
     async function loadMovies(page = 1) {
       currentPage = page;
@@ -163,10 +151,15 @@
       container.classList.remove('loading');
       
       try {
-        const res = await fetch(url);
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
+        const items = Array.isArray(data) ? data
+          : Array.isArray(data?.movies) ? data.movies
+          : Array.isArray(data?.results) ? data.results
+          : [];
         
-        if (!data.movies || data.movies.length === 0) {
+        if (!items.length) {
           container.innerHTML = '<div class="empty-state">No movies found</div>';
           document.getElementById('moviesPagination').innerHTML = '';
           container.classList.add('loaded');
@@ -174,14 +167,14 @@
         }
         
         let html = '';
-        data.movies.forEach((item, index) => {
+        items.forEach((item, index) => {
           html += createCard(item, item.type || 'movie', index);
         });
         container.innerHTML = html;
         container.classList.add('loaded');
         activateLazyImages();
         
-        const totalPages = Math.ceil(data.total / 20);
+        const totalPages = Math.ceil((Number(data?.total) || items.length) / 20);
         let pagHtml = '';
         if (totalPages > 1) {
           if (currentPage > 1) {
@@ -195,7 +188,8 @@
         document.getElementById('moviesPagination').innerHTML = pagHtml;
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (err) {
-        container.innerHTML = '<div class="empty-state">Error loading movies</div>';
+        console.error('Content page load failed:', err);
+        container.innerHTML = '<div class="empty-state">Unable to load content. <button type="button" onclick="loadMovies(currentPage)">Retry</button></div>';
         container.classList.add('loaded');
       }
     }

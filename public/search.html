@@ -116,6 +116,22 @@
     .search-pg-btn:disabled { opacity: 0.3; cursor: not-allowed; }
     .search-pg-info { padding: 8px 16px; color: var(--text2); font-size: 0.85rem; font-weight: 600; }
 
+    /* Results motion and loading feedback */
+    #searchResults { min-height: 120px; }
+    #searchResults.loaded .card { animation: searchCardIn .38s both; animation-delay: calc(var(--card-index, 0) * 35ms); }
+    #searchResults.loading { opacity: .72; transition: opacity .18s ease; }
+    .search-suggestions { transform-origin: top center; }
+    .search-suggestions.open { animation: suggestionIn .16s ease-out both; }
+    .suggestion-item { border-bottom: 1px solid rgba(255,255,255,.045); }
+    .suggestion-item:last-child { border-bottom: 0; }
+    .search-empty { grid-column: 1 / -1; animation: searchCardIn .28s ease both; }
+    @keyframes searchCardIn { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes suggestionIn { from { opacity: 0; transform: translateY(-6px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @media (prefers-reduced-motion: reduce) {
+      #searchResults.loaded .card, .search-suggestions.open, .search-empty { animation: none !important; }
+      .search-input-wrap, .type-tab, .suggestion-item { transition: none !important; }
+    }
+
     /* Empty state */
     .search-empty {
       text-align: center; padding: 80px 20px; color: var(--text2);
@@ -202,12 +218,17 @@
 
   <!-- Mobile Nav Overlay -->
   <div class="mobile-nav-overlay" id="mobileNavOverlay">
-    <button class="mobile-nav-close" onclick="closeMobileNav()" aria-label="Close menu"></button>
+    <button class="mobile-nav-close" onclick="closeMobileNav()" aria-label="Close menu">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/>
+    </svg>
+  </button>
     <a href="/" onclick="closeMobileNav()"> Home</a>
     <a href="/movies.html" onclick="closeMobileNav()"> Movies</a>
     <a href="/shows.html" onclick="closeMobileNav()"> TV Shows</a>
     <a href="/anime.html" onclick="closeMobileNav()"> Anime</a>
     <a href="/search.html" onclick="closeMobileNav()"> Search</a>
+  <a href="/admin/login.html" onclick="closeMobileNav()">Admin</a>
     <div class="mobile-nav-search">
       <input type="text" id="mobileNavSearchInput" placeholder="Search titles..."/>
       <button onclick="mobileNavSearch()">Go</button>
@@ -216,14 +237,7 @@
 
   <script src="/js/app.js"></script>
   <script>
-    // ── Mobile nav ──────────────────────────────────────────────────────────────
-    function openMobileNav()  { document.getElementById('mobileNavOverlay').classList.add('open'); document.body.style.overflow='hidden'; }
-    function closeMobileNav() { document.getElementById('mobileNavOverlay').classList.remove('open'); document.body.style.overflow=''; }
-    function mobileNavSearch() {
-      const q = document.getElementById('mobileNavSearchInput').value.trim();
-      if (q) runSearch(q, 1);
-      closeMobileNav();
-    }
+
 
     // Sync navbar search input with main search input
     document.getElementById('navSearchForm').addEventListener('submit', e => {
@@ -243,6 +257,8 @@
     let currentPage     = 1;
     let debounceTimer   = null;
     let suggestTimer    = null;
+    let searchRequestId = 0;
+    let suggestRequestId = 0;
 
     // ── Elements ─────────────────────────────────────────────────────────────────
     const mainInput      = document.getElementById('mainSearchInput');
@@ -252,14 +268,43 @@
     const statusEl       = document.getElementById('searchStatus');
     const suggestBox     = document.getElementById('searchSuggestions');
 
+    // Suggestions use text/attribute escaping and delegated clicks (no HTML event handlers).
+    suggestBox.addEventListener('click', event => {
+      const item = event.target.closest('.suggestion-item[data-watch-id]');
+      if (!item) return;
+      goToWatch(item.dataset.watchId, item.dataset.watchType || 'movie');
+    });
+
     // ── Type tab wiring ──────────────────────────────────────────────────────────
     document.querySelectorAll('.type-tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('.type-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         currentType = tab.dataset.type;
-        if (currentQuery) runSearch(currentQuery, 1);
+        runSearch(currentQuery, 1);
       });
+    });
+
+    mainInput.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown') {
+        const first = suggestBox.querySelector('.suggestion-item');
+        if (first) { event.preventDefault(); first.focus(); }
+      }
+    });
+    suggestBox.addEventListener('keydown', event => {
+      const items = [...suggestBox.querySelectorAll('.suggestion-item')];
+      const index = items.indexOf(document.activeElement);
+      if (event.key === 'ArrowDown' && index < items.length - 1) {
+        event.preventDefault(); items[index + 1].focus();
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (index > 0) items[index - 1].focus(); else mainInput.focus();
+      } else if (event.key === 'Enter' && index >= 0) {
+        event.preventDefault();
+        goToWatch(items[index].dataset.watchId, items[index].dataset.watchType || 'movie');
+      } else if (event.key === 'Escape') {
+        closeSuggestions(); mainInput.focus();
+      }
     });
 
     // ── Form submit ──────────────────────────────────────────────────────────────
@@ -290,22 +335,30 @@
 
     // ── Suggestions (fast, small limit) ─────────────────────────────────────────
     async function loadSuggestions(q) {
+      const requestId = ++suggestRequestId;
       try {
         const url = `/api/search?q=${encodeURIComponent(q)}&limit=6${currentType ? '&type=' + currentType : ''}`;
         const res  = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        const items = data.results || [];
+        if (requestId !== suggestRequestId) return;
+        const items = Array.isArray(data.results) ? data.results : [];
         if (!items.length) { closeSuggestions(); return; }
 
         suggestBox.innerHTML = items.map(item => {
           const badge = item.type === 'movie' ? 'MOVIE' : item.type === 'anime' ? 'ANIME' : 'SERIES';
-          const poster = item.poster || '';
+          const id = escapeSearchHtml(item._id || '');
+          const type = ['movie', 'series', 'anime'].includes(item.type) ? item.type : 'movie';
+          const poster = escapeSearchHtml(item.poster || '');
+          const title = escapeSearchHtml(item.title || 'Untitled');
+          const year = escapeSearchHtml(item.year || '');
+          const rating = escapeSearchHtml(item.rating || '');
           return `
-            <div class="suggestion-item" onclick="goToWatch('${item._id}','${item.type || 'movie'}')">
-              <img src="${poster}" onerror="this.style.display='none'" alt="${item.title}" loading="lazy">
+            <div class="suggestion-item" role="option" tabindex="0" data-watch-id="${id}" data-watch-type="${type}">
+              <img src="${poster}" onerror="this.style.display='none'" alt="${title}" loading="lazy">
               <div class="suggestion-item-info">
-                <div class="suggestion-item-title">${item.title}</div>
-                <div class="suggestion-item-meta">${item.year || ''} ${item.rating ? ' ' + item.rating : ''}</div>
+                <div class="suggestion-item-title">${title}</div>
+                <div class="suggestion-item-meta">${year} ${rating}</div>
               </div>
               <span class="suggestion-badge">${badge}</span>
             </div>`;
@@ -314,13 +367,46 @@
       } catch (_) { closeSuggestions(); }
     }
 
-    function closeSuggestions() { suggestBox.innerHTML = ''; suggestBox.classList.remove('open'); }
+    function closeSuggestions() {
+      suggestRequestId++;
+      suggestBox.innerHTML = '';
+      suggestBox.classList.remove('open');
+    }
     function goToWatch(id, type) { window.location.href = `/watch.html?id=${id}&type=${type}`; }
 
     // ── Main search ──────────────────────────────────────────────────────────────
+    function escapeSearchHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[char]));
+    }
+
+    function createSafeSearchCard(item, index) {
+      const id = encodeURIComponent(String(item._id || ''));
+      const type = ['movie', 'series', 'anime'].includes(item.type) ? item.type : 'movie';
+      const title = escapeSearchHtml(item.title || 'Untitled');
+      const poster = escapeSearchHtml(item.poster || '');
+      const year = escapeSearchHtml(item.year || '');
+      const label = type === 'movie' ? 'Movie' : type === 'anime' ? 'Anime' : 'Series';
+      const badge = type === 'anime' ? 'ANIME' : type === 'series' ? 'SERIES' : (item.quality === '4K' ? '4K' : 'HD');
+      const delay = Math.min(index, 18);
+      const image = poster
+        ? `<img src="${poster}" alt="${title}" class="card-img" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="card-no-poster" style="display:none"><div class="np-title">${title}</div></div>`
+        : `<div class="card-no-poster"><div class="np-title">${title}</div></div>`;
+      return `<a href="/watch.html?id=${id}&amp;type=${type}" class="card" style="--card-index:${delay}"><div class="card-badge">${badge}</div>${image}<div class="card-info"><div class="card-title">${title}</div><div class="card-sub">${year} • ${label}</div></div></a>`;
+    }
+
+    function renderSearchGrid(html) {
+      resultsGrid.classList.remove('loading', 'loaded');
+      resultsGrid.innerHTML = html;
+      void resultsGrid.offsetWidth;
+      resultsGrid.classList.add('loaded');
+    }
+
     async function runSearch(q, page = 1) {
       currentQuery = q;
       currentPage  = page;
+      const requestId = ++searchRequestId;
 
       // Sync the input
       mainInput.value = q;
@@ -330,7 +416,8 @@
       const urlQ = new URLSearchParams({ q, ...(currentType ? { type: currentType } : {}) });
       window.history.replaceState({}, '', `?${urlQ}`);
 
-      // Show spinner
+      // Keep the spinner visible while the new request is in flight.
+      resultsGrid.classList.remove('loading', 'loaded');
       resultsGrid.innerHTML = '<div class="spinner"></div>';
       paginationEl.innerHTML = '';
       setStatus('Searching...');
@@ -342,27 +429,34 @@
         const res  = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
+        if (requestId !== searchRequestId) return;
 
         const items = Array.isArray(data.results) && data.results.length > 0
           ? data.results
           : [...(data.movies || []), ...(data.series || [])];
 
         if (!items.length) {
-          resultsGrid.innerHTML = `
+          const safeQuery = escapeSearchHtml(q);
+          renderSearchGrid(`
             <div class="search-empty">
-              <div class="search-empty-icon"></div>
-              <h3>No results for "<strong>${q}</strong>"</h3>
-              <p>Try different keywords, or check the spelling.</p>
-            </div>`;
-          setStatus(`No results found for "<strong>${q}</strong>"`);
+              <div class="search-empty-icon">⌕</div>
+              <h3>No results for "<strong>${safeQuery}</strong>"</h3>
+              <p>Try a shorter title, alternate spelling, or another content type.</p>
+            </div>`);
+          setStatus(`No results found for "<strong>${safeQuery}</strong>"`);
         } else {
-          resultsGrid.innerHTML = items.map((item, i) => createCard(item, item.type || 'movie', i)).join('');
+          renderSearchGrid(items.map((item, i) => createSafeSearchCard(item, i)).join(''));
           activateLazyImages();
-          setStatus(`Found <strong>${data.total || items.length}</strong> results for "<strong>${q}</strong>"`);
+          const visibleCount = Number(data.total ?? items.length).toLocaleString();
+          const countMessage = data.truncated
+            ? `Showing the top <strong>${visibleCount}</strong> of <strong>${Number(data.matchedTotal).toLocaleString()}</strong> matches`
+            : `Found <strong>${visibleCount}</strong> results`;
+          setStatus(`${countMessage} for "<strong>${escapeSearchHtml(q)}</strong>"`);
           buildPagination(data.total || items.length, page, 24);
         }
       } catch (err) {
-        resultsGrid.innerHTML = `<div class="search-empty"><div class="search-empty-icon"></div><h3>Search failed</h3><p>${err.message}</p></div>`;
+        if (requestId !== searchRequestId) return;
+        renderSearchGrid(`<div class="search-empty"><div class="search-empty-icon">!</div><h3>Search failed</h3><p>${escapeSearchHtml(err.message)}</p><button class="search-pg-btn" type="button" onclick="runSearch(currentQuery,currentPage)">Try again</button></div>`);
         setStatus('Search failed. Please try again.');
       }
     }

@@ -2133,3 +2133,44 @@ ul { list-style: none; }
   .watch-main { padding: 16px 12px; }
   .hero-title { font-size: 1.6rem; }
 }
+
+
+/* Mobile navigation: the legacy ID selector above uses .visible,
+   while the current menu controller toggles .open. Keep both states in sync. */
+#mobileNavOverlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+
+/* Admin navigation icon alignment */
+.admin-nav a > svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  opacity: .82;
+}
+.admin-nav a.active > svg { opacity: 1; }
+.admin-nav a > span { min-width: 0; }
+.search-icon svg { display: block; }
+.mobile-menu-btn svg, .sidebar-close-btn svg { display: block; flex: 0 0 auto; }
+
+
+/* Admin navigation icon alignment — keep icons visible and consistent on all admin pages. */
+.admin-nav a > svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: currentColor;
+  overflow: visible;
+}
+.admin-nav a > span {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.mobile-menu-btn > svg,
+.sidebar-close-btn > svg {
+  display: block;
+  flex: 0 0 auto;
+}
