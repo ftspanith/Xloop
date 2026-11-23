@@ -525,6 +525,7 @@
   </div>
 </div>
 
+<script src="/js/admin.js"></script>
 <script>
 //  Globals 
 let token = localStorage.getItem('xloop_admin_token') || '';
@@ -536,10 +537,8 @@ let searchTimer   = null;
 let previewMeta   = null;
 let editMovieData = null;
 
-//  Auth check 
-if (!token) {
-  window.location.href = '/admin/login.html';
-}
+// Verify the stored admin token before loading or mutating content.
+checkAuth();
 
 //  Tab switching 
 function switchTab(id) {
