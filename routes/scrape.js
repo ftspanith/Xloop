@@ -220,42 +220,37 @@ router.post('/upload-export', auth, upload.array('files', 10), async (req, res) 
     const PipelineCache = require('../models/PipelineCache');
     const { extractTelegramLinks } = require('../utils/telegram-ingestion');
 
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ message: 'No files received. Use multipart/form-data with field name "files".' });
-    }
-
-    // Parse all uploaded files as JSON and merge into one list
-    let allExports = [];
-    for (const file of req.files) {
-      let parsed;
-      try {
-        parsed = JSON.parse(file.buffer.toString('utf8'));
-      } catch(e) {
-        return res.status(400).json({ message: `File "${file.originalname}" is invalid JSON: ${e.message}` });
+    // Accept both browser multipart uploads and the CLI JSON payload.
+    let allMessages = [];
+    if (req.files && req.files.length) {
+      const allExports = [];
+      for (const file of req.files) {
+        let parsed;
+        try {
+          parsed = JSON.parse(file.buffer.toString('utf8'));
+        } catch (e) {
+          return res.status(400).json({ message: `File "${file.originalname}" is invalid JSON: ${e.message}` });
+        }
+        allExports.push(parsed);
       }
-      allExports.push(parsed);
-    }
-
-    // Flatten: single export or array of exports
-    const data = allExports.length === 1 ? allExports[0] : allExports;
-
-    // Support single OR multiple export files:
-    //   Single: { messages: [...] }  OR  [...]
-    //   Multi:  [ { messages: [...] }, { messages: [...] }, ... ]
-    let allMessages;
-    if (Array.isArray(data)) {
-      // Could be array of messages OR array of export objects
-      if (data.length > 0 && data[0] && typeof data[0] === 'object' && Array.isArray(data[0].messages)) {
-        // Array of exports → merge all
-        allMessages = data.flatMap(d => d.messages || []);
+      const data = allExports.length === 1 ? allExports[0] : allExports;
+      if (Array.isArray(data)) {
+        if (data.length > 0 && data[0] && typeof data[0] === 'object' && Array.isArray(data[0].messages)) {
+          allMessages = data.flatMap(item => item.messages || []);
+        } else {
+          allMessages = data;
+        }
+      } else if (data && Array.isArray(data.messages)) {
+        allMessages = data.messages;
       } else {
-        // Raw array of messages
-        allMessages = data;
+        return res.status(400).json({ message: 'Invalid format. Expected { messages:[...] }, an array of messages, or an array of exports.' });
       }
-    } else if (data.messages && Array.isArray(data.messages)) {
-      allMessages = data.messages;
+    } else if (req.body && Array.isArray(req.body.messages)) {
+      allMessages = req.body.messages;
+    } else if (Array.isArray(req.body)) {
+      allMessages = req.body;
     } else {
-      return res.status(400).json({ message: 'Invalid format. Expected { messages:[...] }, an array of messages, or an array of exports.' });
+      return res.status(400).json({ message: 'No Telegram messages received. Send multipart files or JSON { messages: [...] }.' });
     }
 
     // Global dedup by channel_id:message_id (handles overlapping files)
