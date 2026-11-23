@@ -11,6 +11,7 @@ const path     = require('path');
 const fs       = require('fs');
 const auth     = require('../middleware/auth');
 const { analyzeVariantSet, rankVariantsForDisplay } = require('../utils/variant-intelligence');
+const { isAllowedTelegramDownloadUrl } = require('../utils/telegram-ingestion');
 
 const ROOT          = path.join(__dirname, '..');
 const SCRAPE_SCRIPT = path.join(ROOT, 'scrape_api.js');
@@ -680,9 +681,14 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
     return res.status(409).json({ aborted: true, message: 'Upload was cancelled. Please re-upload your file.' });
   }
   try {
-    const { links, batchId: incomingBatchId, isFinal, messageCount, skipped, sourceAccount: incomingSourceAccount } = req.body;
-    if (!Array.isArray(links)) {
+    const { links: submittedLinks, batchId: incomingBatchId, isFinal, messageCount, skipped, sourceAccount: incomingSourceAccount } = req.body;
+    if (!Array.isArray(submittedLinks)) {
       return res.status(400).json({ message: 'No links array provided.' });
+    }
+    const links = submittedLinks.filter((entry) => isAllowedTelegramDownloadUrl(entry && entry.url));
+    const rejectedLinks = submittedLinks.length - links.length;
+    if (rejectedLinks > 0) {
+      console.log(`[provider-filter] Rejected ${rejectedLinks} unsupported website/provider links.`);
     }
     // Reset abort flag at the start of a NEW upload (first chunk, no batchId yet)
     if (!incomingBatchId) _uploadAborted = false;
@@ -726,6 +732,15 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
     // Only finalize on the last chunk
     if (isFinal) {
       if (!mergeMode) {
+        // Never wipe the previous extracted-link set when the submitted batch
+        // contains no approved provider URLs after filtering.
+        const approvedBatchCount = await ExtractedLink.countDocuments({ uploadBatch: batchId });
+        if (approvedBatchCount === 0) {
+          return res.status(422).json({
+            message: 'No approved GDFlix, HubCloud or TMBCloud links found; existing extracted links were preserved.',
+            rejectedLinks,
+          });
+        }
         // Replace mode: delete all other batches (fresh start)
         await ExtractedLink.deleteMany({ uploadBatch: { $ne: batchId } });
       }
@@ -741,9 +756,10 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
       try { fs.unlinkSync(path.join(os.tmpdir(), 'links_for_bypasser.json')); } catch(_) {}
       try { fs.unlinkSync(path.join(os.tmpdir(), 'shortlinks_report.json')); } catch(_) {}
       const modeNote = mergeMode ? ` [MERGE — total across all accounts: ${totalCount}]` : '';
+      const filterNote = rejectedLinks ? ` Rejected ${rejectedLinks} unsupported website/provider links in this chunk.` : '';
       return res.json({
-        message: `[DONE] Extracted ${totalCount} links from ${messageCount || '?'} messages (${skipped || 0} skipped)${modeNote}. Saved to MongoDB. Run Full Pipeline now.`,
-        count: totalCount, batchId, mergeMode,
+        message: `[DONE] Extracted ${totalCount} links from ${messageCount || '?'} messages (${skipped || 0} skipped)${modeNote}.${filterNote} Saved to MongoDB. Run Full Pipeline now.`,
+        count: totalCount, batchId, mergeMode, rejectedLinks,
       });
     }
 
