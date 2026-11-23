@@ -150,4 +150,37 @@ function analyzeVariantSet(downloads = [], options = {}) {
   };
 }
 
-module.exports = { sizeToBytes, titleKey, scoreVariant, analyzeVariantSet, nearDuplicateGroups };
+
+/**
+ * Display ordering for combined results from every selected Telegram account.
+ * Size establishes the global order; releases within an 8% size window are
+ * re-ordered by the existing format/quality score. No link is removed.
+ */
+function rankVariantsForDisplay(items = [], options = {}) {
+  const tolerance = Number.isFinite(options.sizeTolerance) ? options.sizeTolerance : 0.08;
+  const ranked = (Array.isArray(items) ? items : []).map(scoreVariant);
+  const sized = ranked
+    .map(item => ({ item, bytes: sizeToBytes(item.size || item.sizeBytes) }))
+    .filter(entry => entry.bytes > 0)
+    .sort((a, b) => b.bytes - a.bytes);
+  const unsized = ranked
+    .filter(item => !(sizeToBytes(item.size || item.sizeBytes) > 0))
+    .sort((a, b) => b.qualityScore - a.qualityScore);
+  const ordered = [];
+
+  for (let i = 0; i < sized.length;) {
+    const anchor = sized[i].bytes;
+    const cluster = [sized[i]];
+    let j = i + 1;
+    while (j < sized.length && (anchor - sized[j].bytes) / anchor <= tolerance) {
+      cluster.push(sized[j]);
+      j++;
+    }
+    cluster.sort((a, b) => b.item.qualityScore - a.item.qualityScore || b.bytes - a.bytes);
+    ordered.push(...cluster.map(entry => entry.item));
+    i = j;
+  }
+  return [...ordered, ...unsized];
+}
+
+module.exports = { sizeToBytes, titleKey, scoreVariant, analyzeVariantSet, nearDuplicateGroups, rankVariantsForDisplay };
