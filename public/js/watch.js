@@ -365,7 +365,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     }
 
     const normalized = String(value).replace(/,/g, '').trim();
-    const match = normalized.match(/(\\d+(?:\\.\\d+)?)\\s*(TB|TIB|GB|GIB|MB|MIB|KB|KIB|BYTES?|B)?/i);
+    const match = normalized.match(/(\d+(?:\.\d+)?)\s*(TB|TIB|GB|GIB|MB|MIB|KB|KIB|BYTES?|B)?/i);
     if (!match) return 0;
 
     const amount = Number(match[1]);
