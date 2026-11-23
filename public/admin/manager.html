@@ -769,7 +769,12 @@ async function fetchPreview() {
   if (!title) return showStatus('fetch-status', 'Please enter a title first.', 'error');
   const { tmdbKey, omdbKey } = getKeys();
   showStatus('fetch-status', ' Fetching from TMDB...', 'loading');
-  const data = await apiCall('POST', '/api/import/fetch-meta', { title, year: year ? parseInt(year) : null, tmdbKey, omdbKey });
+  let data;
+  try {
+    data = await apiCall('POST', '/api/import/fetch-meta', { title, year: year ? parseInt(year) : null, tmdbKey, omdbKey });
+  } catch (err) {
+    return showStatus('fetch-status', err.message || 'Metadata lookup failed. Please try again.', 'error');
+  }
   if (data.message) return showStatus('fetch-status', data.message, 'error');
   previewMeta = data;
   document.getElementById('preview-poster').src = data.poster || '/images/placeholder.svg';
@@ -820,7 +825,12 @@ async function submitManualAdd(overwrite=false) {
     links, tmdbKey, omdbKey, overwrite
   };
 
-  const data = await apiCall('POST', '/api/import/manual-add', payload);
+  let data;
+  try {
+    data = await apiCall('POST', '/api/import/manual-add', payload);
+  } catch (err) {
+    return showStatus('add-status', err.message || 'Unable to add this content. Please try again.', 'error');
+  }
   if (data.movie) {
     showStatus('add-status', data.message, 'success');
     document.getElementById('links-container').innerHTML = '';
@@ -971,7 +981,7 @@ function addNewDownload() {
 
 function detectHostJS(url) {
   if (/^(?:https?:\/\/)?(?:[^/]+\.)?gdflix\.dev(?:[/:?#]|$)/i.test(url)) return 'GDFlix';
-  if (/^(?:https?:\/\/)?(?:[^/]+\.)?hubcloud\.one(?:[/:?#]|$)/i.test(url)) return 'hubcloud';
+  if (/^(?:https?:\/\/)?(?:[^/]+\.)?hubcloud\.one(?:[/:?#]|$)/i.test(url)) return 'HubCloud';
   if (/gdlink/i.test(url)) return 'GDLink';
   if (/terabox/i.test(url)) return 'TeraBox';
   if (/drive\.google/i.test(url)) return 'Google Drive';
