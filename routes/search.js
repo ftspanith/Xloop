@@ -2,7 +2,7 @@ const router = require('express').Router();
 const Movie = require('../models/Movie');
 
 function escapeRegex(value) {
-  return String(value || '').replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&');
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\  return String(value || '').replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&');');
 }
 
 function normalize(value) {
