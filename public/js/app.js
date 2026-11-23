@@ -181,9 +181,23 @@ async function loadHomepage() {
   if (!document.getElementById('heroBg')) return;
   
   try {
-    // Load hero (featured movie)
-    const fRes = await fetch('/api/movies/featured');
-    const featured = await fRes.json();
+    // Load hero (featured movie). A failed/empty response must never leave
+    // the initial spinner running or prevent the remaining homepage sections.
+    let featured = [];
+    try {
+      const fRes = await fetch('/api/movies/featured', { cache: 'no-store' });
+      if (!fRes.ok) throw new Error(`HTTP ${fRes.status}`);
+      const featuredData = await fRes.json();
+      featured = Array.isArray(featuredData) ? featuredData
+        : Array.isArray(featuredData?.movies) ? featuredData.movies
+        : Array.isArray(featuredData?.results) ? featuredData.results
+        : [];
+    } catch (heroError) {
+      console.error('Featured content load error:', heroError);
+      const heroContent = document.getElementById('heroContent');
+      if (heroContent) heroContent.innerHTML = '<div class="empty-state">Featured content is temporarily unavailable.</div>';
+    }
+
     if (featured.length > 0) {
       let heroIdx = 0;
       let heroInterval;
@@ -260,18 +274,26 @@ async function loadHomepage() {
     // Load Sliders
     const loadSlider = async (url, id, type, isWide = false) => {
       try {
-        const res = await fetch(url);
-        const items = await res.json();
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = await res.json();
+        const items = Array.isArray(payload) ? payload
+          : Array.isArray(payload?.movies) ? payload.movies
+          : Array.isArray(payload?.results) ? payload.results
+          : [];
         const el = document.getElementById(id);
-        if(el) {
-          if (items.length === 0) {
-            el.innerHTML = '<div class="empty-state">No content yet</div>';
-          } else {
-            el.innerHTML = items.map((item, index) => isWide ? createWideCard(item, item.type || type, index) : createCard(item, item.type || type, index)).join('');
-            activateLazyImages();
-          }
+        if (!el) return;
+        if (items.length === 0) {
+          el.innerHTML = '<div class="empty-state">No content available right now</div>';
+        } else {
+          el.innerHTML = items.map((item, index) => isWide ? createWideCard(item, item.type || type, index) : createCard(item, item.type || type, index)).join('');
+          activateLazyImages();
         }
-      } catch (e) { console.error('Slider load error:', e); }
+      } catch (e) {
+        console.error('Slider load error:', url, e);
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '<div class="empty-state">Unable to load content</div>';
+      }
     };
     
     // Main sliders
