@@ -10,6 +10,8 @@ const {
   cleanTitleForApi,
   detectAudioChannels,
   extractSize,
+  toMB,
+  isGenericTitleCandidate,
   normalizeGdflixUrl,
 } = require('../utils/parser');
 const { buildTitleCandidates } = require('../utils/tmdbSearch');
@@ -206,4 +208,14 @@ test('explicit MongoDB catalogue reset preserves the ExtractedLink source collec
     'approved source links must be validated before deleting Movie documents');
   assert.match(pipelineSource, /if \(!approvedSourceCount\)[\s\S]*?throw new Error\('No approved provider links found in MongoDB; catalogue reset aborted'\)/);
   assert.match(pipelineSource, /preloadedMongoSourceLinks \|\| await ExtractedLink\.find\(\{\}\)\.lean\(\)/);
+});
+
+
+test('supports decimal-comma sizes, TB/KB conversion and generic-title detection', () => {
+  assert.equal(extractSize('💾 Size - 2,5 GiB'), '2.5GB');
+  assert.equal(extractSize('File Size: 1,200 MB'), '1200MB');
+  assert.equal(toMB('2TB'), 2 * 1024 * 1024);
+  assert.equal(toMB('512KB'), 0.5);
+  assert.equal(isGenericTitleCandidate('Movie'), true);
+  assert.equal(isGenericTitleCandidate('The Real Film'), false);
 });

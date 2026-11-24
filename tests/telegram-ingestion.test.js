@@ -126,3 +126,22 @@ test('provider matching does not accept lookalike unrelated hostnames', () => {
   ];
   for (const url of rejected) assert.equal(isAllowedTelegramDownloadUrl(url), false, url);
 });
+
+
+test('uses a descriptive filename instead of a generic cleaned heading', () => {
+  const message = {
+    channel_id: '456',
+    id: 404,
+    date: '2024-07-01',
+    text: [
+      'Movie 1080p',
+      'The.Real.Film.2024.1080p.WEB-DL.HEVC.mkv',
+      'https://mirror.gdflix.xyz/file/generic-title-test',
+    ].join('\n'),
+  };
+  const result = extractTelegramLinks([message], '1');
+  assert.equal(result.links.length, 1);
+  assert.equal(result.links[0].title, 'The Real Film');
+  assert.equal(result.links[0].rawTitle, 'The.Real.Film.2024.1080p.WEB-DL.HEVC.mkv');
+  assert.equal(result.links[0].url, 'https://gdflix.dev/file/generic-title-test');
+});
