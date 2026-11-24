@@ -1644,7 +1644,7 @@ function parseManualInput(line) {
   const language = detectAllLanguages(raw).filter(l => l !== 'Multi').join(', ') || '';
 
   // Extract year  (4-digit between 1900-2099, not part of resolution like 1080)
-  const yearMatch = raw.match(/(?<!\d)(19\d{2}|20\d{2}{2})(?!\d)/);
+  const yearMatch = raw.match(/(?<!\d)(19\d{2}|20\d{2})(?!\d)/);
   const year = yearMatch ? parseInt(yearMatch[1]) : null;
 
   // Detect type from filename cues
@@ -1661,7 +1661,7 @@ function parseManualInput(line) {
     .replace(/\b(HDR10\+?|DOLBY[\s.]?VISION|HLG|SDR|HDR)\b/gi, '') // hdr
     .replace(/S\d{1,2}E\d{1,3}|Season\s*\d+|Episode\s*\d+/gi, '') // season/ep
     .replace(/\[(.*?)\]|\{(.*?)\}|\((.*?)\)/g, '')  // bracketed tags
-    .replace(/(?<!\d)(19\d{2}|20\d{2}{2})(?!\d)/g, '') // year
+    .replace(/(?<!\d)(19\d{2}|20\d{2})(?!\d)/g, '') // year
     .replace(/[._\-]+/g, ' ')                        // dots/underscores
     .replace(/\s{2,}/g, ' ')
     .trim();
