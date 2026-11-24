@@ -700,6 +700,26 @@
   line-height: 1.4;
 }
 
+/* Main/repack marker: both releases stay visible; repacks get the stronger label. */
+.dl-row-release {
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.dl-row-release.is-repack {
+  color: #f4c46a;
+  background: rgba(224, 154, 45, 0.14);
+  border-color: rgba(224, 154, 45, 0.38);
+}
+.dl-row-release.is-main {
+  color: rgba(255,255,255,0.46);
+  background: rgba(255,255,255,0.06);
+}
+
 /* Season/episode badge */
 .dl-row-se {
   font-size: 0.68rem;
