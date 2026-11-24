@@ -29,7 +29,7 @@ function createCard(item, type, index = 0) {
     if (validLangsCount > 3) badgesHtml += `<span class="c-badge c-badge-glass c-lang">+${validLangsCount-3}</span>`;
   }
 
-  const delay = (index * 0.05).toFixed(2);
+  const delay = (Math.min(index, 10) * 0.025).toFixed(3);
   const poster = item.poster || '';
   const initials = getInitials(item.title);
 
@@ -66,7 +66,7 @@ function createCard(item, type, index = 0) {
 
 function createWideCard(item, type, index = 0) {
   const url = `/watch.html?id=${item._id}&type=${type}`;
-  const delay = (index * 0.05).toFixed(2);
+  const delay = (Math.min(index, 10) * 0.025).toFixed(3);
   const img = item.backdrop || item.poster || '';
   const initials = getInitials(item.title);
 
