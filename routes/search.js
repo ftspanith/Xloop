@@ -12,6 +12,7 @@ function normalize(value) {
     .toLowerCase()
     // Keep Unicode letters, combining marks, and numbers (Telugu, Hindi, Korean, etc.).
     .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -41,9 +42,12 @@ function relevanceScore(movie, query, tokens) {
   const title = normalize(movie.title);
   const words = title.split(' ').filter(Boolean);
   let score = 0;
-  const compactTitle = title.replace(/\s+/g, '');
-  const compactQuery = query.replace(/\s+/g, '');
-  if (compactQuery.length >= 5 && levenshtein(compactTitle.slice(0, compactQuery.length), compactQuery) <= Math.max(1, Math.floor(compactQuery.length * 0.2))) score += 62;
+  // Compact matching is for a single unspaced query only. A multi-word query
+  // must retain word boundaries so "DJ Tillu" does not collapse to "DJTillu".
+  if (!/\s/.test(query) && query.length >= 5) {
+    const compactTitle = title.replace(/\s+/g, '');
+    if (levenshtein(compactTitle.slice(0, query.length), query) <= Math.max(1, Math.floor(query.length * 0.2))) score += 35;
+  }
   const description = normalize(movie.description);
   const genres = normalize((movie.genre || []).join(' '));
   const languages = normalize([movie.language, ...(movie.languages || [])].join(' '));
@@ -72,7 +76,7 @@ function relevanceScore(movie, query, tokens) {
 router.get('/', async (req, res) => {
   try {
     let { q = '', genre, year, quality, type, language, page = 1, limit = 24 } = req.query;
-    q = String(q).slice(0, 200).trim();
+    q = String(q).slice(0, 200).replace(/\s+/g, ' ').trim();
     page = Math.max(1, parseInt(page, 10) || 1);
     limit = Math.min(100, Math.max(1, parseInt(limit, 10) || 24));
 
