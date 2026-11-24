@@ -242,7 +242,7 @@ function detectHost(url) {
 function parseExplicitAudioTrackLine(line) {
   const value = String(line || '').trim();
   const match = value.match(/^(?:AUDIO\s+)?TRACK\s*#?\s*(\d{1,2})\s*[:.)-]\s*(.+)$/i)
-    || value.match(/^(?:#\s*)?(\d{1,2})\s*[.)-]\s*(.+)$/i);
+    || value.match(/^(?:#\s*)?(\d{1,2})\s*[-.)|:]\s*(.+)$/i);
   if (!match) return null;
 
   const payload = match[2].trim();
