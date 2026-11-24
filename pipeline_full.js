@@ -34,9 +34,10 @@ const {
   cleanTitleForApi, detectHost, detectCodec, detectHDR, extractAudio,
   detectBitDepth, detectAudioChannels, detectSource, detectContainer,
   normalizeQuality, extractSize, detectAllLanguages, extractSeasonEpisode,
+  classifyLanguageType, detectReleaseMetadata,
 } = require('./utils/parser');
 const sharedMetadataSearch = require('./utils/tmdbSearch');
-const { analyzeVariantSet, rankVariantsForDisplay } = require('./utils/variant-intelligence');
+const { analyzeVariantSet, rankVariantsForDisplay, inferRepackStatus, uploadTimestamp } = require('./utils/variant-intelligence');
 
 // ─── CLI args (only used when run directly, not when require()'d) ─────────────
 const IS_MAIN = require.main === module;
@@ -385,26 +386,32 @@ function recomputeAggregates(doc) {
   const dls = doc.downloads || [];
   const QUALITY_ORDER = ['8K', '4K', '1440p', '1080p', '720p', '576p', '540p', '480p', '360p', '240p', 'SD', 'HD'];
 
-  // Preserve the catalogue's quality-first order. Inside each quality group,
-  // use cross-account variant intelligence to rank close-size encodes by
-  // source, codec, HDR, audio and metadata completeness. No link is removed.
-  const qualityKeys = [...new Set(dls.map(download => download.quality || ''))]
-    .sort((a, b) => {
-      const ai = QUALITY_ORDER.indexOf(a);
-      const bi = QUALITY_ORDER.indexOf(b);
-      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
-    });
-  const sortedDownloads = [];
-  for (const quality of qualityKeys) {
-    const group = dls.filter(download => (download.quality || '') === quality);
-    const ranked = rankVariantsForDisplay(group.map((download, index) => ({
-      ...(typeof download.toObject === 'function' ? download.toObject() : download),
-      title: doc.title || '',
-      year: doc.year || null,
-      _rankIndex: index,
-    })), { sizeTolerance: 0.08 });
-    sortedDownloads.push(...ranked.map(item => group[item._rankIndex]).filter(Boolean));
-  }
+  // Repack releases are shown before all main/original versions. Within
+  // each class, preserve the established quality-first groups and close-size
+  // cross-account ranking. This changes display order only; no link is removed.
+  const rankReleaseClass = entries => {
+    const qualityKeys = [...new Set(entries.map(download => download.quality || ''))]
+      .sort((a, b) => {
+        const ai = QUALITY_ORDER.indexOf(a);
+        const bi = QUALITY_ORDER.indexOf(b);
+        return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+      });
+    const ordered = [];
+    for (const quality of qualityKeys) {
+      const group = entries.filter(download => (download.quality || '') === quality);
+      const rankedGroup = rankVariantsForDisplay(group.map((download, index) => ({
+        ...(typeof download.toObject === 'function' ? download.toObject() : download),
+        title: doc.title || '',
+        year: doc.year || null,
+        _rankIndex: index,
+      })), { sizeTolerance: 0.08 });
+      ordered.push(...rankedGroup.map(item => group[item._rankIndex]).filter(Boolean));
+    }
+    return ordered;
+  };
+  const repacks = dls.filter(download => download.isRepack || download.releaseType === 'repack');
+  const mainReleases = dls.filter(download => !download.isRepack && download.releaseType !== 'repack');
+  const sortedDownloads = [...rankReleaseClass(repacks), ...rankReleaseClass(mainReleases)];
   // Keep original Mongoose subdocuments; only change their display order.
   dls.splice(0, dls.length, ...sortedDownloads);
 
@@ -415,6 +422,17 @@ function recomputeAggregates(doc) {
   doc.languages = [...new Set(allLangs)].filter(Boolean);
   const best = QUALITY_ORDER.find(q => doc.formats.includes(q));
   if (best) doc.quality = best;
+
+  // Top-level detail follows the highest-ranked release (repack first), while
+  // the complete per-download metadata remains available on every variant.
+  const preferred = dls.find(download => download.isRepack || download.releaseType === 'repack') || dls[0];
+  if (preferred) {
+    doc.isIMAX = !!preferred.isIMAX;
+    if (preferred.aspectRatio) doc.aspectRatio = preferred.aspectRatio;
+    if (preferred.runtimeMinutes) doc.runtimeMinutes = preferred.runtimeMinutes;
+    if (preferred.certification) doc.certification = preferred.certification;
+    if (preferred.languageType) doc.languageType = preferred.languageType;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -618,7 +636,15 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
     else if (meta.type === 'series' || isSer) finalType = 'series';
     else finalType = 'movie';
 
-    for (const item of group.items) {
+    // Import oldest uploads first so a later improved encode can be compared
+    // against its original/main version and identified as a repack.
+    const orderedItems = [...group.items].sort((a, b) => {
+      const aDate = uploadTimestamp(a.uploadDate || a.date);
+      const bDate = uploadTimestamp(b.uploadDate || b.date);
+      if (!aDate || !bDate) return 0;
+      return aDate - bDate;
+    });
+    for (const item of orderedItems) {
       // KEY FIX: use bypassedUrl for shortlinks, direct url otherwise.
       // DEDUP FIX: if bypass produced a *different* URL, only store the bypassed URL —
       // never store both the shortlink AND the direct URL as separate entries.
@@ -644,8 +670,11 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       const container = item.container || detectContainer(filename) || null;
       const bitDepth = item.bitDepth || detectBitDepth(filename) || null;
       const audioChannels = item.audioChannels || detectAudioChannels(filename) || null;
+      const languageType = item.languageType || classifyLanguageType(detectAllLanguages(language || filename), filename);
+      const releaseMetadata = detectReleaseMetadata(filename);
       const correctSeason = seasonFromFilename(filename) ?? item.season ?? fileTags.season ?? null;
       const correctEpisode = item.episode ?? fileTags.episode ?? null;
+      const uploadDate = item.uploadDate || item.date || null;
 
       let dbRec = existing;
       // Re-check by tmdbId in case meta search found a different record than initial lookup
@@ -656,16 +685,82 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
 
       const newDl = {
         quality, size, filename, language, codec, hdr, audio, source, container, bitDepth, audioChannels,
+        languageType,
         season: correctSeason, episode: correctEpisode,
+        isIMAX: item.isIMAX === true || releaseMetadata.isIMAX,
+        aspectRatio: item.aspectRatio || releaseMetadata.aspectRatio,
+        runtimeMinutes: item.runtimeMinutes == null ? releaseMetadata.runtimeMinutes : Number(item.runtimeMinutes),
+        certification: item.certification || releaseMetadata.certification,
+        isRepack: item.isRepack === true || releaseMetadata.isRepack,
+        releaseType: item.isRepack === true || releaseMetadata.isRepack || item.releaseType === 'repack' ? 'repack' : 'main',
+        repackReason: item.repackReason || releaseMetadata.repackReason,
+        uploadDate: uploadDate ? String(uploadDate) : '',
         links: [{ host, url: finalUrl, isFast: /gdflix|hubcloud|gdlink|tmbcloud/i.test(finalUrl) }],
       };
+      // Explicit release tags win; otherwise infer only with an older same-tier,
+      // same-episode version and a meaningful technical quality-score gain.
+      Object.assign(newDl, inferRepackStatus(newDl, dbRec?.downloads || []));
 
       if (dbRec) {
-        if (dbRec.downloads?.some(d => d.links?.some(l => l.url === finalUrl))) { skipped++; continue; }
+        const duplicateIndex = (dbRec.downloads || []).findIndex(download =>
+          download.links?.some(link => link.url === finalUrl)
+        );
+        if (duplicateIndex >= 0) {
+          // The exact URL already exists. Do not add it twice, but still backfill
+          // metadata parsed from its filename and upgrade an explicit repack tag.
+          const duplicate = dbRec.downloads[duplicateIndex];
+          const duplicateSet = {};
+          const metadataFields = [
+            'filename', 'language', 'languageType', 'source', 'container',
+            'bitDepth', 'audioChannels', 'codec', 'hdr', 'audio',
+            'aspectRatio', 'runtimeMinutes', 'certification', 'isIMAX', 'uploadDate',
+          ];
+          for (const field of metadataFields) {
+            const value = newDl[field];
+            const missing = duplicate[field] == null || duplicate[field] === '';
+            const strongerBoolean = field === 'isIMAX' && value === true && duplicate[field] !== true;
+            if ((missing || strongerBoolean) && value !== null && value !== undefined && value !== '') {
+              duplicateSet[`downloads.${duplicateIndex}.${field}`] = value;
+            }
+          }
+          if (newDl.isRepack) {
+            duplicateSet[`downloads.${duplicateIndex}.isRepack`] = true;
+            duplicateSet[`downloads.${duplicateIndex}.releaseType`] = 'repack';
+            if (newDl.repackReason) duplicateSet[`downloads.${duplicateIndex}.repackReason`] = newDl.repackReason;
+          }
+
+          if (Object.keys(duplicateSet).length) {
+            const enriched = await Movie.findByIdAndUpdate(dbRec._id, { $set: duplicateSet }, { new: true });
+            if (enriched) {
+              recomputeAggregates(enriched);
+              existing = await Movie.findByIdAndUpdate(dbRec._id, {
+                $set: {
+                  downloads: enriched.downloads,
+                  formats: enriched.formats,
+                  quality: enriched.quality,
+                  languages: enriched.languages,
+                  codecs: enriched.codecs,
+                  isIMAX: enriched.isIMAX,
+                  aspectRatio: enriched.aspectRatio,
+                  runtimeMinutes: enriched.runtimeMinutes,
+                  certification: enriched.certification,
+                  languageType: enriched.languageType,
+                }
+              }, { new: true });
+              updated++;
+            }
+          }
+          skipped++;
+          continue;
+        }
         const newMB = toMB(size);
         let matchedIdx = -1;
         for (let j = 0; j < dbRec.downloads.length; j++) {
           const ex = dbRec.downloads[j];
+
+          // Main and repack releases are separate download variants by design.
+          // Keep both; only merge mirrors belonging to the same release class.
+          if (!!ex.isRepack !== !!newDl.isRepack) continue;
 
           // Series/anime: season+episode must match
           const seasOk = (finalType === 'series' || finalType === 'anime')
@@ -689,9 +784,16 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           const exCodec   = (ex.codec || '').toLowerCase().trim();
           const newCodec  = (codec    || '').toLowerCase().trim();
           const codecOk   = !exCodec || !newCodec || exCodec === newCodec;
+          const normalizeLanguages = value => String(value || '').split(/[,/+&|]+/)
+            .map(part => part.trim().toLowerCase()).filter(Boolean).sort().join(',');
+          const exLanguageKnown = !!ex.language && !/^(multi|unknown)$/i.test(ex.language.trim());
+          const newLanguageKnown = !!language && !/^(multi|unknown)$/i.test(language.trim());
+          const languagesCompatible = !exLanguageKnown || !newLanguageKnown ||
+            normalizeLanguages(ex.language) === normalizeLanguages(language);
+          if (!languagesCompatible) continue;
 
-          // TIER 2 — Quality + size + codec: same quality, size within 5%, same codec
-          if (qualOk && sizeClose && codecOk) {
+          // TIER 2 — Quality + size + codec + compatible audio language tracks.
+          if (qualOk && sizeClose && codecOk && languagesCompatible) {
             matchedIdx = j;
             if (language && language !== 'Multi' && (!ex.language || ex.language === 'Multi')) {
               ex.language = language;
@@ -724,7 +826,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           const exHostsInGroup = (ex.links || []).map(l => detectHost(l.url));
           const hostMatch = qualOk && exHostsInGroup.includes(host);
           const sizeBracketOk = bothKnown ? sizeClose : (!size && !ex.size);
-          if (hostMatch && sizeBracketOk) {
+          if (hostMatch && sizeBracketOk && languagesCompatible) {
             matchedIdx = j; break;
           }
         }
@@ -739,6 +841,13 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         if (!dbRec.year && meta.year) metaSet.year = meta.year;
         if (!dbRec.duration && meta.duration) metaSet.duration = meta.duration;
         if (!dbRec.totalSeasons && meta.totalSeasons) metaSet.totalSeasons = meta.totalSeasons;
+        if (!dbRec.languageType && languageType) metaSet.languageType = languageType;
+        if (newDl.isRepack) {
+          metaSet.isIMAX = !!newDl.isIMAX;
+          if (newDl.aspectRatio) metaSet.aspectRatio = newDl.aspectRatio;
+          if (newDl.runtimeMinutes) metaSet.runtimeMinutes = newDl.runtimeMinutes;
+          if (newDl.certification) metaSet.certification = newDl.certification;
+        }
         if ((!dbRec.genre || !dbRec.genre.length) && meta.genre?.length) metaSet.genre = meta.genre;
         if (dbRec.type !== finalType) metaSet.type = finalType;
         if (rep.season && meta.seasonPoster && !dbRec.seasonPosters?.[`s${rep.season}`]) {
@@ -747,7 +856,8 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
 
         if (matchedIdx >= 0) {
           const matchedDownload = dbRec.downloads[matchedIdx] || {};
-          for (const field of ['source', 'container', 'bitDepth', 'audioChannels', 'codec', 'hdr', 'audio', 'filename']) {
+          for (const field of ['source', 'container', 'bitDepth', 'audioChannels', 'codec', 'hdr', 'audio', 'filename',
+            'language', 'languageType', 'isIMAX', 'aspectRatio', 'runtimeMinutes', 'certification', 'repackReason', 'uploadDate']) {
             if (!matchedDownload[field] && newDl[field]) {
               metaSet[`downloads.${matchedIdx}.${field}`] = newDl[field];
             }
@@ -787,6 +897,9 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
                 downloads: res.downloads,
                 formats: res.formats, quality: res.quality,
                 languages: res.languages, codecs: res.codecs,
+                isIMAX: res.isIMAX, aspectRatio: res.aspectRatio,
+                runtimeMinutes: res.runtimeMinutes, certification: res.certification,
+                languageType: res.languageType,
               }
             }, { new: true });
             _emitter(`[MERGED] ${dbRec.title} | ${quality} -> ${host}`);
@@ -807,6 +920,9 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
                 downloads: res.downloads,
                 formats: res.formats, quality: res.quality,
                 languages: res.languages, codecs: res.codecs,
+                isIMAX: res.isIMAX, aspectRatio: res.aspectRatio,
+                runtimeMinutes: res.runtimeMinutes, certification: res.certification,
+                languageType: res.languageType,
               }
             }, { new: true });
             _emitter(`[UPDATED] ${dbRec.title} | ${quality} -> ${host}`);
@@ -834,7 +950,14 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           seasonPosters: rep.season && meta.seasonPoster
             ? { [`s${rep.season}`]: meta.seasonPoster } : {},
           rating: meta.rating || 0, year: meta.year || item.year || new Date().getFullYear(),
-          genre: meta.genre || [], duration: meta.duration || '', quality, language: displayLang,
+          genre: meta.genre || [],
+          duration: meta.duration || (newDl.runtimeMinutes ? newDl.runtimeMinutes + ' min' : ''),
+          runtimeMinutes: newDl.runtimeMinutes || null,
+          certification: newDl.certification || '',
+          isIMAX: !!newDl.isIMAX,
+          aspectRatio: newDl.aspectRatio || '',
+          languageType: newDl.languageType || classifyLanguageType(detectAllLanguages(displayLang), displayLang),
+          quality, language: displayLang,
           formats: [quality].filter(Boolean), codecs: [codec].filter(c => c !== 'Other'),
           languages: allLangsSet,
           telegramMessageIds: item.messageId ? [item.messageId] : [],

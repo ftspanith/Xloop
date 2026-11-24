@@ -531,6 +531,17 @@ router.post('/telegram-sync/chunk', auth, express.json({ limit: '3mb' }), async 
         audio: allowedString(item.audio, 120),
         bitDepth: allowedString(item.bitDepth, 40),
         audioChannels: allowedString(item.audioChannels, 40),
+        languageType: ['Single', 'Dual', 'Multi'].includes(item.languageType) ? item.languageType : '',
+        isRepack: item.isRepack === true,
+        releaseType: item.isRepack === true || item.releaseType === 'repack' ? 'repack' : 'main',
+        repackReason: allowedString(item.repackReason, 120),
+        uploadDate: item.uploadDate == null
+          ? allowedString(item.date, 100)
+          : allowedString(String(item.uploadDate), 100),
+        isIMAX: item.isIMAX === true,
+        aspectRatio: allowedString(item.aspectRatio, 20),
+        runtimeMinutes: item.runtimeMinutes == null || !Number.isFinite(Number(item.runtimeMinutes)) ? null : Number(item.runtimeMinutes),
+        certification: allowedString(item.certification, 30),
         bypassedUrl: allowedString(item.bypassedUrl, 2000),
         isSeries: !!item.isSeries,
         contentType: allowedString(item.contentType, 40),

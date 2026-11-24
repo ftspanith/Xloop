@@ -5,14 +5,18 @@ on:
       - 'utils/parser.js'
       - 'utils/variant-intelligence.js'
       - 'utils/tmdbSearch.js'
+      - 'utils/telegram-ingestion.js'
       - 'pipeline_full.js'
-      - 'tests/importer-metadata.test.js'
       - 'models/Movie.js'
-      - 'routes/scrape.js'
       - 'models/ExtractedLink.js'
+      - 'routes/scrape.js'
       - 'scrape_api.js'
       - 'scrape-and-upload.js'
       - 'tests/scraper-intelligence.test.js'
+      - 'tests/importer-metadata.test.js'
+      - 'tests/telegram-ingestion-metadata.test.js'
+      - 'public/js/watch.js'
+      - 'public/css/watch.css'
       - 'test/variant-intelligence.test.js'
       - 'package.json'
       - '.github/workflows/scraper-intelligence.yml'
@@ -20,12 +24,15 @@ on:
     paths:
       - 'utils/parser.js'
       - 'utils/variant-intelligence.js'
-      - 'routes/scrape.js'
+      - 'utils/telegram-ingestion.js'
+      - 'pipeline_full.js'
+      - 'models/Movie.js'
       - 'models/ExtractedLink.js'
-      - 'scrape_api.js'
-      - 'scrape-and-upload.js'
-      - 'tests/scraper-intelligence.test.js'
-      - 'test/variant-intelligence.test.js'
+      - 'routes/scrape.js'
+      - 'tests/importer-metadata.test.js'
+      - 'tests/telegram-ingestion-metadata.test.js'
+      - 'public/js/watch.js'
+      - 'public/css/watch.css'
       - 'package.json'
       - '.github/workflows/scraper-intelligence.yml'
 jobs:
@@ -38,6 +45,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: node --check public/js/watch.js
+      - run: node --check routes/scrape.js
       - run: npm run test:scraper-intelligence
       - run: npm run test:video-formats
       - run: npm run test:importer-metadata
+      - run: npm run test:telegram-ingestion

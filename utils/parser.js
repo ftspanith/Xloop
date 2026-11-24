@@ -247,7 +247,7 @@ const CHAN_LANG = [
   {re:/tamil|kollywood/i,       lang:'Tamil'},
   {re:/hindi|bolly/i,           lang:'Hindi'},
   {re:/mallu|malayalam/i,       lang:'Malayalam'},
-  {re:/kannada|sandalwood/i,    lang:'Kannada'},
+  {re:/kannada|kanada|sandalwood/i, lang:'Kannada'},
   {re:/anime|manga|jpn/i,       lang:'Japanese'},
   {re:/korean|kdrama/i,         lang:'Korean'},
 ];
@@ -292,6 +292,70 @@ function detectLanguage(str) {
   if (!langs.length) return '';
   const spec = langs.filter(l=>l!=='Multi');
   return spec.length ? spec.join(', ') : 'Multi';
+}
+
+// Classify the number of distinct explicitly detected language tracks.
+function classifyLanguageType(languages, text = '') {
+  const source = Array.isArray(languages) ? languages : detectAllLanguages(String(languages || text || ''));
+  const specific = [...new Set(source.map(value => String(value || '').trim()).filter(value => value && !/^multi$/i.test(value)))];
+  if (specific.length >= 3) return 'Multi';
+  if (specific.length === 2) return 'Dual';
+  if (specific.length === 1) return 'Single';
+  const tags = String(text || '');
+  if (/\b(?:multi(?:[- ._]?audio)?|tri[- ._]?audio|[4-9][- ]in[- ]1)\b/i.test(tags)) return 'Multi';
+  if (/\b(?:dual(?:[- ._]?audio)?|bilingual)\b/i.test(tags)) return 'Dual';
+  return '';
+}
+
+function detectAspectRatio(value) {
+  const s = String(value || '');
+  const explicit = s.match(/\b(\d{1,2}(?:\.\d{1,2})?)\s*:\s*(\d{1,2}(?:\.\d{1,2})?)\b/);
+  if (explicit) {
+    const left = Number(explicit[1]), right = Number(explicit[2]);
+    if (left > 0 && right > 0) return (left / right).toFixed(2) + ':1';
+  }
+  const dimensions = s.match(/\b(\d{3,5})\s*[x×]\s*(\d{3,5})\b/i);
+  if (dimensions) {
+    const width = Number(dimensions[1]), height = Number(dimensions[2]), ratio = width / height;
+    if (width >= 300 && height >= 300 && ratio >= 1.2 && ratio <= 3.0) return ratio.toFixed(2) + ':1';
+  }
+  return '';
+}
+
+function extractRuntimeMinutes(value) {
+  const s = String(value || '');
+  let m = s.match(/\b(\d{1,2})\s*h(?:ours?)?\s*(?:(\d{1,2})\s*m(?:in(?:utes?)?)?)?\b/i);
+  if (m) return Number(m[1]) * 60 + Number(m[2] || 0);
+  m = s.match(/\b(\d{2,3})\s*(?:min|mins|minutes)\b/i);
+  if (m) return Number(m[1]);
+  m = s.match(/\b(?:runtime|run[ ._-]?time|duration)\s*[:= -]?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/i);
+  if (m) return Number(m[1]) * 60 + Number(m[2]) + (m[3] && Number(m[3]) >= 30 ? 1 : 0);
+  return null;
+}
+
+function detectCBFCCertification(value) {
+  const s = String(value || '').replace(/_/g, ' ');
+  const contextual = s.match(/(?:CBFC|CENSOR(?:ED)?|CERT(?:IFICATE)?|RATING)\s*[:._ -]*\s*(U\s*\/\s*A|UA|U|A|S)(?:\s*[-._ ]?\s*(7|13|16|18)\s*\+?)?/i);
+  const ageOnly = s.match(/\b(U\s*\/\s*A|UA)\s*(7|13|16|18)\s*\+?(?!\d)/i);
+  const m = contextual || ageOnly;
+  if (!m) return '';
+  const base = m[1].replace(/\s/g, '').replace('/', '').toUpperCase();
+  return m[2] ? base + ' ' + m[2] + '+' : base;
+}
+
+function detectReleaseMetadata(value) {
+  const s = String(value || '');
+  const repack = s.match(/\b(RE[ ._-]?PACK|RE[ ._-]?RIP|RERIP|PROPER|FIXED[ ._-]?RIP)\b/i);
+  const reason = repack ? repack[1].replace(/[._-]+/g, ' ').toUpperCase() : '';
+  return {
+    isIMAX: /\bIMAX(?:[ ._-]?ENHANCED)?\b/i.test(s),
+    aspectRatio: detectAspectRatio(s),
+    runtimeMinutes: extractRuntimeMinutes(s),
+    certification: detectCBFCCertification(s),
+    isRepack: !!repack,
+    releaseType: repack ? 'repack' : 'main',
+    repackReason: reason,
+  };
 }
 
 // ─── CODEC ───────────────────────────────────────────────────────────────────
@@ -1149,7 +1213,16 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const audioChannels = detectAudioChannels(rawFn);
     const source = detectSource(rawFn) || null;
     const container = detectContainer(rawFn) || null;
-    if (!fileMap[key]) fileMap[key]={quality,size,hdr,codec,container,audio,bitDepth,audioChannels,source,filename:stripEmojis(rawFn).trim()||cleanedTitle,language:fileLang,season:fs,episode:fe,links:[]};
+    const urlLineIdx = lines.indexOf(pair.url);
+    const nearbyMetadataText = urlLineIdx >= 0 ? lines.slice(Math.max(0, urlLineIdx - 5), Math.min(lines.length, urlLineIdx + 2)).join(' ') : '';
+    const metadataText = rawFn + ' ' + nearbyMetadataText;
+    const releaseMetadata = detectReleaseMetadata(metadataText);
+    const languageType = classifyLanguageType(detectAllLanguages(fileLang || rawFn), metadataText);
+    if (!fileMap[key]) fileMap[key]={
+      quality,size,hdr,codec,container,audio,bitDepth,audioChannels,source,
+      filename:stripEmojis(rawFn).trim()||cleanedTitle,language:fileLang,languageType,
+      season:fs,episode:fe,uploadDate:msgDate||null,...releaseMetadata,links:[]
+    };
     if (!fileMap[key].links.find(l=>l.url===pair.url)) {
       fileMap[key].links.push({host:detectHost(pair.url),url:normalizeGdflixUrl(pair.url),isFast:/gdflix\.dev|hubcloud|gdlink/i.test(pair.url)});
     }
@@ -1179,13 +1252,20 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     if (imdbId && tmdbIdHint) break;
   }
 
-  return {title:cleanedTitle,rawTitle:masterTitle,year,language,languages:allLanguages,quality:bestQuality,contentType,isSeries,season,episode,downloads,messageId,date:msgDate||null,imdbId,tmdbIdHint,_isBatchList};
+  return {
+    title:cleanedTitle,rawTitle:masterTitle,year,language,languages:allLanguages,
+    languageType:classifyLanguageType(allLanguages, fullText),
+    quality:bestQuality,contentType,isSeries,season,episode,downloads,messageId,
+    date:msgDate||null,uploadDate:msgDate||null,imdbId,tmdbIdHint,_isBatchList
+  };
 }
 
 module.exports = {
   parseMessageBlock,classifyUrl,stripEmojis,cleanTitleForApi,normalizeQuality,
   extractSize,toMB,detectHost,detectLanguage,detectAllLanguages,detectContentType,
-  extractSeasonEpisode,detectCodec,detectContainer,detectHDR,detectBitDepth,detectAudioChannels,extractAudio,detectSource,isJunkTitle,isMetadataLine,
+  extractSeasonEpisode,detectCodec,detectContainer,detectHDR,detectBitDepth,detectAudioChannels,extractAudio,detectSource,
+  classifyLanguageType,detectAspectRatio,extractRuntimeMinutes,detectCBFCCertification,detectReleaseMetadata,
+  isJunkTitle,isMetadataLine,
   extractTitleFromStreamingUrl, normalizeGdflixUrl,
   parseManualInput,
 };
@@ -1209,6 +1289,8 @@ function parseManualInput(line) {
   const container = detectContainer(raw) || null;
   const hdr   = detectHDR(raw)   || null;
   const audio = extractAudio(raw) || null;
+  const languageType = classifyLanguageType(detectAllLanguages(raw), raw);
+  const releaseMetadata = detectReleaseMetadata(raw);
 
   // Extract season / episode
   const { season, episode } = extractSeasonEpisode(raw);
@@ -1243,5 +1325,5 @@ function parseManualInput(line) {
   title = title.replace(/\s*(BluRay|WEB-?DL|WEBRip|DVDRip|HDTV|Blu-?Ray|Remux|Extended|Theatrical|Directors\.?Cut)\s*/gi, ' ').trim();
   title = cleanTitleForApi(title) || title;
 
-  return { title, year, quality, size, codec, container, hdr, audio, language, season, episode, type, raw };
+  return { title, year, quality, size, codec, container, hdr, audio, language, languageType, season, episode, type, raw, ...releaseMetadata };
 }
