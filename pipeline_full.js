@@ -794,7 +794,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         if (matchedIdx >= 0) {
           const matchedDownload = dbRec.downloads[matchedIdx] || {};
           for (const field of ['source', 'container', 'bitDepth', 'audioChannels', 'codec', 'hdr', 'audio', 'filename',
-            'languageType', 'aspectRatio', 'runtimeMinutes', 'certification', 'repackReason', 'uploadDate']) {
+            'language', 'languageType', 'isIMAX', 'aspectRatio', 'runtimeMinutes', 'certification', 'repackReason', 'uploadDate']) {
             if (!matchedDownload[field] && newDl[field]) {
               metaSet[`downloads.${matchedIdx}.${field}`] = newDl[field];
             }
