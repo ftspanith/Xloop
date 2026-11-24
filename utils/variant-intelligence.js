@@ -84,15 +84,15 @@ function completenessScore(item) {
 
 function bitDepthScore(value) {
   const s = String(value || '').toLowerCase();
-  if (/\\b12[- ]?bit\\b/.test(s)) return 5;
-  if (/\\b10[- ]?bit\\b/.test(s)) return 4;
+  if (/\b12[- ]?bit\b/.test(s)) return 5;
+  if (/\b10[- ]?bit\b/.test(s)) return 4;
   return 0;
 }
 
 function channelScore(value) {
   const s = String(value || '').toLowerCase();
-  if (/\\b7\\.1\\b/.test(s)) return 4;
-  if (/\\b5\\.1\\b/.test(s)) return 2;
+  if (/\b7\.1\b/.test(s)) return 4;
+  if (/\b5\.1\b/.test(s)) return 2;
   return 0;
 }
 
