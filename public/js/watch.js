@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         <!-- ── Right: floating info panel ── -->
         <div class="wp-side-panel">
-          ${[data.duration ? `<div class="wp-side-row"><span class="wp-side-label">Runtime</span><span class="wp-side-val">${data.duration}</span></div>` : '',
+          ${[(data.duration || data.runtimeMinutes) ? `<div class="wp-side-row"><span class="wp-side-label">Runtime</span><span class="wp-side-val">${data.duration || (data.runtimeMinutes + ' min')}</span></div>` : '',
              data.language ? `<div class="wp-side-row"><span class="wp-side-label">Language</span><span class="wp-side-val">${data.language.split(',')[0].trim()}</span></div>` : '',
              data.year ? `<div class="wp-side-row"><span class="wp-side-label">Release Year</span><span class="wp-side-val">${data.year}</span></div>` : '',
              displayQuality ? `<div class="wp-side-row"><span class="wp-side-label">Quality</span><span class="wp-side-val">${displayQuality}</span></div>` : '',
@@ -101,8 +101,7 @@ document.addEventListener('DOMContentLoaded', async () => {
              data.languageType ? `<div class="wp-side-row"><span class="wp-side-label">Audio</span><span class="wp-side-val">${data.languageType}</span></div>` : '',
              data.certification ? `<div class="wp-side-row"><span class="wp-side-label">CBFC</span><span class="wp-side-val">${data.certification}</span></div>` : '',
              data.isIMAX ? `<div class="wp-side-row"><span class="wp-side-label">Format</span><span class="wp-side-val">IMAX</span></div>` : '',
-             data.aspectRatio ? `<div class="wp-side-row"><span class="wp-side-label">Aspect Ratio</span><span class="wp-side-val">${data.aspectRatio}</span></div>` : '',
-             data.runtimeMinutes ? `<div class="wp-side-row"><span class="wp-side-label">Runtime</span><span class="wp-side-val">${data.runtimeMinutes} min</span></div>` : ''
+             data.aspectRatio ? `<div class="wp-side-row"><span class="wp-side-label">Aspect Ratio</span><span class="wp-side-val">${data.aspectRatio}</span></div>` : ''
           ].filter(Boolean).join('')}
         </div>
       </div>
@@ -188,14 +187,21 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       if (re.test(languageText) && !detectedLangs.includes(label)) detectedLangs.push(label);
     }
     const specificLangs = detectedLangs;
-    const explicitMulti = /\\b(?:multi(?:[- ._]?audio)?|tri[- ._]?audio|[4-9][- ]in[- ]1)\\b/i.test(languageText);
-    const explicitDual = /\\b(?:dual(?:[- ._]?audio)?|bilingual)\\b/i.test(languageText);
+    const explicitMulti = /\b(?:multi(?:[- ._]?audio)?|tri[- ._]?audio|[4-9][- ]in[- ]1)\b/i.test(languageText);
+    const explicitDual = /\b(?:dual(?:[- ._]?audio)?|bilingual)\b/i.test(languageText);
     const languageType = dl.languageType || (specificLangs.length >= 3 ? 'Multi'
       : specificLangs.length === 2 ? 'Dual'
       : specificLangs.length === 1 ? 'Single'
       : explicitMulti ? 'Multi' : explicitDual ? 'Dual' : '');
     const isMulti = languageType === 'Multi';
     const langLabel = specificLangs.join(', ') || (languageType === 'Multi' ? 'Multi' : languageType === 'Dual' ? 'Dual Audio' : '');
+    const rawUploadDate = dl.uploadDate || dl.date || '';
+    const uploadDateValue = /^\d{10,13}$/.test(String(rawUploadDate))
+      ? new Date(Number(rawUploadDate) * (String(rawUploadDate).length === 10 ? 1000 : 1))
+      : new Date(rawUploadDate);
+    const uploadDateLabel = rawUploadDate && Number.isFinite(uploadDateValue.getTime())
+      ? new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(uploadDateValue)
+      : '';
 
     let res = dl.quality || 'HD';
     // Override from filename if filename has explicit quality token
@@ -283,6 +289,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       aspectRatio: dl.aspectRatio || '',
       runtimeMinutes: dl.runtimeMinutes || null,
       certification: dl.certification || '',
+      uploadDate: uploadDateLabel,
       season: dl.season || null, episode: dl.episode || null
     };
   }
@@ -313,6 +320,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     if (info.aspectRatio) techParts.push(info.aspectRatio);
     if (info.runtimeMinutes) techParts.push(info.runtimeMinutes + ' min');
     if (info.certification) techParts.push('CBFC ' + info.certification);
+    if (info.uploadDate) techParts.push('Uploaded ' + info.uploadDate);
     const techTags = techParts.filter(Boolean).join(' · ');
 
     // Cleaned display filename (strip inline size bracket — size shown separately)
@@ -362,6 +370,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
         aspectRatio: info.aspectRatio,
         runtimeMinutes: info.runtimeMinutes,
         certification: info.certification,
+        uploadDate:  info.uploadDate,
         rank:        HOST_RANK[hostLabel] ?? 99,
         season:      dl.season,
         episode:     dl.episode,
