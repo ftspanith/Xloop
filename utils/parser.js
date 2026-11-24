@@ -1251,9 +1251,14 @@ function parseMessageBlock(rawText, messageId, msgDate) {
       ? effectiveLangInfo.languages.join(', ')
       : (effectiveLangInfo.languageType || language);
 
-    const releaseMeta = detectReleaseMetadata(rawFn + ' ' + masterTitle);
-    const fileAspectRatio = extractAspectRatio(rawFn) || extractAspectRatio(masterTitle);
-    const fileIsIMAX = /\bIMAX\b/i.test(rawFn + ' ' + masterTitle);
+    const pairLineIndex = lines.findIndex(line => String(line).trim() === String(pair.url || '').trim());
+    const pairContext = pairLineIndex >= 0
+      ? lines.slice(Math.max(0, pairLineIndex - 4), pairLineIndex + 1).join(' ')
+      : '';
+    const fileContext = rawFn + ' ' + masterTitle + ' ' + pairContext;
+    const releaseMeta = detectReleaseMetadata(fileContext);
+    const fileAspectRatio = extractAspectRatio(rawFn) || extractAspectRatio(masterTitle) || extractAspectRatio(pairContext);
+    const fileIsIMAX = /\bIMAX\b/i.test(fileContext);
     const {season:ds,episode:de}=extractSeasonEpisode(rawFn);
     const fs=ds??season, fe=de??episode;
     const fileIdentity = stripEmojis(rawFn).toLowerCase().replace(/\s+/g, ' ').trim();
