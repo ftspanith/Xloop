@@ -253,6 +253,6 @@ test('normalizes regional provider suffixes without trusting lookalike hosts', (
 
 test('pipeline retries TMDB and OMDb with per-file release title candidates', () => {
   assert.match(pipelineSource, /\.\.\.group\.items\.map\(item => item && item\.filename\)/);
-  assert.match(pipelineSource, /Filename\\/title fallback matched/);
+  assert.ok(pipelineSource.includes('[TMDB] Filename/title fallback matched:'));
   assert.match(pipelineSource, /for \(const candidate of tmdbSearchCandidates\.slice\(0, 4\)\)/);
 });
