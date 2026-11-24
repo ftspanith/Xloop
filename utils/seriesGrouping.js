@@ -62,13 +62,16 @@ function mergeDownloads(documents) {
   for (const doc of documents) {
     for (const rawDownload of doc.downloads || []) {
       const download = { ...plain(rawDownload) };
+      // Capture incoming links before initializing a new grouped row. Resetting
+      // download.links first would discard every URL from the first record.
+      const incomingLinks = Array.isArray(download.links) ? download.links : [];
       const key = downloadGroupKey(download);
       if (!rows.has(key)) {
         download.links = [];
         rows.set(key, download);
       }
       const target = rows.get(key);
-      for (const link of download.links || []) {
+      for (const link of incomingLinks) {
         const url = String(link?.url || '').trim();
         if (url && !target.links.some(existing => existing.url === url)) {
           target.links.push({ ...link });
