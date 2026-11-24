@@ -746,6 +746,7 @@ router.post('/fetch-meta', auth, async (req, res) => {
     year:        (tmdb?.year || omdb?.year || parsed.messageYear || (isSeries ? null : year) || null),
     releaseDate: (tmdb?.releaseDate || ''),
     seasonYear: (tmdb?.seasonYear || null),
+    originalLanguage: (tmdb?.originalLanguage || ''),
     poster:      (tmdb?.poster    || omdb?.poster    || ''),
     backdrop:    (tmdb?.backdrop  || ''),                      // Only TMDB has backdrops
     rating:      (tmdb?.rating    || omdb?.rating    || 0),
