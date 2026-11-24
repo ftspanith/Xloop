@@ -1321,10 +1321,13 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const fileIdentity = stripEmojis(rawFn).toLowerCase().replace(/\s+/g, ' ').trim();
     const key=`${quality}__${size||'nosize'}__${releaseMeta.releaseType}__S${fs??''}E${fe??''}__${fileIdentity||pair.url}`;
 
-    const audio = extractAudio(rawFn) || null;
-    const bitDepth = detectBitDepth(rawFn);
-    const audioChannels = detectAudioChannels(rawFn);
-    const source = detectSource(rawFn) || null;
+    // Audio/source details are sometimes posted as adjacent "Audio:" / "Source:"
+    // lines instead of being embedded in the filename.
+    const technicalContext = [rawFn, pairContext].filter(Boolean).join(' ');
+    const audio = extractAudio(technicalContext) || null;
+    const bitDepth = detectBitDepth(technicalContext);
+    const audioChannels = detectAudioChannels(technicalContext);
+    const source = detectSource(technicalContext) || null;
     const container = detectContainer(rawFn) || null;
     if (!fileMap[key]) fileMap[key]={
       quality,size,hdr,codec,container,audio,bitDepth,audioChannels,source,
