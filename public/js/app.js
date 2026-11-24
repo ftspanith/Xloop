@@ -1,3 +1,14 @@
+// Keep audio formats out of the catalogue's video-codec chips, including legacy data.
+function getVisibleVideoCodecs(item) {
+  const audioCodec = /^(?:E-?AC-?3|DDP|DD\+?|AC-?3|DTS|TRUEHD|ATMOS|AAC|FLAC|MP3|OPUS|ALAC|L?PCM|VORBIS|AC4|WMA|DOLBY DIGITAL)/i;
+  return Array.isArray(item && item.codecs)
+    ? item.codecs.filter(codec => {
+        const value = String(codec || '').trim();
+        return value && !audioCodec.test(value);
+      })
+    : [];
+}
+
 // Helper functions for rendering cards
 function getInitials(title) {
   return title.split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '??';
@@ -18,8 +29,9 @@ function createCard(item, type, index = 0) {
   // Bottom info dynamic badges
   let badgesHtml = '';
   
-  if (item.codecs && item.codecs.length > 0) {
-    badgesHtml += item.codecs.map(c => `<span class="c-badge c-badge-glass c-codec">${c}</span>`).join('');
+  const visibleCodecs = getVisibleVideoCodecs(item);
+  if (visibleCodecs.length) {
+    badgesHtml += visibleCodecs.map(c => `<span class="c-badge c-badge-glass c-codec">${c}</span>`).join('');
   }
   
   if (item.languages && item.languages.length > 0) {
