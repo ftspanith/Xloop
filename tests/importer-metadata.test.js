@@ -190,3 +190,20 @@ test('recovers a labelled size placed immediately before its filename', () => {
   assert.equal(parsed.downloads[0].size, '3.25GB');
   assert.equal(parsed.downloads[0].filename, 'Another.Film.2022.1080p.BluRay.mkv');
 });
+
+
+test('explicit MongoDB catalogue reset preserves the ExtractedLink source collection', () => {
+  assert.match(pipelineSource, /_argv\.includes\('--clean-catalogue'\)/);
+  assert.match(pipelineSource, /const NO_WIPE\s+= FROM_MONGODB \? !CLEAN_CATALOGUE/);
+  assert.match(pipelineSource, /await Movie\.deleteMany\(\{\}\)/);
+  assert.match(pipelineSource, /ExtractedLink\.find\(\{\}\)\.lean\(\)/);
+  assert.match(pipelineSource, /ExtractedLink source preserved/);
+  assert.doesNotMatch(pipelineSource, /ExtractedLink\.deleteMany\(/);
+
+  const preflight = pipelineSource.indexOf('let preloadedMongoSourceLinks = null;');
+  const catalogueDelete = pipelineSource.indexOf('await Movie.deleteMany({});');
+  assert.ok(preflight >= 0 && catalogueDelete > preflight,
+    'approved source links must be validated before deleting Movie documents');
+  assert.match(pipelineSource, /if \(!approvedSourceCount\)[\s\S]*?throw new Error\('No approved provider links found in MongoDB; catalogue reset aborted'\)/);
+  assert.match(pipelineSource, /preloadedMongoSourceLinks \|\| await ExtractedLink\.find\(\{\}\)\.lean\(\)/);
+});
