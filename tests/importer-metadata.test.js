@@ -230,7 +230,7 @@ test('recovers size values posted after a URL and supports spaced thousands', ()
     'Size.Recovery.Film.2024.720p.WEB-DL.mkv',
     'mirror.hubcloud.app/file/second-size-after-url',
     '💾 Size - 2,5 GiB',
-  ].join('\\n'), 79, '2024-08-02');
+  ].join('\n'), 79, '2024-08-02');
 
   assert.ok(parsed);
   assert.equal(parsed.downloads.length, 2);
