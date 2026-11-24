@@ -11,6 +11,7 @@ const extractedLinkSchema = new mongoose.Schema({
   messageId:   { type: Number, default: null },
   host:        { type: String, default: 'Other' },
   title:       { type: String, default: '' },
+  rawTitle:    { type: String, default: '' },
   year:        { type: Number, default: null },
   quality:     { type: String, default: 'HD' },
   size:        { type: String, default: '' },
