@@ -8,7 +8,11 @@ const html = fs.readFileSync(path.join(root, 'public/search.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public/css/style.css'), 'utf8');
 const searchApi = fs.readFileSync(path.join(root, 'routes/search.js'), 'utf8');
 
-const inlineScripts = [...html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/g)].map(match => match[1]);
+const inlineScripts = html.split('<script').slice(1).map(segment => {
+  const start = segment.indexOf('>');
+  const end = segment.indexOf('</script>');
+  return start >= 0 && end > start ? segment.slice(start + 1, end) : '';
+});
 const activeSearchScript = inlineScripts.find(script => script.includes('function runSearch'));
 assert.ok(activeSearchScript, 'active search page script should be present');
 
@@ -22,40 +26,40 @@ function getRunSearchSource() {
 
 test('typing cannot be overwritten by an older search request', () => {
   const runSearch = getRunSearchSource();
-  assert.doesNotMatch(runSearch, /mainInput\\.value\\s*=/);
-  assert.match(activeSearchScript, /searchRequestId\\+\\+/);
-  assert.match(activeSearchScript, /requestId !== searchRequestId/);
+  assert.equal(runSearch.includes('mainInput.value = q'), false);
+  assert.ok(activeSearchScript.includes('searchRequestId++'));
+  assert.ok(activeSearchScript.includes('requestId !== searchRequestId'));
 });
 
 test('new searches abort superseded network requests', () => {
-  assert.match(activeSearchScript, /searchAbortController\\.abort\\(\\)/);
-  assert.match(activeSearchScript, /new AbortController\\(\\)/);
-  assert.match(activeSearchScript, /fetch\\(url, \\{ signal: controller\\.signal \\}\\)/);
+  assert.ok(activeSearchScript.includes('searchAbortController.abort()'));
+  assert.ok(activeSearchScript.includes('new AbortController()'));
+  assert.ok(activeSearchScript.includes('fetch(url, { signal: controller.signal })'));
 });
 
 test('search suggestions are cancellable and report expanded state', () => {
-  assert.match(activeSearchScript, /suggestionAbortController\\.abort\\(\\)/);
-  assert.match(activeSearchScript, /mainInput\\.setAttribute\\('aria-expanded', 'true'\\)/);
-  assert.match(activeSearchScript, /mainInput\\.setAttribute\\('aria-expanded', 'false'\\)/);
-  assert.match(html, /role="listbox"/);
+  assert.ok(activeSearchScript.includes('suggestionAbortController.abort()'));
+  assert.ok(activeSearchScript.includes("mainInput.setAttribute('aria-expanded', 'true')"));
+  assert.ok(activeSearchScript.includes("mainInput.setAttribute('aria-expanded', 'false')"));
+  assert.ok(html.includes('role="listbox"'));
 });
 
 test('search UI exposes status and busy state to assistive technology', () => {
-  assert.match(html, /role="status" aria-live="polite"/);
-  assert.match(html, /id="searchResults" aria-busy="false"/);
+  assert.ok(html.includes('role="status" aria-live="polite"'));
+  assert.ok(html.includes('id="searchResults" aria-busy="false"'));
 });
 
 test('search animations stay lightweight and respect reduced motion', () => {
-  assert.match(html, /searchProgress/);
-  assert.match(html, /searchCardIn \.28s/);
-  assert.match(css, /@media \\(prefers-reduced-motion: reduce\\)/);
-  assert.match(css, /@media \\(max-width: 420px\\)/);
-  assert.match(css, /content-grid > \.card \\{ width: 100%; min-width: 0; \\}/);
+  assert.ok(html.includes('searchProgress'));
+  assert.ok(html.includes('searchCardIn .28s'));
+  assert.ok(css.includes('@media (prefers-reduced-motion: reduce)'));
+  assert.ok(css.includes('@media (max-width: 420px)'));
+  assert.ok(css.includes('.content-grid > .card { width: 100%; min-width: 0; }'));
 });
 
 test('backend search remains normalized, typo-tolerant, and relevance-ranked', () => {
-  assert.match(searchApi, /function normalize\\(/);
-  assert.match(searchApi, /function levenshtein\\(/);
-  assert.match(searchApi, /function relevanceScore\\(/);
-  assert.match(searchApi, /Movie\\.find\\(searchFilter\\)/);
+  assert.ok(searchApi.includes('function normalize('));
+  assert.ok(searchApi.includes('function levenshtein('));
+  assert.ok(searchApi.includes('function relevanceScore('));
+  assert.ok(searchApi.includes('Movie.find(searchFilter)'));
 });
