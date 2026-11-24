@@ -120,6 +120,7 @@ function extractTelegramLinks(inputMessages, account = '1') {
     if (!parsed || !Array.isArray(parsed.downloads) || !parsed.downloads.length ||
         !parsed.title || isJunkTitle(parsed.title)) { skipped++; continue; }
     parsedMessages++;
+    const singleFileRelease = parsed.downloads.length === 1 ? parsed.releaseType : '';
 
     const slots = new Map();
     for (const download of parsed.downloads) {
@@ -144,7 +145,8 @@ function extractTelegramLinks(inputMessages, account = '1') {
           codec: download.codec || '', hdr: download.hdr || '', audio: download.audio || '',
           source: download.source || '', container: download.container || '',
           bitDepth: download.bitDepth || '', audioChannels: download.audioChannels || '',
-          isRepack: !!download.isRepack, releaseType: download.releaseType || 'Original',
+          isRepack: !!download.isRepack || singleFileRelease === 'Repack',
+          releaseType: download.releaseType || singleFileRelease || 'Original',
           isIMAX: !!download.isIMAX || !!parsed.isIMAX,
           aspectRatio: download.aspectRatio || parsed.aspectRatio || '',
           languageType: download.languageType || parsed.languageType || '',
