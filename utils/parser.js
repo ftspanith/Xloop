@@ -1091,8 +1091,6 @@ function parseMessageBlock(rawText, messageId, msgDate) {
         }
       }
     }
-      }
-    }
     while(k<lines.length&&isUrl(lines[k])&&!isTgLink(lines[k])&&!isYtLink(lines[k])) {
       const cls2=classifyUrl(lines[k]);
       if (cls2!=='Ignore') {
