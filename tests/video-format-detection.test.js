@@ -67,6 +67,12 @@ assert.equal(manual.codec, 'VP9');
 assert.equal(manual.container, 'MKV');
 assert.equal(manual.quality, '1080p');
 
+const dvd9Manual = parseManualInput('Sample.Movie.2024.DVD9.Dolby.Digital.Plus.5.1.mkv');
+assert.equal(dvd9Manual.source, 'DVD9');
+assert.equal(dvd9Manual.audio, 'EAC3');
+assert.equal(dvd9Manual.audioChannels, '5.1');
+assert.equal(dvd9Manual.title, 'Sample Movie');
+
 console.log('Video format detection tests passed.');
 
 
