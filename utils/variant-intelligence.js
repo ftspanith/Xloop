@@ -82,6 +82,20 @@ function completenessScore(item) {
   return score;
 }
 
+function bitDepthScore(value) {
+  const s = String(value || '').toLowerCase();
+  if (/\\b12[- ]?bit\\b/.test(s)) return 5;
+  if (/\\b10[- ]?bit\\b/.test(s)) return 4;
+  return 0;
+}
+
+function channelScore(value) {
+  const s = String(value || '').toLowerCase();
+  if (/\\b7\\.1\\b/.test(s)) return 4;
+  if (/\\b5\\.1\\b/.test(s)) return 2;
+  return 0;
+}
+
 function scoreVariant(item) {
   const reasons = [];
   const add = (label, value) => { if (value > 0) reasons.push(label); return value; };
@@ -90,11 +104,13 @@ function scoreVariant(item) {
   const codec = add('codec efficiency', codecScore(item.codec || item.filename));
   const hdr = add('HDR / Dolby Vision', hdrScore(item.hdr || item.filename));
   const audio = add('audio format', audioScore(item.audio || item.filename));
+  const bitDepth = add('bit depth', bitDepthScore(item.bitDepth || item.filename));
+  const channels = add('audio channels', channelScore(item.audioChannels || item.audio || item.filename));
   const completeness = completenessScore(item);
   const cinema = (item.isIMAX ? 3 : 0) + (item.aspectRatio ? 1 : 0) + (item.runtimeMinutes ? 1 : 0);
   if (cinema) reasons.push('cinema metadata');
-  return { ...item, qualityScore: source + resolution + codec + hdr + audio + completeness + cinema,
-    scoreBreakdown: {source,resolution,codec,hdr,audio,completeness,cinema}, scoreReasons: reasons };
+  return { ...item, qualityScore: source + resolution + codec + hdr + audio + bitDepth + channels + completeness + cinema,
+    scoreBreakdown: {source,resolution,codec,hdr,audio,bitDepth,channels,completeness,cinema}, scoreReasons: reasons };
 }
 
 function nearDuplicateGroups(items, tolerance = 0.01) {
