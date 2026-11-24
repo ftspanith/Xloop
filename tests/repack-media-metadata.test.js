@@ -160,8 +160,8 @@ test('import matching keeps repack and main releases in separate download groups
   assert.match(pipeline, /isRepack: !!dl\.isRepack/);
   assert.match(watch, /title="Repack release">REPACK/);
   assert.match(watch, /Available Languages/);
-  assert.match(watch, /getAvailableLanguageLabels\\(downloads\\)/);
-  assert.match(pipeline, /doc\\.language = doc\\.languages\\.join\\(' , '\\)/);
-  assert.doesNotMatch(pipeline, /meta\\.originalLanguage/);
+  assert.ok(watch.includes('getAvailableLanguageLabels(downloads)'));
+  assert.ok(pipeline.includes("doc.language = doc.languages.join(', ');"));
+  assert.doesNotMatch(pipeline, /origLang2/);
   assert.match(watch, /Telegram message date/);
 });
