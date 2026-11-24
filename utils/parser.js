@@ -176,7 +176,7 @@ function detectHost(url) {
 // Returns true for lines that are channel/format headers, NOT real title/filename lines
 function isMetadataLine(line) {
   const metadataText = String(line || '').trim();
-  if (/^(?:Runtime|Run\\s*time|Duration|Length|Aspect\\s*Ratio|Screen\\s*Ratio|AR|CBFC|Censor(?:ship)?|Certificate|Certification|Format)\\s*[:=]/i.test(metadataText)) return true;
+  if (/^Format\s*[:=]/i.test(metadataText)) return true;
   const s = (line || '').trim();
   if (!s) return false;
   // Pure hashtag-only lines: '#NF_WEBDL #MULTI_AUDIO'
@@ -337,7 +337,7 @@ function extractRuntime(text) {
   if (!labelled) return { runtimeMinutes: null, duration: '' };
   const raw = labelled[1].trim();
   let minutes = null;
-  let match = raw.match(/^(\d{1,2})\s*h(?:ours?)?\s*(?:(\d{1,2})\s*m(?:in(?:utes?)?)?)?/i);
+  let match = raw.match(/^(\d{1,2})\s*h(?:ours?|rs?)?\s*(?:(\d{1,2})\s*m(?:in(?:utes?)?)?)?/i);
   if (match) minutes = Number(match[1]) * 60 + Number(match[2] || 0);
   if (minutes == null) {
     match = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -355,7 +355,7 @@ function extractRuntime(text) {
 
 function extractCertification(text) {
   const value = String(text || '');
-  const match = value.match(/(?:CBFC|CENSOR(?:SHIP)?|CERT(?:IFICATE|IFICATION)?|CERT\.)\s*[:=\-]?\s*(U\s*[\/.-]?\s*A|U\.?A\.?|U|A|S)(?:\s*[- ]?\s*(7|13|16)\s*\+?)?/i);
+  const match = value.match(/(?:CBFC|CENSOR(?:SHIP)?|CERT(?:IFICATE|IFICATION)?|CERT\.)\s*[:=\-]?\s*(U\s*[\/.-]?\s*A|U\.?A\.?|U|A|S)(?:\s*[-( ]?\s*(7|13|16)\s*\+?\)?)?/i);
   if (!match) return null;
   const base = /^U\s*[\/.-]?\s*A$/i.test(match[1]) || /^U\.?A\.?$/i.test(match[1])
     ? 'U/A' : match[1].toUpperCase();
