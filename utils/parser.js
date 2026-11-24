@@ -1380,20 +1380,6 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     // because that incorrectly assigns the same size to 1080p and 720p variants.
     let size=extractSize(rawFn);
     if (!size && pair.size) size=pair.size;
-    // Recover sizes in this URL's local filename-to-link context. Never scan
-    // the entire message when per-file filenames exist (avoids size bleed).
-    if (!size) {
-      const sizeUrlIndex = lines.findIndex(line => String(line).trim() === String(pair.url || '').trim());
-      const sizeFilenameIndex = sizeUrlIndex >= 0
-        ? lines.lastIndexOf(String(rawFn || '').trim(), sizeUrlIndex)
-        : -1;
-      if (sizeUrlIndex >= 0) {
-        const contextStart = sizeFilenameIndex >= 0
-          ? sizeFilenameIndex
-          : Math.max(0, sizeUrlIndex - 8);
-        size = extractSize(lines.slice(contextStart, Math.min(lines.length, sizeUrlIndex + 10)).join(' '));
-      }
-    }
     // Only use fullText/masterTitle size when there's no dedicated filename at all
     // (i.e. the parser couldn't find a filename line near the URL)
     if (!size && !hasDedicatedFn) {
