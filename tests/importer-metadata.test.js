@@ -186,6 +186,11 @@ test('a later upload date alone does not turn an otherwise equal encode into a r
   assert.equal(inferRepackStatus(newer,[old]).isRepack,false);
 });
 
+test('importer preserves releases with different language-track sets', () => {
+  assert.match(pipelineSource, /if \(!languagesCompatible\) continue/);
+  assert.match(pipelineSource, /normalizeLanguages\(ex\.language\) === normalizeLanguages\(language\)/);
+});
+
 test('bit-depth and audio-channel upgrades contribute to repack inference', () => {
   const old = {
     quality:'1080p', source:'WEB-DL', codec:'HEVC', audio:'AAC',
