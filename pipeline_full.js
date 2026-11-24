@@ -531,7 +531,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
 
     if (cleanTitle && needsMetadata) {
       const tmdb = await searchTMDB(
-        rep.title || cleanTitle, rep.year, isSer, rep.season, group.msgDate,
+        rep.rawTitle || rep.title || cleanTitle, rep.year, isSer, rep.season, group.msgDate,
         rep.imdbId || null, rep.tmdbIdHint || null
       );
       if (tmdb) {
@@ -1039,7 +1039,7 @@ async function main(opts = {}) {
                     quality: dl.quality, size: dl.size, language: dl.language,
                     season: dl.season ?? null, episode: dl.episode ?? null,
                     type: parsed.type, contentType: parsed.contentType, isSeries: !!parsed.isSeries,
-                    filename: dl.filename,
+                    rawTitle: parsed.rawTitle || parsed.title, filename: dl.filename,
                     codec: dl.codec, hdr: dl.hdr, audio: dl.audio,
                     source: dl.source, container: dl.container,
                     bitDepth: dl.bitDepth, audioChannels: dl.audioChannels,
