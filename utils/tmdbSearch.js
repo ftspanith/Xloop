@@ -375,6 +375,18 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     return pending;
   }
 
+  async function verifiedTitleMatch(details, isTv) {
+    const query = normalizeMatchTitle(cleanTitle);
+    const compactLength = query.replace(/\s+/g, '').length;
+    const names = [details?.title, details?.name, details?.original_title, details?.original_name].filter(Boolean);
+    if (names.some(name => normalizeMatchTitle(name) === query)) return true;
+    if (compactLength > 4 && names.some(name => stringSimilarity(cleanTitle, name) >= 0.86)) return true;
+
+    const aliases = await fetchAlternativeTitles(details.id, isTv);
+    if (aliases.some(alias => normalizeMatchTitle(alias) === query)) return true;
+    return compactLength > 4 && aliases.some(alias => stringSimilarity(cleanTitle, alias) >= 0.86);
+  }
+
   // ── Result builder ──────────────────────────────────────────────────────────
   function buildResult(d, isTv, extra = {}, confidence = 100, algo = 'direct') {
     return {
@@ -411,7 +423,9 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       );
       if (r?.data && (r.data.title || r.data.name) && yearCompatible(r.data.release_date || r.data.first_air_date)) {
         const tv = mt === 'tv';
-        return buildResult(r.data, tv, await fetchSeasonData(r.data.id, season, tv), 100, 'tmdb-id');
+        if (await verifiedTitleMatch(r.data, tv)) {
+          return buildResult(r.data, tv, await fetchSeasonData(r.data.id, season, tv), 100, 'tmdb-id');
+        }
       }
     }
   }
@@ -430,7 +444,9 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
         );
         if (r?.data && (r.data.title || r.data.name) && yearCompatible(r.data.release_date || r.data.first_air_date)) {
           const tv = mt === 'tv';
-          return buildResult(r.data, tv, await fetchSeasonData(r.data.id, season, tv), 100, 'imdb-id');
+          if (await verifiedTitleMatch(r.data, tv)) {
+            return buildResult(r.data, tv, await fetchSeasonData(r.data.id, season, tv), 100, 'imdb-id');
+          }
         }
       }
     }
