@@ -51,7 +51,7 @@ function relevanceScore(movie, query, tokens) {
   }
   const description = normalize(movie.description);
   const genres = normalize((movie.genre || []).join(' '));
-  const languages = normalize([movie.language, ...(movie.languages || [])].join(' '));
+  const languages = normalize([movie.language, movie.originalLanguage, ...(movie.languages || [])].join(' '));
 
   if (title === query) score += 160;
   else if (title.startsWith(query)) score += 115;
@@ -106,6 +106,7 @@ router.get('/', async (req, res) => {
           { title: { $regex: escaped, $options: 'i' } },
           { description: { $regex: escaped, $options: 'i' } },
           { language: { $regex: escaped, $options: 'i' } },
+          { originalLanguage: { $regex: escaped, $options: 'i' } },
           { languages: { $regex: escaped, $options: 'i' } },
           { genre: { $regex: escaped, $options: 'i' } },
           ...tokenPatterns.flatMap(pattern => [
