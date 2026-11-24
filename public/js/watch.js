@@ -197,7 +197,6 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     const languageType = hasMultiMarker || detectedLangs.length >= 3 ? 'Multi'
       : hasDualMarker || detectedLangs.length === 2 ? 'Dual'
       : detectedLangs.length === 1 ? 'Single' : '';
-      : hasMultiMarker ? 'Multi' : hasDualMarker ? 'Dual' : '';
     const isMulti = languageType === 'Multi';
     const langLabel = detectedLangs.length ? detectedLangs.join(' + ') : languageType;
 
