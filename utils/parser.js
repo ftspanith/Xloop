@@ -183,6 +183,8 @@ function isMetadataLine(line) {
   if (/^[~\-•*._\s]+#[A-Za-z0-9_]+/i.test(s) && !/\.(mkv|mp4|avi|zip)\b/i.test(s)) return true;
   // Section headers: 'DRIVE LINKS:', 'TELEGRAM FILES:'
   if (/^(DRIVE\s+LINKS?|TELEGRAM\s+FILES?|HEVC\s*$|AVC\s*$)\s*[:#]?/i.test(s)) return true;
+  // Runtime, aspect ratio and CBFC certification metadata lines
+  if (/^(?:Run\s*time|Runtime|Duration|Length|Aspect\s*Ratio|Screen\s*Ratio|AR|CBFC|Censor(?:ship)?|Certificate|Certification)\s*[:=]/i.test(s)) return true;
   // Size / File Size lines
   if (/^(?:File\s*)?Size\s*[:].*/i.test(s) && /\d/.test(s)) return true;
   // Quality metadata: 'Quality: 2160p DV HDR'
@@ -268,6 +270,108 @@ function detectAllLanguages(str) {
     for (const {re,lang} of CHAN_LANG) if (re.test(tag)) found.add(lang);
   }
   return Array.from(found);
+}
+
+
+// Normalize language names before classifying the number of actual audio languages.
+// "Multi"/"Dual" are labels, not languages; they never inflate the language count.
+function normalizeLanguageList(values) {
+  const raw = Array.isArray(values)
+    ? values
+    : String(values || '').split(/[,|+/&]|\band\b/i);
+  const found = new Set();
+  const specific = LANG_MAP.filter(entry => entry.name !== 'Multi');
+  for (const value of raw) {
+    const token = String(value || '').trim();
+    if (!token) continue;
+    for (const { name, re } of specific) {
+      if (re.test(token)) found.add(name);
+    }
+  }
+  return [...found];
+}
+
+function classifyLanguages(values, markerText = '') {
+  const languages = normalizeLanguageList(values);
+  const text = String(markerText || (Array.isArray(values) ? values.join(' ') : values) || '');
+  const hasMultiMarker = /\b(?:multi(?:[.\s_-]?audio)?|tri[.\s_-]?audio|bilingual)\b/i.test(text);
+  const hasDualMarker = /\bdual(?:[.\s_-]?audio)?\b/i.test(text);
+  const languageType = languages.length >= 3 ? 'Multi'
+    : languages.length === 2 ? 'Dual'
+    : languages.length === 1 ? 'Single'
+    : hasMultiMarker ? 'Multi'
+    : hasDualMarker ? 'Dual' : '';
+  return { languages, languageCount: languages.length, languageType };
+}
+
+function detectReleaseMetadata(text) {
+  const value = String(text || '');
+  const isRepack = /\b(?:RE[\s._-]?PACK|RE[\s._-]?RIP|RERIP)\b/i.test(value);
+  const isProper = !isRepack && /\bPROPER\b/i.test(value);
+  return {
+    isRepack,
+    releaseType: isRepack ? 'Repack' : isProper ? 'Proper' : 'Original',
+  };
+}
+
+function extractAspectRatio(text) {
+  const value = String(text || '');
+  const ratio = '(?:1\\.(?:33|37|43|50|66|78|85|90)|2\\.(?:00|20|35|39|40|76)|16|4)\\s*:\\s*(?:1|9|3)';
+  const labelled = value.match(new RegExp('(?:aspect[\\s._-]*ratio|screen[\\s._-]*ratio|\\bAR\\b)\\s*[:=\\-]?\\s*(' + ratio + ')', 'i'));
+  const match = labelled || value.match(new RegExp('\\b(' + ratio + ')\\b', 'i'));
+  return match ? match[1].replace(/\s+/g, '') : null;
+}
+
+function formatRuntimeMinutes(totalMinutes) {
+  if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) return '';
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours ? (minutes ? hours + 'h ' + minutes + 'm' : hours + 'h') : totalMinutes + ' min';
+}
+
+function extractRuntime(text) {
+  const value = String(text || '');
+  const labelled = value.match(/(?:runtime|run[\s._-]*time|duration|length)\s*[:=\-]?\s*([^\n|]{1,40})/i);
+  if (!labelled) return { runtimeMinutes: null, duration: '' };
+  const raw = labelled[1].trim();
+  let minutes = null;
+  let match = raw.match(/^(\d{1,2})\s*h(?:ours?)?\s*(?:(\d{1,2})\s*m(?:in(?:utes?)?)?)?/i);
+  if (match) minutes = Number(match[1]) * 60 + Number(match[2] || 0);
+  if (minutes == null) {
+    match = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (match) minutes = Number(match[1]) * 60 + Number(match[2]) + (match[3] ? Math.round(Number(match[3]) / 60) : 0);
+  }
+  if (minutes == null) {
+    match = raw.match(/^(\d{2,3})\s*(?:m|min|mins|minutes)\b/i);
+    if (match) minutes = Number(match[1]);
+  }
+  if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 1000) {
+    return { runtimeMinutes: null, duration: '' };
+  }
+  return { runtimeMinutes: minutes, duration: formatRuntimeMinutes(minutes) };
+}
+
+function extractCertification(text) {
+  const value = String(text || '');
+  const match = value.match(/(?:CBFC|CENSOR(?:SHIP)?|CERT(?:IFICATE|IFICATION)?|CERT\.)\s*[:=\-]?\s*(U\s*[\/.-]?\s*A|U\.?A\.?|U|A|S)(?:\s*[- ]?\s*(7|13|16)\s*\+?)?/i);
+  if (!match) return null;
+  const base = /^U\s*[\/.-]?\s*A$/i.test(match[1]) || /^U\.?A\.?$/i.test(match[1])
+    ? 'U/A' : match[1].toUpperCase();
+  return base + (match[2] ? ' ' + match[2] + '+' : '');
+}
+
+function extractMediaMetadata(text) {
+  const value = String(text || '');
+  const release = detectReleaseMetadata(value);
+  const runtime = extractRuntime(value);
+  return {
+    ...release,
+    isIMAX: /\bIMAX\b/i.test(value),
+    aspectRatio: extractAspectRatio(value),
+    runtimeMinutes: runtime.runtimeMinutes,
+    duration: runtime.duration,
+    certification: extractCertification(value),
+  };
 }
 
 // ─── Platform/release-group → language inference ────────────────────────────
@@ -1088,9 +1192,12 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   const inlineLang=detectLanguage(fullText);
   // Platform/release-group inference (e.g. SUNNXT → Telugu, TamilBlasters → Tamil)
   const platformLang=inferLanguageFromPlatform(fullText);
-  let language=audioLang||inlineLang||platformLang||'';
-  if (!language&&/\bDUAL\b/i.test(fullText)) language='Multi';
-  const allLanguages=detectAllLanguages(fullText);
+  const detectedLanguages = detectAllLanguages(fullText);
+  const languageInfo = classifyLanguages(detectedLanguages, fullText);
+  const allLanguages = languageInfo.languages;
+  const language = allLanguages.length
+    ? allLanguages.join(', ')
+    : (languageInfo.languageType || audioLang || inlineLang || platformLang || '');
 
   // Build download slots
   const fileMap={};
@@ -1136,9 +1243,17 @@ function parseMessageBlock(rawText, messageId, msgDate) {
       if (quality==='HD') { const mq=normalizeQuality(fullText); if(mq!=='HD') quality=mq; }
     }
 
-    const fileLangs=detectAllLanguages(rawFn);
-    const fileLang=fileLangs.length?(fileLangs.filter(l=>l!=='Multi').join(', ')||'Multi'):language;
+    const fileLangInfo = classifyLanguages(detectAllLanguages(rawFn), rawFn);
+    const effectiveLangInfo = fileLangInfo.languageCount || fileLangInfo.languageType
+      ? fileLangInfo
+      : languageInfo;
+    const fileLang = effectiveLangInfo.languages.length
+      ? effectiveLangInfo.languages.join(', ')
+      : (effectiveLangInfo.languageType || language);
 
+    const releaseMeta = detectReleaseMetadata(rawFn + ' ' + masterTitle);
+    const fileAspectRatio = extractAspectRatio(rawFn) || extractAspectRatio(masterTitle);
+    const fileIsIMAX = /\bIMAX\b/i.test(rawFn + ' ' + masterTitle);
     const {season:ds,episode:de}=extractSeasonEpisode(rawFn);
     const fs=ds??season, fe=de??episode;
     const fileIdentity = stripEmojis(rawFn).toLowerCase().replace(/\s+/g, ' ').trim();
@@ -1149,7 +1264,15 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const audioChannels = detectAudioChannels(rawFn);
     const source = detectSource(rawFn) || null;
     const container = detectContainer(rawFn) || null;
-    if (!fileMap[key]) fileMap[key]={quality,size,hdr,codec,container,audio,bitDepth,audioChannels,source,filename:stripEmojis(rawFn).trim()||cleanedTitle,language:fileLang,season:fs,episode:fe,links:[]};
+    if (!fileMap[key]) fileMap[key]={
+      quality,size,hdr,codec,container,audio,bitDepth,audioChannels,source,
+      filename:stripEmojis(rawFn).trim()||cleanedTitle,
+      language:fileLang, languages:effectiveLangInfo.languages,
+      languageType:effectiveLangInfo.languageType, languageCount:effectiveLangInfo.languageCount,
+      isRepack:releaseMeta.isRepack, releaseType:releaseMeta.releaseType,
+      isIMAX:fileIsIMAX, aspectRatio:fileAspectRatio,
+      season:fs,episode:fe,links:[]
+    };
     if (!fileMap[key].links.find(l=>l.url===pair.url)) {
       fileMap[key].links.push({host:detectHost(pair.url),url:normalizeGdflixUrl(pair.url),isFast:/gdflix\.dev|hubcloud|gdlink/i.test(pair.url)});
     }
@@ -1179,13 +1302,23 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     if (imdbId && tmdbIdHint) break;
   }
 
-  return {title:cleanedTitle,rawTitle:masterTitle,year,language,languages:allLanguages,quality:bestQuality,contentType,isSeries,season,episode,downloads,messageId,date:msgDate||null,imdbId,tmdbIdHint,_isBatchList};
+  const mediaMetadata = extractMediaMetadata(fullText);
+  return {
+    title:cleanedTitle,rawTitle:masterTitle,year,language,languages:allLanguages,
+    languageType:languageInfo.languageType, languageCount:languageInfo.languageCount,
+    quality:bestQuality,contentType,isSeries,season,episode,downloads,messageId,
+    date:msgDate||null,imdbId,tmdbIdHint,_isBatchList,
+    isIMAX:mediaMetadata.isIMAX, aspectRatio:mediaMetadata.aspectRatio,
+    runtimeMinutes:mediaMetadata.runtimeMinutes, duration:mediaMetadata.duration,
+    certification:mediaMetadata.certification
+  };
 }
 
 module.exports = {
   parseMessageBlock,classifyUrl,stripEmojis,cleanTitleForApi,normalizeQuality,
   extractSize,toMB,detectHost,detectLanguage,detectAllLanguages,detectContentType,
   extractSeasonEpisode,detectCodec,detectContainer,detectHDR,detectBitDepth,detectAudioChannels,extractAudio,detectSource,isJunkTitle,isMetadataLine,
+  normalizeLanguageList,classifyLanguages,detectReleaseMetadata,extractAspectRatio,extractRuntime,extractCertification,extractMediaMetadata,
   extractTitleFromStreamingUrl, normalizeGdflixUrl,
   parseManualInput,
 };
