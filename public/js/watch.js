@@ -104,7 +104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
              data.language ? `<div class="wp-side-row"><span class="wp-side-label">Language</span><span class="wp-side-val">${data.language.split(',').map(part => part.trim()).join(' + ')}${data.languageType ? ' (' + data.languageType + ')' : ''}</span></div>` : '',
              data.year ? `<div class="wp-side-row"><span class="wp-side-label">Release Year</span><span class="wp-side-val">${data.year}</span></div>` : '',
              displayQuality ? `<div class="wp-side-row"><span class="wp-side-label">Quality</span><span class="wp-side-val">${displayQuality}</span></div>` : '',
-             data.rating ? `<div class="wp-side-row"><span class="wp-side-label">Rating</span><span class="wp-side-val">${data.rating} / 10</span></div>` : ''
+             data.rating ? `<div class="wp-side-row"><span class="wp-side-label">Rating</span><span class="wp-side-val">${data.rating} / 10</span></div>` : '',
               data.isIMAX ? `<div class="wp-side-row"><span class="wp-side-label">Format</span><span class="wp-side-val">IMAX</span></div>` : '',
               data.aspectRatio ? `<div class="wp-side-row"><span class="wp-side-label">Screen Ratio</span><span class="wp-side-val">${data.aspectRatio}</span></div>` : '',
               certificationLabel ? `<div class="wp-side-row"><span class="wp-side-label">CBFC</span><span class="wp-side-val">${certificationLabel}</span></div>` : ''
