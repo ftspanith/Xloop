@@ -180,6 +180,16 @@ test('explicit and inferred repacks remain separate and rank before main release
   assert.equal(explicit.releaseType, 'repack');
 });
 
+test('repack ranks ahead of main even when main has higher resolution', () => {
+  const items = rankVariantsForDisplay([
+    {quality:'4K',releaseType:'main',isRepack:false,source:'BluRay',codec:'HEVC',size:'8 GB'},
+    {quality:'1080p',releaseType:'repack',isRepack:true,source:'WEB-DL',codec:'HEVC',size:'2 GB'},
+  ]);
+  assert.equal(items[0].releaseType, 'repack');
+  assert.equal(items[1].releaseType, 'main');
+  assert.deepEqual(items.map(item => item.quality), ['1080p', '4K']);
+});
+
 test('a later upload date alone does not turn an otherwise equal encode into a repack', () => {
   const old = {quality:'1080p',source:'WEB-DL',codec:'HEVC',size:'2 GB',uploadDate:'2024-01-01'};
   const newer = {...old,uploadDate:'2024-02-01'};
