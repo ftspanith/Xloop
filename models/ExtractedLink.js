@@ -1,6 +1,12 @@
 'use strict';
 const mongoose = require('mongoose');
 
+const AudioTrackSchema = new mongoose.Schema({
+  codec: { type: String, default: '' },
+  channels: { type: String, default: '' },
+  language: { type: String, default: '' },
+}, { _id: false });
+
 // ExtractedLink — persistent store for links uploaded by scrape-and-upload.js.
 // This is the bridge between the local scraper and the Vercel pipeline:
 //   1. scrape-and-upload.js → POST /api/scrape/save-extracted → saves here
@@ -27,6 +33,7 @@ const extractedLinkSchema = new mongoose.Schema({
   container:   { type: String, default: '' },
   bitDepth:    { type: String, default: '' },
   audioChannels:{ type: String, default: '' },
+  audioTracks: { type: [AudioTrackSchema], default: [] },
   isRepack:    { type: Boolean, default: false },
   releaseType: { type: String, default: 'Original' },
   isIMAX:      { type: Boolean, default: false },

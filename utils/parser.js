@@ -237,6 +237,33 @@ function detectHost(url) {
   return (c==='Ignore'||c==='Paste'||c==='Download') ? 'Download' : c;
 }
 
+// Parse one explicitly numbered audio-track row. A generic DUAL/MULTI marker
+// is deliberately not enough evidence to invent track details.
+function parseExplicitAudioTrackLine(line) {
+  const value = String(line || '').trim();
+  const match = value.match(/^(?:AUDIO\s+)?TRACK\s*#?\s*(\d{1,2})\s*[:.)-]\s*(.+)$/i)
+    || value.match(/^(?:#\s*)?(\d{1,2})\s*[-.)|:]\s*(.+)$/i);
+  if (!match) return null;
+
+  const payload = match[2].trim();
+  const codec = extractAudio(payload);
+  if (!codec) return null;
+
+  const channels = detectAudioChannels(payload) || '';
+  const languages = [...new Set((detectAllLanguages(payload) || []).filter(language => language && language !== 'Multi'))];
+  // Codec alone is too weak: require an explicit channel layout or one language.
+  if (!channels && languages.length !== 1) return null;
+  return {
+    codec,
+    channels,
+    language: languages.length === 1 ? languages[0] : '',
+  };
+}
+
+function isAudioTrackSectionHeader(line) {
+  return /^AUDIO\s+TRACKS?\b(?:\s*\(\s*\d+\s*\))?\s*[:=-]?\s*$/i.test(String(line || '').trim());
+}
+
 // ─── METADATA LINE DETECTOR ───────────────────────────────────────────────────
 // Returns true for lines that are channel/format headers, NOT real title/filename lines
 function isMetadataLine(line) {
@@ -244,6 +271,7 @@ function isMetadataLine(line) {
   if (/^(?:Runtime|Run\s*time|Duration|Length|Aspect\s*Ratio|Screen\s*Ratio|AR|CBFC|Censor(?:ship)?|Certificate|Certification|Format)(?:\s*[:=]\s*|\s+)\S/i.test(metadataText)) return true;
   const s = (line || '').trim();
   if (!s) return false;
+  if (isAudioTrackSectionHeader(s) || parseExplicitAudioTrackLine(s)) return true;
   // Pure hashtag-only lines: '#NF_WEBDL #MULTI_AUDIO'
   if (/^(#[A-Za-z0-9_]+(?:\s+#[A-Za-z0-9_]+)*)\s*$/.test(s)) return true;
   // Mixed bullet+hashtag: '~.  #DUAL_AUDIO'
@@ -539,7 +567,7 @@ function detectBitDepth(fn) {
 function detectAudioChannels(fn) {
   const s = String(fn || '').toUpperCase();
   // Check immersive layouts before shorter prefixes (e.g. 5.1.2 before 5.1).
-  const m = s.match(/(?<!\d)(9\.1\.6|7\.1\.6|7\.1\.4|5\.1\.4|5\.1\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)(?!\d)/);
+  const m = s.match(/(?<!\d)(9\.1\.6|9\.1\.4|7\.1\.6|7\.1\.4|5\.1\.4|5\.1\.2|3\.1\.2|7\.2|5\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)(?!\d)/);
   if (m) return m[1];
   if (/\b(?:STEREO|2CH)\b/.test(s)) return '2.0';
   if (/\b(?:MONO|1CH)\b/.test(s)) return '1.0';
@@ -582,24 +610,35 @@ function extractAudio(fn) {
   const hasAtmos = /DOLBY[\s._-]*ATMOS|\bATMOS\b/.test(s);
   let codec = null;
 
-  // Prefer the underlying audio codec while preserving Atmos as an enhancement.
+  // Prefer the most specific codec spelling before matching its family.
   if (/TRUEHD/.test(s)) codec = 'TrueHD';
   else if (/DTS[.\s_-]?X\b/.test(s)) codec = 'DTS:X';
-  else if (/DTS[.\s_-]?HD[.\s_-]?MA\b/.test(s)) codec = 'DTS-HD MA';
-  else if (/DTS[.\s_-]?HD[.\s_-]?HRA\b/.test(s)) codec = 'DTS-HD HRA';
+  else if (/DTS[.\s_-]?HD[.\s_-]?(?:MA|MASTER[.\s_-]*AUDIO)\b/.test(s)) codec = 'DTS-HD MA';
+  else if (/DTS[.\s_-]?HD[.\s_-]?(?:HRA|HR|HIGH[.\s_-]*RESOLUTION[.\s_-]*AUDIO)\b/.test(s)) codec = 'DTS-HD HRA';
   else if (/DTS[.\s_-]?HD\b/.test(s)) codec = 'DTS-HD';
-  else if (/\bDTS\b/.test(s)) codec = 'DTS';
+  else if (/DTS[.\s_-]?ES\b/.test(s)) codec = 'DTS-ES';
+  else if (/DTS[.\s_-]?96[./\s_-]?24\b/.test(s)) codec = 'DTS 96/24';
+  else if (/DTS[.\s_-]?EXPRESS\b/.test(s)) codec = 'DTS Express';
+  else if (/E[.\s_-]?AC[.\s_-]?3[.\s_-]*JOC\b|\bDDP[.\s_-]*JOC\b|DOLBY[.\s_-]*DIGITAL[.\s_-]*PLUS[.\s_-]*JOC/.test(s)) codec = 'EAC3 JOC';
   else if (/E[.\s_-]?AC[.\s_-]?3|\bDDP(?:\+|\d+(?:\.\d+)?)?|\bDD\+|DOLBY[.\s_-]*DIGITAL[.\s_-]*PLUS/.test(s)) codec = 'EAC3';
   else if (/\bAC[.\s_-]?3\b|\bDD(?=\d|[.\s_-]|$)|\bDOLBY[.\s_-]*DIGITAL\b/.test(s)) codec = 'DD';
   else if (/\bAC[.\s_-]?4\b/.test(s)) codec = 'AC4';
-  else if (/\b(?:HE[.\s_-]?)?AAC(?:[.\s_-]?LC)?\b/.test(s)) codec = 'AAC';
+  else if (/\bMPEG[.\s_-]*H(?:\s*3D)?\b/.test(s)) codec = 'MPEG-H';
+  else if (/\bAURO[.\s_-]?3D\b/.test(s)) codec = 'Auro-3D';
+  else if (/\bHE[.\s_-]?AAC\b|\bHEAAC\b/.test(s)) codec = 'HE-AAC';
+  else if (/\bAAC[.\s_-]?LC\b/.test(s)) codec = 'AAC-LC';
+  else if (/\bAAC\b/.test(s)) codec = 'AAC';
   else if (/\bFLAC\b/.test(s)) codec = 'FLAC';
   else if (/\bOPUS\b/.test(s)) codec = 'Opus';
   else if (/\bALAC\b/.test(s)) codec = 'ALAC';
-  else if (/\bL?PCM\b/.test(s)) codec = 'PCM';
+  else if (/\bLPCM\b/.test(s)) codec = 'LPCM';
+  else if (/\bPCM\b/.test(s)) codec = 'PCM';
   else if (/\bVORBIS\b/.test(s)) codec = 'Vorbis';
   else if (/\bMP3\b/.test(s)) codec = 'MP3';
   else if (/\bMP2\b|MPEG[.\s_-]*AUDIO/.test(s)) codec = 'MP2';
+  else if (/\bMLP\b/.test(s)) codec = 'MLP';
+  else if (/\bWMA[.\s_-]*LOSSLESS\b/.test(s)) codec = 'WMA Lossless';
+  else if (/\bWMA[.\s_-]*PRO\b/.test(s)) codec = 'WMA Pro';
   else if (/\bWMA\b/.test(s)) codec = 'WMA';
 
   if (hasAtmos) return codec ? codec + ' Atmos' : 'Atmos';
@@ -1056,6 +1095,47 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     ) && _fl.length > 3;
   };
 
+  // Collect track rows tightly associated with this file only. Stop at the
+  // nearest title/file boundary so one variant cannot inherit another's audio.
+  const collectAudioTracksForPair = (filenameIndex, urlIndex) => {
+    const anchorIndex = filenameIndex >= 0 ? filenameIndex : urlIndex;
+    if (anchorIndex < 0) return [];
+    const found = [];
+
+    // Audio-track rows may appear immediately before the filename.
+    for (let scan = anchorIndex - 1, steps = 0; scan >= 0 && steps < 12; scan--, steps++) {
+      const line = String(lines[scan] || '').trim();
+      const track = parseExplicitAudioTrackLine(line);
+      if (track) { found.unshift(track); continue; }
+      if (isAudioTrackSectionHeader(line) || isMetadataLine(line)) continue;
+      break;
+    }
+
+    // Or immediately after the filename and before its download link.
+    if (filenameIndex >= 0 && urlIndex > filenameIndex) {
+      for (let scan = filenameIndex + 1; scan < urlIndex; scan++) {
+        const line = String(lines[scan] || '').trim();
+        const track = parseExplicitAudioTrackLine(line);
+        if (track) { found.push(track); continue; }
+        if (isAudioTrackSectionHeader(line) || isMetadataLine(line) || isSizeLine(line)) continue;
+        if (isUrl(line) || isLinkLabel(line)) continue;
+        if (isFileDesc(line)) break;
+        break;
+      }
+    }
+
+    const unique = [];
+    const seen = new Set();
+    for (const track of found) {
+      const key = [track.codec, track.channels, track.language].join('|').toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(track);
+    }
+    // Store multiple audio only when at least two distinct explicit tracks matched.
+    return unique.length >= 2 ? unique.slice(0, 8) : [];
+  };
+
   // ── Helper: extract size from a 'Size :' or 'File Size:' line ─────────────
   const extractSizeFromMeta = l => extractSize(l || '');
   const isSizeLine = line => {
@@ -1183,7 +1263,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   // ── Extract master title — 5 strategies ──────────────────────────────────
   // Strategy 0: detect numbered-list batch format and warn
   // e.g. "1. Movie Title (2023)\nhttps://...\n2. Movie 2 (2022)\nhttps://..."
-  const numberedListLines = lines.filter(l => /^\d+[\.)\-]\s+.{5,}/.test(l) && !isUrl(l));
+  const numberedListLines = lines.filter(l => /^\d+[\.)\-]\s+.{5,}/.test(l) && !isUrl(l) && !parseExplicitAudioTrackLine(l));
   const _isBatchList = numberedListLines.length >= 2;
   // (caller can check parsed._isBatchList to re-split if needed)
 
@@ -1431,6 +1511,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const pairContext = pairLineIndex >= 0
       ? lines.slice(pairContextStart, pairLineIndex + 1).join(' ')
       : '';
+    const audioTracks = collectAudioTracksForPair(rawFilenameLineIndex, pairLineIndex);
     const fileContext = rawFn + ' ' + masterTitle + ' ' + pairContext;
     const releaseMeta = detectReleaseMetadata(fileContext);
     const fileAspectRatio = extractAspectRatio(rawFn) || extractAspectRatio(masterTitle) || extractAspectRatio(pairContext);
@@ -1449,7 +1530,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const source = detectSource(technicalContext) || null;
     const container = detectContainer(rawFn) || null;
     if (!fileMap[key]) fileMap[key]={
-      quality,size,hdr,codec,container,audio,bitDepth,audioChannels,source,
+      quality,size,hdr,codec,container,audio,bitDepth,audioChannels,audioTracks,source,
       filename:stripEmojis(rawFn).trim()||cleanedTitle,
       language:fileLang, languages:effectiveLangInfo.languages,
       languageType:effectiveLangInfo.languageType, languageCount:effectiveLangInfo.languageCount,

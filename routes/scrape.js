@@ -514,6 +514,13 @@ router.post('/telegram-sync/chunk', auth, express.json({ limit: '3mb' }), async 
           !['1', '2'].includes(String(item.sourceAccount))) {
         return res.status(400).json({ message: 'Every link needs a valid http(s) URL and sourceAccount 1 or 2.' });
       }
+      const incomingAudioTracks = Array.isArray(item.audioTracks)
+        ? item.audioTracks.slice(0, 8).map(track => ({
+            codec: allowedString(track && track.codec, 80),
+            channels: allowedString(track && track.channels, 40),
+            language: allowedString(track && track.language, 80),
+          })).filter(track => track.codec)
+        : [];
       const doc = {
         url: item.url.trim(),
         host: allowedString(item.host, 80) || 'Other',
@@ -531,6 +538,7 @@ router.post('/telegram-sync/chunk', auth, express.json({ limit: '3mb' }), async 
         audio: allowedString(item.audio, 120),
         bitDepth: allowedString(item.bitDepth, 40),
         audioChannels: allowedString(item.audioChannels, 40),
+        audioTracks: incomingAudioTracks.length >= 2 ? incomingAudioTracks : [],
         bypassedUrl: allowedString(item.bypassedUrl, 2000),
         isSeries: !!item.isSeries,
         contentType: allowedString(item.contentType, 40),
@@ -707,6 +715,15 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
       : '';
     links.forEach(e => {
       e.uploadBatch = batchId;
+      const audioTracks = Array.isArray(e.audioTracks)
+        ? e.audioTracks.slice(0, 8).filter(track => track && typeof track.codec === 'string' && track.codec.trim())
+          .map(track => ({
+            codec: track.codec.trim().slice(0, 80),
+            channels: typeof track.channels === 'string' ? track.channels.slice(0, 40) : '',
+            language: typeof track.language === 'string' ? track.language.slice(0, 80) : '',
+          }))
+        : [];
+      e.audioTracks = audioTracks.length >= 2 ? audioTracks : [];
       if (sourceAccount) e.sourceAccount = sourceAccount;
     });
     if (links.length > 0) {
@@ -722,6 +739,17 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
           if (uniqueLinks.length > 0) {
             await ExtractedLink.insertMany(uniqueLinks, { ordered: false });
           }
+          // A merge upload may enrich old URLs with newly parsed explicit audio
+          // tracks. Never replace an already complete two-or-more-track record.
+          const trackUpdates = slice
+            .filter(l => Array.isArray(l.audioTracks) && l.audioTracks.length >= 2)
+            .map(l => ({
+              updateOne: {
+                filter: { url: l.url, 'audioTracks.1': { $exists: false } },
+                update: { $set: { audioTracks: l.audioTracks.slice(0, 8) } },
+              },
+            }));
+          if (trackUpdates.length) await ExtractedLink.bulkWrite(trackUpdates, { ordered: false });
         } else {
           // Replace mode: insert everything
           await ExtractedLink.insertMany(slice, { ordered: false });
@@ -913,7 +941,7 @@ router.get('/collection-links', auth, async (req, res) => {
 
     const regex = new RegExp('^' + title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
     const links = await ExtractedLink.find({ title: regex })
-      .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels sourceAccount')
+      .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels audioTracks sourceAccount')
       .sort({ quality: -1, size: -1 })
       .maxTimeMS(8000)
       .lean();
@@ -956,10 +984,10 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
 
     const [titleLinks, fileLinks] = await Promise.all([
       ExtractedLink.find(titleFilter)
-        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels sourceAccount')
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels audioTracks sourceAccount')
         .lean(),
       ExtractedLink.find(fileFilter)
-        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels sourceAccount')
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels audioTracks sourceAccount')
         .lean(),
     ]);
     const seenInit = new Set(titleLinks.map(l => l.url));
@@ -971,7 +999,7 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
       const looseFilter = { $or: [{ title: looseRegex }, { filename: looseRegex }] };
       if (year && /^\d{4}$/.test(year)) looseFilter.year = parseInt(year, 10);
       const looseLinks = await ExtractedLink.find(looseFilter)
-        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels sourceAccount')
+        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels audioTracks sourceAccount')
         .lean();
       const seen2 = new Set(links.map(l => l.url));
       links = [...links, ...looseLinks.filter(l => !seen2.has(l.url))];

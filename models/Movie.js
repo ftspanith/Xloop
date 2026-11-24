@@ -1,5 +1,11 @@
 const mongoose = require('mongoose');
 
+const AudioTrackSchema = new mongoose.Schema({
+  codec: { type: String, default: '' },
+  channels: { type: String, default: '' },
+  language: { type: String, default: '' },
+}, { _id: false });
+
 const LinkSchema = new mongoose.Schema({
   host: { type: String }, // GDFlix, HubCloud, FlipRes, TeraBox
   url:  { type: String },
@@ -20,6 +26,7 @@ const DownloadSchema = new mongoose.Schema({
   container:{ type: String },  // MKV, MP4, WEBM, AVI, M2TS, etc.
   bitDepth: { type: String },  // 8-bit, 10-bit, 12-bit, etc.
   audioChannels: { type: String }, // 2.0, 5.1, 7.1
+  audioTracks: { type: [AudioTrackSchema], default: [] },
   isRepack: { type: Boolean, default: false },
   releaseType: { type: String, default: 'Original' }, // Original, Repack, Proper
   isIMAX: { type: Boolean, default: false },

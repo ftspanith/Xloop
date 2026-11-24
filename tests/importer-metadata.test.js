@@ -9,6 +9,7 @@ const {
   parseMessageBlock,
   cleanTitleForApi,
   detectAudioChannels,
+  extractAudio,
   extractSize,
   toMB,
   isGenericTitleCandidate,
@@ -62,6 +63,71 @@ test('Telegram parser preserves IDs and all rich filename metadata for DB import
   assert.equal(download.audioChannels, '5.1');
   assert.equal(download.audio, 'EAC3');
   assert.equal(download.links[0].host, 'GDFlix');
+});
+
+test('Telegram parser stores multiple audio tracks only when two explicit track rows match the file', () => {
+  const message = [
+    'Multi Audio Sample Film (2024)',
+    'Audio Tracks:',
+    '1. DDP | 5.1 | 640 kb/s | Telugu',
+    '2. AAC | 2.0 | 128 kb/s | Hindi',
+    'Multi.Audio.Sample.Film.2024.1080p.WEB-DL.HEVC.2GB.mkv',
+    'https://gdflix.dev/file/multi-audio-sample',
+  ].join('\n');
+
+  const parsed = parseMessageBlock(message, 12, '2024-12-02');
+  assert.ok(parsed);
+  assert.equal(parsed._isBatchList, false, 'numbered audio tracks must not be treated as a numbered movie list');
+  assert.deepEqual(parsed.downloads[0].audioTracks, [
+    { codec: 'EAC3', channels: '5.1', language: 'Telugu' },
+    { codec: 'AAC', channels: '2.0', language: 'Hindi' },
+  ]);
+});
+
+test('a single audio row or a DUAL/MULTI marker does not create guessed multi-audio tracks', () => {
+  const singleTrackMessage = [
+    'Single Track Sample Film (2024)',
+    '#DUAL_AUDIO #MULTI_AUDIO',
+    'Audio Tracks:',
+    '1. DDP | 5.1 | 640 kb/s | Telugu',
+    'Single.Track.Sample.Film.2024.1080p.WEB-DL.HEVC.2GB.mkv',
+    'https://gdflix.dev/file/single-audio-track',
+  ].join('\n');
+  const single = parseMessageBlock(singleTrackMessage, 13, '2024-12-03');
+  assert.deepEqual(single.downloads[0].audioTracks, []);
+
+  const markerOnlyMessage = [
+    'Marker Only Sample Film (2024)',
+    '#DUAL_AUDIO #MULTI_AUDIO',
+    'Marker.Only.Sample.Film.2024.1080p.WEB-DL.HEVC.DDP5.1.2GB.mkv',
+    'https://gdflix.dev/file/marker-only-audio',
+  ].join('\n');
+  const markerOnly = parseMessageBlock(markerOnlyMessage, 14, '2024-12-04');
+  assert.deepEqual(markerOnly.downloads[0].audioTracks, []);
+});
+
+test('detects additional common audio codecs used in movie releases', () => {
+  assert.equal(extractAudio('Movie.E-AC3.JOC.1080p.mkv'), 'EAC3 JOC');
+  assert.equal(extractAudio('Movie.DTS-ES.1080p.mkv'), 'DTS-ES');
+  assert.equal(extractAudio('Movie.DTS.96.24.1080p.mkv'), 'DTS 96/24');
+  assert.equal(extractAudio('Movie.DTS-Express.1080p.mkv'), 'DTS Express');
+  assert.equal(extractAudio('Movie.DTS-HD.Master.Audio.1080p.mkv'), 'DTS-HD MA');
+  assert.equal(extractAudio('Movie.DTS-HD.High.Resolution.Audio.1080p.mkv'), 'DTS-HD HRA');
+  assert.equal(extractAudio('Movie.HE-AAC.1080p.mkv'), 'HE-AAC');
+  assert.equal(extractAudio('Movie.AAC-LC.1080p.mkv'), 'AAC-LC');
+  assert.equal(extractAudio('Movie.LPCM.1080p.mkv'), 'LPCM');
+  assert.equal(extractAudio('Movie.MPEG-H.1080p.mkv'), 'MPEG-H');
+  assert.equal(extractAudio('Movie.Auro-3D.1080p.mkv'), 'Auro-3D');
+  assert.equal(extractAudio('Movie.WMA-Pro.1080p.mkv'), 'WMA Pro');
+  assert.equal(extractAudio('Movie.WMA-Lossless.1080p.mkv'), 'WMA Lossless');
+  assert.equal(extractAudio('Movie.MLP.1080p.mkv'), 'MLP');
+});
+
+test('recognizes additional surround channel layouts without guessing from format labels', () => {
+  assert.equal(detectAudioChannels('Movie.DDP.9.1.4.mkv'), '9.1.4');
+  assert.equal(detectAudioChannels('Movie.DTS.7.2.mkv'), '7.2');
+  assert.equal(detectAudioChannels('Movie.5.1.2.AAC.mkv'), '5.1.2');
+  assert.equal(detectAudioChannels('Movie.1080p.DDP.mkv'), null);
 });
 
 test('MongoDB-only importer calls the shared TMDB/OMDb engine and poster fallback chain', () => {

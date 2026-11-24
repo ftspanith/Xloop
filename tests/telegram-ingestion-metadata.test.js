@@ -57,3 +57,26 @@ test('Telegram ingestion accepts bare rotated provider URLs and normalizes them'
     ['1.2GB', '2.4GB']
   );
 });
+
+
+test('Telegram ingestion carries only explicitly parsed multi-audio track details', () => {
+  const message = {
+    channel_id: '123',
+    id: 204,
+    date: '2024-02-03',
+    text: [
+      'Multi Audio Sample Film (2024)',
+      'Audio Tracks:',
+      '1. DDP | 5.1 | 640 kb/s | Telugu',
+      '2. AAC | 2.0 | 128 kb/s | Hindi',
+      'Multi.Audio.Sample.Film.2024.1080p.WEB-DL.HEVC.2GB.mkv',
+      'https://gdflix.dev/file/multi-audio-ingestion',
+    ].join('\n'),
+  };
+  const result = extractTelegramLinks([message], '1');
+  assert.equal(result.links.length, 1);
+  assert.deepEqual(result.links[0].audioTracks, [
+    { codec: 'EAC3', channels: '5.1', language: 'Telugu' },
+    { codec: 'AAC', channels: '2.0', language: 'Hindi' },
+  ]);
+});
