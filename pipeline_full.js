@@ -31,7 +31,7 @@ const { CookieJar } = require('tough-cookie');
 const { spawn }     = require('child_process');
 const Movie         = require('./models/Movie');
 const {
-  cleanTitleForApi, fallbackTitleFromText, isJunkTitle, normalizeProviderUrl,
+  cleanTitleForApi, fallbackTitleFromText, isJunkTitle, isGenericTitleCandidate, normalizeProviderUrl,
   detectHost, detectCodec, detectHDR, extractAudio,
   detectBitDepth, detectAudioChannels, detectSource, detectContainer,
   normalizeQuality, extractSize, detectAllLanguages, extractSeasonEpisode,
@@ -533,10 +533,10 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
     for (const sourceTitle of titleSources) {
       if (!sourceTitle) continue;
       const direct = cleanTitleForApi(sourceTitle, rep.year);
-      const candidate = direct && !isJunkTitle(direct)
+      const candidate = direct && !isJunkTitle(direct) && !isGenericTitleCandidate(direct)
         ? direct
         : fallbackTitleFromText(sourceTitle, rep.year);
-      if (candidate && !isJunkTitle(candidate)) {
+      if (candidate && !isJunkTitle(candidate) && !isGenericTitleCandidate(candidate)) {
         cleanTitle = candidate;
         break;
       }
