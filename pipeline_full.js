@@ -1035,12 +1035,12 @@ async function main(opts = {}) {
   // rebuilding them, while never deleting the ExtractedLink source collection.
   const CLEAN_CATALOGUE = FROM_MONGODB &&
     (opts.cleanCatalogue !== undefined ? !!opts.cleanCatalogue : _argv.includes('--clean-catalogue'));
+  const RESUME      = opts.resume !== undefined ? !!opts.resume : _argv.includes('--resume');
   const requestedNoWipe = FROM_MONGODB ? !CLEAN_CATALOGUE : (opts.noWipe !== undefined ? !!opts.noWipe : _argv.includes('--no-wipe'));
   // Scoped imports and resume runs must never delete the existing catalogue.
   const NO_WIPE = requestedNoWipe || scope !== 'all' || RESUME;
   const NO_HEAL     = FROM_MONGODB ? true : (opts.noHeal !== undefined ? opts.noHeal : _argv.includes('--no-heal'));
   const NO_BYPASS   = FROM_MONGODB ? true : (opts.noBypass !== undefined ? opts.noBypass : _argv.includes('--no-bypass'));
-  const RESUME      = opts.resume !== undefined ? !!opts.resume : _argv.includes('--resume');
   const CONCURRENCY = opts.concurrency || parseInt((_argv.find(a => a.startsWith('--concurrency=')) || '').replace('--concurrency=', '') || '3', 10);
   const IMPORT_SRC  = opts.importSrc  || (_argv.find(a => a.startsWith('--import-source=')) || '').replace('--import-source=', '') || null;
   const IS_STOP_REQUESTED = opts.isStopRequested || (() => false);
