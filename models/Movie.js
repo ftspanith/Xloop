@@ -17,6 +17,9 @@ const DownloadSchema = new mongoose.Schema({
   hdr:      { type: String },  // Dolby Vision, HDR10+, HDR10, HDR, SDR
   audio:    { type: String },  // Atmos, TrueHD, DTS:X, DTS-HD MA, DTS, EAC3, DD, AAC, FLAC
   source:   { type: String },  // WEB-DL, WEBRip, BluRay, REMUX, HDRip, DVD, CAM
+  container:{ type: String },  // MKV, MP4, WEBM, AVI, M2TS, etc.
+  bitDepth: { type: String },  // 8-bit, 10-bit, 12-bit, etc.
+  audioChannels: { type: String }, // 2.0, 5.1, 7.1
   links:    [LinkSchema]
 }, { _id: false });
 
