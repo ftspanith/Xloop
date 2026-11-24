@@ -14,7 +14,8 @@ test('global stylesheet prevents automatic mobile text inflation', () => {
 });
 
 test('fixed mobile navigation overlay fits the viewport without 100vw overflow', () => {
-  const start = css.indexOf('#mobileNavOverlay {');
+  const viewportFix = css.indexOf('/* Fixed-viewport guarantee:');
+  const start = css.indexOf('#mobileNavOverlay {', viewportFix);
   const end = css.indexOf('\n}', start);
   assert.ok(start >= 0 && end > start, 'mobile navigation overlay rule should exist');
   const rule = css.slice(start, end);
