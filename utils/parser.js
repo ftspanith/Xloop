@@ -859,6 +859,12 @@ function isJunkTitle(title) {
   return JUNK_PATTERNS.some(re => re.test(c));
 }
 
+// Treat generic headings as metadata placeholders, not catalogue titles.
+function isGenericTitleCandidate(value) {
+  return /^(?:movie|film|video|clip|show|series|episode|part|chapter|season|trailer|teaser|sample|test|unknown|untitled|hd|fhd|uhd|4k|1080p|720p|480p)$/i
+    .test(stripEmojis(String(value || '')).trim());
+}
+
 // Conservative fallback for filename/heading title variants. Strip only known
 // technical suffixes; preserve title words instead of turning a failed TMDB query
 // into a reason to drop the download itself.
@@ -883,7 +889,7 @@ function fallbackTitleFromText(value, yearHint = null) {
 
   const cleaned = cleanTitleForApi(raw, yearHint);
   const plausible = candidate => !!candidate && (
-    !isJunkTitle(candidate) ||
+    (!isJunkTitle(candidate) && !isGenericTitleCandidate(candidate)) ||
     (yearHint && /^\d{4}$/.test(candidate) && Number(candidate) !== Number(yearHint))
   );
   if (plausible(cleaned)) return cleaned;
@@ -1339,7 +1345,10 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const _slM = (masterTitle || '').trim().match(/^([A-Z])(?:\s+\(|\s+\[|\.|\s+\d{4})/);
     if (_slM) { cleanedTitle = _slM[1]; _usedNumericFallback = true; }
   }
-  if (!_usedNumericFallback && (!cleanedTitle || cleanedTitle.length < 1 || isJunkTitle(cleanedTitle))) {
+  if (!_usedNumericFallback && (
+    !cleanedTitle || cleanedTitle.length < 1 ||
+    isJunkTitle(cleanedTitle) || isGenericTitleCandidate(cleanedTitle)
+  )) {
     const fallbackSources = [masterTitle, firstFn, ...lines.filter(line =>
       line && !isUrl(line) && !isMetadataLine(line) && !isPromo(line) && !isLinkLabel(line)
     )];
@@ -1352,7 +1361,10 @@ function parseMessageBlock(rawText, messageId, msgDate) {
       }
     }
   }
-  if (!_usedNumericFallback && (!cleanedTitle || cleanedTitle.length < 1 || isJunkTitle(cleanedTitle))) {
+  if (!_usedNumericFallback && (
+    !cleanedTitle || cleanedTitle.length < 1 ||
+    isJunkTitle(cleanedTitle) || isGenericTitleCandidate(cleanedTitle)
+  )) {
     return null;
   }
 
@@ -1499,7 +1511,7 @@ module.exports = {
   extractSeasonEpisode,detectCodec,detectContainer,detectHDR,detectBitDepth,detectAudioChannels,extractAudio,detectSource,isJunkTitle,isMetadataLine,
   normalizeLanguageList,classifyLanguages,detectReleaseMetadata,extractAspectRatio,extractRuntime,extractCertification,extractMediaMetadata,
   extractTitleFromStreamingUrl, normalizeGdflixUrl, normalizeProviderUrl,
-  getProviderFamily, fallbackTitleFromText,
+  getProviderFamily, fallbackTitleFromText, isGenericTitleCandidate,
   parseManualInput,
 };
 
