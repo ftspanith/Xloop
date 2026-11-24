@@ -512,7 +512,7 @@ router.post('/import-batch', auth, async (req, res) => {
             if (omdb.poster && omdb.poster !== meta.poster) meta.posterFallback = omdb.poster;
           }
         } else {
-          const omdb = await searchOMDB(cleanTitle, rep.year, isSer);
+          const omdb = await searchOMDB(cleanTitle, titleYearHint, isSer, yearHints);
           if (omdb) Object.assign(meta, omdb, { tmdbId: '' });
         }
         // Google Image fallback when poster still empty
