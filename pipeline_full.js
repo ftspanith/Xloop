@@ -734,6 +734,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           const newLanguageKnown = !!language && !/^(multi|unknown)$/i.test(language.trim());
           const languagesCompatible = !exLanguageKnown || !newLanguageKnown ||
             normalizeLanguages(ex.language) === normalizeLanguages(language);
+          if (!languagesCompatible) continue;
 
           // TIER 2 — Quality + size + codec + compatible audio language tracks.
           if (qualOk && sizeClose && codecOk && languagesCompatible) {
