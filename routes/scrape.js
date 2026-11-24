@@ -535,7 +535,9 @@ router.post('/telegram-sync/chunk', auth, express.json({ limit: '3mb' }), async 
         isRepack: item.isRepack === true,
         releaseType: item.isRepack === true || item.releaseType === 'repack' ? 'repack' : 'main',
         repackReason: allowedString(item.repackReason, 120),
-        uploadDate: allowedString(item.uploadDate || item.date, 100),
+        uploadDate: item.uploadDate == null
+          ? allowedString(item.date, 100)
+          : allowedString(String(item.uploadDate), 100),
         isIMAX: item.isIMAX === true,
         aspectRatio: allowedString(item.aspectRatio, 20),
         runtimeMinutes: item.runtimeMinutes == null || !Number.isFinite(Number(item.runtimeMinutes)) ? null : Number(item.runtimeMinutes),
