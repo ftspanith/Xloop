@@ -22,6 +22,9 @@ test('classifies one, two, and three-or-more named audio languages correctly', (
   assert.equal(classifyLanguages([], 'DUAL AUDIO').languageType, 'Dual');
   assert.equal(classifyLanguages([], 'MULTI AUDIO').languageType, 'Multi');
   assert.equal(classifyLanguages([], 'BILINGUAL').languageType, 'Dual');
+  const detectedDual = detectAllLanguages('Film.SPANISH.KOREAN.DUAL.AUDIO.mkv');
+  assert.equal(classifyLanguages(detectedDual).languageType, 'Dual');
+  assert.equal(classifyLanguages(detectAllLanguages('Film.SPANISH.KOREAN.MULTI.AUDIO.mkv')).languageType, 'Multi');
 });
 
 test('recognizes additional international download languages', () => {
