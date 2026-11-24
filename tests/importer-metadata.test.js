@@ -186,6 +186,13 @@ test('a later upload date alone does not turn an otherwise equal encode into a r
   assert.equal(inferRepackStatus(newer,[old]).isRepack,false);
 });
 
+test('importer enriches existing exact URLs instead of skipping repack metadata', () => {
+  assert.match(pipelineSource, /const duplicateIndex = \(dbRec\.downloads \|\| \[\]\)\.findIndex/);
+  assert.match(pipelineSource, /if \(newDl\.isRepack\) \{/);
+  assert.match(pipelineSource, /downloads\.\$\{duplicateIndex\}\.releaseType/);
+  assert.match(pipelineSource, /recomputeAggregates\(enriched\)/);
+});
+
 test('importer preserves releases with different language-track sets', () => {
   assert.match(pipelineSource, /if \(!languagesCompatible\) continue/);
   assert.match(pipelineSource, /normalizeLanguages\(ex\.language\) === normalizeLanguages\(language\)/);
