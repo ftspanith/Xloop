@@ -247,7 +247,7 @@ const CHAN_LANG = [
   {re:/tamil|kollywood/i,       lang:'Tamil'},
   {re:/hindi|bolly/i,           lang:'Hindi'},
   {re:/mallu|malayalam/i,       lang:'Malayalam'},
-  {re:/kannada|sandalwood/i,    lang:'Kannada'},
+  {re:/kannada|kanada|sandalwood/i, lang:'Kannada'},
   {re:/anime|manga|jpn/i,       lang:'Japanese'},
   {re:/korean|kdrama/i,         lang:'Korean'},
 ];
