@@ -297,19 +297,26 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     else if (codec && /av1/i.test(codec))               codec = 'AV1';
 
     // Normalize source labels in legacy rows and infer missing values from filenames.
-    let source = normalizeSourceLabel(dl.source) || normalizeSourceLabel(fn) || normalizeSourceLabel(tags);
+    let source = normalizeSourceLabel(fn) || normalizeSourceLabel(dl.source) || normalizeSourceLabel(tags);
 
     // Audio: DB-stored field first, then detect from filename
     let audio = dl.audio || '';
     if (!audio) {
-      if      (/\batmos\b/i.test(fn))           audio = 'ATMOS';
-      else if (/dts-hdma?/i.test(fn))           audio = 'DTS-HD';
-      else if (/\bdts\b/i.test(fn))             audio = 'DTS';
-      else if (/ddp5\.1|eac3|dd\+5\.1/i.test(fn)) audio = 'DDP5.1';
-      else if (/ddp2\.0|dd\+2/i.test(fn))      audio = 'DDP2.0';
-      else if (/dd5\.1|ac3/i.test(fn))         audio = 'DD5.1';
-      else if (/\baac\b/i.test(fn))            audio = 'AAC';
-      else if (/\bflac\b/i.test(fn))           audio = 'FLAC';
+      if (/truehd/i.test(fn)) audio = /\batmos\b/i.test(fn) ? 'TrueHD Atmos' : 'TrueHD';
+      else if (/dts[.\s_-]?x\b/i.test(fn)) audio = 'DTS:X';
+      else if (/dts[.\s_-]?hd[.\s_-]?ma/i.test(fn)) audio = 'DTS-HD MA';
+      else if (/dts[.\s_-]?hd/i.test(fn)) audio = 'DTS-HD';
+      else if (/\bdts\b/i.test(fn)) audio = 'DTS';
+      else if (/e[.\s_-]?ac[.\s_-]?3|\bddp|dd\+/i.test(fn)) audio = /\batmos\b/i.test(fn) ? 'EAC3 Atmos' : 'EAC3';
+      else if (/\bac[.\s_-]?3\b|\bdd5[.\s_-]?1|\bdd\b/i.test(fn)) audio = 'DD';
+      else if (/\bac[.\s_-]?4\b/i.test(fn)) audio = 'AC4';
+      else if (/\baac\b/i.test(fn)) audio = 'AAC';
+      else if (/\bflac\b/i.test(fn)) audio = 'FLAC';
+      else if (/\bopus\b/i.test(fn)) audio = 'Opus';
+      else if (/\balac\b/i.test(fn)) audio = 'ALAC';
+      else if (/\bpcm\b/i.test(fn)) audio = 'PCM';
+      else if (/\bvorbis\b/i.test(fn)) audio = 'Vorbis';
+      else if (/\bmp3\b/i.test(fn)) audio = 'MP3';
     }
 
     let platform = '';
@@ -363,6 +370,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       .replace(/^[\s+,&/·-]+|[\s+,&/·-]+$/g, '')
       .trim();
     if (visibleAudio) techParts.push(visibleAudio);
+    if (dl.audioChannels) techParts.push(dl.audioChannels);
     if (info.platform) techParts.push(info.platform);
     if (dl.isIMAX || /\bIMAX\b/i.test(dl.filename || '')) techParts.push('IMAX');
     if (dl.aspectRatio) techParts.push('AR ' + dl.aspectRatio);
