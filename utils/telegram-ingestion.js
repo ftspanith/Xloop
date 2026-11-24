@@ -1,41 +1,19 @@
 'use strict';
-const { parseMessageBlock, classifyUrl, isJunkTitle, normalizeGdflixUrl } = require('./parser');
+const { parseMessageBlock, classifyUrl, isJunkTitle, cleanTitleForApi, normalizeGdflixUrl, isKnownProviderHost } = require('./parser');
 
 const HOST_PRIORITY = ['GDFlix', 'HubCloud', 'TMBCloud'];
 
-// Only approved Telegram download providers are retained for extraction/upload.
-// Website links, generic direct-file URLs, shorteners and other hosts are rejected.
-const ALLOWED_PROVIDER_DOMAINS = {
-  GDFlix: [
-    'gdflix.dev', 'gdflix.to', 'gdflix.one', 'gdflix.link',
-    'gdflix.net', 'gdflix.dad', 'gdflix.cfd', 'gdflix.io',
-    'gdlink.dev', 'gdtot.dad', 'gdtot.one', 'gdtot.sbs',
-    'extralink.cfd', 'neolinks.sbs', 'gtlinks.me',
-  ],
-  HubCloud: [
-    'hubcloud.foo', 'hubcloud.one', 'hubcloud.art', 'hubcloud.cx',
-    'hubcloud.lol', 'hubcloud.bz', 'hubcloud.club', 'hubcloud.in',
-    'hubcloud.to', 'hubcloud.work', 'hubcloud.zone', 'hubcloud.dev',
-    'hubcloud.me', 'hubcloud.best',
-    'drivehub.dev', 'drivehub.to', 'drivehub.in', 'drivehub.online',
-  ],
-  TMBCloud: ['tmbcloud.dev', 'tmbcloud.online', 'tmbcloud.lol'],
-};
-const ALLOWED_PROVIDER_HOSTS = new Set(Object.keys(ALLOWED_PROVIDER_DOMAINS));
-
+// Only the three approved provider families are retained. The parser resolves
+// provider identity from the registrable host label, so new subdomains and TLD
+// rotations do not need a code change while unrelated hosts remain rejected.
 function isAllowedTelegramDownloadUrl(value) {
   let parsed;
   try { parsed = new URL(String(value || '').trim()); }
   catch (_) { return false; }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
-
   const category = classifyUrl(parsed.toString());
-  if (!ALLOWED_PROVIDER_HOSTS.has(category)) return false;
-
-  const hostname = parsed.hostname.toLowerCase().replace(/^www\./, '');
-  return ALLOWED_PROVIDER_DOMAINS[category].some((domain) =>
-    hostname === domain || hostname.endsWith('.' + domain)
-  );
+  return ['GDFlix', 'HubCloud', 'TMBCloud'].includes(category) &&
+    isKnownProviderHost(parsed.hostname);
 }
 const CDN_RE = [
   /\.(m3u8|ts|m4s)(\?|$)/i, /\/(image|img|thumbnail|poster|banner|cover)\//i,
@@ -117,8 +95,23 @@ function extractTelegramLinks(inputMessages, account = '1') {
     let parsed;
     try { parsed = parseMessageBlock(rawText, message.id, message.date || null); }
     catch (_) { skipped++; continue; }
-    if (!parsed || !Array.isArray(parsed.downloads) || !parsed.downloads.length ||
-        !parsed.title || isJunkTitle(parsed.title)) { skipped++; continue; }
+    if (!parsed || !Array.isArray(parsed.downloads) || !parsed.downloads.length) {
+      skipped++;
+      continue;
+    }
+
+    // A channel title line can be absent or noisy while a clean release title
+    // is still recoverable from the raw title / individual filenames.
+    const titleSources = [
+      parsed.title,
+      parsed.rawTitle,
+      ...parsed.downloads.map(download => download && download.filename),
+    ].filter(Boolean);
+    const recoveredTitle = titleSources
+      .map(value => cleanTitleForApi(value, parsed.year))
+      .find(value => value && value.length >= 2 && !isJunkTitle(value));
+    if (!recoveredTitle) { skipped++; continue; }
+    parsed.title = recoveredTitle;
     parsedMessages++;
     const singleFileRelease = parsed.downloads.length === 1 ? parsed.releaseType : '';
 

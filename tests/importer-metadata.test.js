@@ -9,6 +9,8 @@ const {
   parseMessageBlock,
   cleanTitleForApi,
   detectAudioChannels,
+  extractSize,
+  normalizeGdflixUrl,
 } = require('../utils/parser');
 const { buildTitleCandidates } = require('../utils/tmdbSearch');
 const { recomputeAggregates } = require('../pipeline_full');
@@ -132,4 +134,59 @@ test('catalogue importer applies cross-account ranking without breaking quality-
   assert.equal(doc.downloads[1].source, 'WEB-DL');
   assert.equal(doc.downloads[2].links[0].url, 'https://acc1/720p', 'quality-first order is retained');
   assert.equal(doc.downloads.length, 3, 'ranking keeps every variant');
+});
+
+
+test('extracts labelled, comma-formatted and binary file sizes', () => {
+  assert.equal(extractSize('File Size: 1,200 MB'), '1200MB');
+  assert.equal(extractSize('💾 Size - 2.45 GiB'), '2.45GB');
+  assert.equal(extractSize('Movie.1080p.5.75GB.mkv'), '5.75GB');
+  assert.equal(extractSize('[ 850 MiB ]'), '850MB');
+});
+
+test('recovers per-file sizes placed between filenames and download URLs', () => {
+  const parsed = parseMessageBlock([
+    'Example Film (2024)',
+    'Example.Film.2024.1080p.WEB-DL.mkv',
+    'File Size: 2.45 GB',
+    'https://new5.gdflix.xyz/file/size-one',
+    'Example.Film.2024.720p.WEB-DL.mkv',
+    '💾 1.1 GB',
+    'https://mirror.hubcloud.app/file/size-two',
+  ].join('\n'), 77, '2024-08-01');
+
+  assert.ok(parsed);
+  assert.equal(parsed.downloads.length, 2);
+  assert.equal(parsed.downloads[0].size, '2.45GB');
+  assert.equal(parsed.downloads[1].size, '1.1GB');
+  assert.equal(parsed.downloads[0].links[0].url, 'https://gdflix.dev/file/size-one');
+  assert.equal(parsed.downloads[1].links[0].url, 'https://hubcloud.one/file/size-two');
+});
+
+test('provider normalization handles new subdomains and TLD rotations safely', () => {
+  assert.equal(
+    normalizeGdflixUrl('https://edge.new5.gdflix.xyz/file/abc?token=1'),
+    'https://gdflix.dev/file/abc?token=1'
+  );
+  assert.equal(
+    normalizeGdflixUrl('https://mirror.tmbcloud.cloud/dl/abc'),
+    'https://tmbcloud.dev/dl/abc'
+  );
+  assert.equal(
+    normalizeGdflixUrl('https://www.example.com/file/abc'),
+    'https://www.example.com/file/abc'
+  );
+});
+
+test('recovers a labelled size placed immediately before its filename', () => {
+  const parsed = parseMessageBlock([
+    'Another Film (2022)',
+    'Size: 3.25 GB',
+    'Another.Film.2022.1080p.BluRay.mkv',
+    'https://node.gdflix.xyz/file/size-before',
+  ].join('\n'), 78, '2022-10-01');
+
+  assert.ok(parsed);
+  assert.equal(parsed.downloads[0].size, '3.25GB');
+  assert.equal(parsed.downloads[0].filename, 'Another.Film.2022.1080p.BluRay.mkv');
 });

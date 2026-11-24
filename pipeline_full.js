@@ -34,7 +34,7 @@ const {
   cleanTitleForApi, detectHost, detectCodec, detectHDR, extractAudio,
   detectBitDepth, detectAudioChannels, detectSource, detectContainer,
   normalizeQuality, extractSize, detectAllLanguages, extractSeasonEpisode,
-  classifyLanguages, extractMediaMetadata,
+  classifyLanguages, extractMediaMetadata, normalizeGdflixUrl, isJunkTitle,
 } = require('./utils/parser');
 const sharedMetadataSearch = require('./utils/tmdbSearch');
 const { analyzeVariantSet, rankVariantsForDisplay } = require('./utils/variant-intelligence');
@@ -73,28 +73,11 @@ const sep  = ()  => _emitter('─'.repeat(64));
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// ── Canonical URL normalizer ──────────────────────────────────────────────────
-// All GDFlix mirrors → gdflix.dev  |  All HubCloud mirrors → hubcloud.one
-// Preserves the full path + query string so the link still works.
-const GDFLIX_RE    = /^https?:\/\/gdflix\.(dev|to|one|link|net|dad|cfd|xyz)/i;
-const GDLINK_RE    = /^https?:\/\/gdlink\.dev/i;
-const HUBCLOUD_RE  = /^https?:\/\/hubcloud\.(foo|one|art|cx|lol|bz|club|in|to|work|zone|dev|me|best)/i;
-const DRIVEHUB_RE  = /^https?:\/\/drivehub\.(dev|to|in|online)/i;
-
+// ── Shared provider URL normalizer ──────────────────────────────────────────
+// Use the same provider resolver as Telegram ingestion so TLD rotations,
+// subdomains and aliases are handled consistently in both stages.
 function normalizeUrl(url) {
-  if (!url) return url;
-  try {
-    const parsed = new URL(url);
-    // GDFlix family → gdflix.dev
-    if (GDFLIX_RE.test(url) || GDLINK_RE.test(url)) {
-      return `https://gdflix.dev${parsed.pathname}${parsed.search}`;
-    }
-    // HubCloud / DriveHub family → hubcloud.one
-    if (HUBCLOUD_RE.test(url) || DRIVEHUB_RE.test(url)) {
-      return `https://hubcloud.one${parsed.pathname}${parsed.search}`;
-    }
-  } catch (_) {}
-  return url;
+  return normalizeGdflixUrl(url);
 }
 
 // Only accept these as valid bypassed direct URLs (reliable cloud hosts only)
@@ -540,7 +523,24 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       _emitter(`[VARIANT] "${rep.title}": ${variantAnalysis.nearDuplicates.length} possible near-duplicate group(s) flagged for review; no variants removed.`);
     }
 
-    let cleanTitle = cleanTitleForApi(rep.title || '', rep.year);
+    const titleSources = [
+      rep.title,
+      rep.rawTitle,
+      ...group.items.map(item => item.filename),
+    ].filter(Boolean);
+    let cleanTitle = '';
+    let searchTitle = rep.rawTitle || rep.title || '';
+    for (const source of titleSources) {
+      const candidate = cleanTitleForApi(source, rep.year);
+      if (candidate && candidate.length >= 2 && !isJunkTitle(candidate)) {
+        cleanTitle = candidate;
+        if (!searchTitle || isJunkTitle(searchTitle)) searchTitle = source;
+        break;
+      }
+    }
+    if (cleanTitle && (!searchTitle || isJunkTitle(cleanTitleForApi(searchTitle, rep.year)))) {
+      searchTitle = cleanTitle;
+    }
 
     const esc = (cleanTitle || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     let existing = null;
@@ -577,7 +577,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
 
     if (cleanTitle && needsMetadata) {
       const tmdb = await searchTMDB(
-        rep.rawTitle || rep.title || cleanTitle, rep.year, isSer, rep.season, group.msgDate,
+        searchTitle || cleanTitle, rep.year, isSer, rep.season, group.msgDate,
         rep.imdbId || null, rep.tmdbIdHint || null
       );
       if (tmdb) {
