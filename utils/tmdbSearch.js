@@ -452,7 +452,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       // selected season's actual TMDB air date. This distinguishes same-title
       // remakes and avoids penalizing later seasons against the series premiere.
       if (isSeries && season && seasonYearHints.length) {
-        const seasonCandidates = scored.filter(item => item.isTvCandidate).slice(0, 8);
+        const seasonCandidates = scored.filter(item => item.isTvCandidate).slice(0, 5);
         await Promise.all(seasonCandidates.map(async item => {
           const seasonData = await fetchSeasonData(item.r.id, season, true);
           if (!seasonData.seasonYear) return;
@@ -571,7 +571,7 @@ async function searchOMDB(title, year, isSeries, omdbKey, options = {}) {
       // A filename year inside that range is a valid season match, even though
       // the parent card must retain the first-air year.
       const insideSeriesRun = isSeries && omdbYears.length > 1 &&
-        yearHints.some(hint => hint >= omdbYears[0] && hint <= omdbYears[omdbYears.length - 1]);
+        yearHints.some(hint => hint >= omdbYears[0] - 2 && hint <= omdbYears[omdbYears.length - 1] + 2);
       if (yearDiff != null && yearDiff > (isSeries ? 5 : 3) && !insideSeriesRun) return null;
       return {
         imdbId:      d.imdbID || '',
