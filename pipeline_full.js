@@ -872,16 +872,23 @@ async function main(opts = {}) {
   // opts.noWipe, opts.noHeal, opts.noBypass, opts.resume, opts.concurrency, opts.importSrc, opts.emitter
   if (opts.emitter) _emitter = opts.emitter;
 
-  const NO_WIPE     = opts.noWipe     !== undefined ? opts.noWipe     : _argv.includes('--no-wipe');
-  const NO_HEAL     = opts.noHeal     !== undefined ? opts.noHeal     : _argv.includes('--no-heal');
-  const NO_BYPASS   = opts.noBypass   !== undefined ? opts.noBypass   : _argv.includes('--no-bypass');
+  const FROM_MONGODB = opts.fromMongoDB !== undefined ? !!opts.fromMongoDB : _argv.includes('--from-mongodb');
+  // The dedicated MongoDB importer is deliberately read-only with respect to
+  // the source collection: it never wipes, scrapes, bypasses, or runs the healer.
+  const NO_WIPE     = FROM_MONGODB ? true : (opts.noWipe !== undefined ? opts.noWipe : _argv.includes('--no-wipe'));
+  const NO_HEAL     = FROM_MONGODB ? true : (opts.noHeal !== undefined ? opts.noHeal : _argv.includes('--no-heal'));
+  const NO_BYPASS   = FROM_MONGODB ? true : (opts.noBypass !== undefined ? opts.noBypass : _argv.includes('--no-bypass'));
   const RESUME      = opts.resume     !== undefined ? opts.resume     : _argv.includes('--resume');
   const CONCURRENCY = opts.concurrency || parseInt((_argv.find(a => a.startsWith('--concurrency=')) || '').replace('--concurrency=', '') || '3', 10);
   const IMPORT_SRC  = opts.importSrc  || (_argv.find(a => a.startsWith('--import-source=')) || '').replace('--import-source=', '') || null;
   const IS_STOP_REQUESTED = opts.isStopRequested || (() => false);
 
+  if (FROM_MONGODB && IMPORT_SRC) {
+    throw new Error('--from-mongodb cannot be combined with --import-source; choose one source.');
+  }
+
   const t0 = Date.now();
-  log('XLOOP ─ UNIFIED BYPASS + IMPORT PIPELINE');
+  log(FROM_MONGODB ? 'XLOOP ─ DIRECT MONGODB IMPORT' : 'XLOOP ─ UNIFIED BYPASS + IMPORT PIPELINE');
 
   if (!TMDB_KEY) warn('TMDB_API_KEY not set — posters will be blank!');
   if (!process.env.MONGODB_URI) warn('MONGODB_URI not set — defaulting to localhost');
@@ -936,9 +943,45 @@ async function main(opts = {}) {
     warn('STEP 0 — Skipping wipe (--no-wipe)');
   }
 
-  // STEP 1: Extract
+  // STEP 1: Extract / load existing source
   sep();
-  if (!IMPORT_SRC) {
+  if (FROM_MONGODB) {
+    log('STEP 1 — Reading existing approved links directly from MongoDB ExtractedLink...');
+    try {
+      const ExtractedLink = require('./models/ExtractedLink');
+      const PipelineCache = require('./models/PipelineCache');
+      const { isAllowedTelegramDownloadUrl } = require('./utils/telegram-ingestion');
+      const storedLinks = await ExtractedLink.find({}).lean();
+      if (!storedLinks.length) {
+        fail('MongoDB ExtractedLink collection is empty. Nothing to import.');
+        throw new Error('No extracted links found in MongoDB');
+      }
+
+      const approvedLinks = storedLinks.filter((entry) =>
+        isAllowedTelegramDownloadUrl(entry && entry.url)
+      );
+      const rejectedCount = storedLinks.length - approvedLinks.length;
+      if (!approvedLinks.length) {
+        fail('No approved GDFlix, HubCloud or TMBCloud links found in MongoDB. Existing catalogue was preserved.');
+        throw new Error('No approved provider links found in MongoDB');
+      }
+
+      const clean = approvedLinks.map(({ _id, __v, uploadBatch, createdAt, updatedAt, ...rest }) => rest);
+      // Force-refresh the local working file from MongoDB; never trust an older
+      // links_for_bypasser.json, telegram_export.json, or shortlinks report.
+      fs.writeFileSync(LINKS_FILE, JSON.stringify(clean));
+      ok(`Loaded ${clean.length} approved links directly from MongoDB (rejected ${rejectedCount} unsupported links).`);
+      await PipelineCache.findOneAndUpdate(
+        { key: 'extracted_links' },
+        { $set: { count: storedLinks.length, 'data.count': storedLinks.length } },
+        { upsert: false }
+      );
+    } catch (err) {
+      if (/No extracted links found|No approved provider links/.test(err.message)) throw err;
+      fail(`MongoDB import source read failed: ${err.message}`);
+      throw err;
+    }
+  } else if (!IMPORT_SRC) {
     // Check if already-extracted links are in /tmp (same Lambda invocation as upload)
     if (fs.existsSync(LINKS_FILE)) {
       warn('STEP 1 — Using pre-extracted links_for_bypasser.json from /tmp');
@@ -1014,17 +1057,17 @@ async function main(opts = {}) {
         throw err;
       }
     }
+
   } else {
     warn(`STEP 1 — Using existing file: ${IMPORT_SRC}`);
   }
-
   // Merge all entries (direct + shortlinks from separate file)
   const sourceFile = IMPORT_SRC || LINKS_FILE;
   if (!fs.existsSync(sourceFile)) { fail(`Source file not found: ${sourceFile}`); throw new Error(`Source file not found: ${sourceFile}`); }
   let allEntries = JSON.parse(fs.readFileSync(sourceFile, 'utf8'));
 
   // Pull in shortlinks from shortlinks_report.json
-  if (!IMPORT_SRC && fs.existsSync(SHORTLINKS_FILE)) {
+  if (!IMPORT_SRC && !FROM_MONGODB && fs.existsSync(SHORTLINKS_FILE)) {
     const shortlinkData = JSON.parse(fs.readFileSync(SHORTLINKS_FILE, 'utf8'));
     if (shortlinkData.length > 0) {
       log(`Merging ${shortlinkData.length} shortlinks from shortlinks_report.json`);
@@ -1033,12 +1076,13 @@ async function main(opts = {}) {
     }
   }
 
-  const existingBypassed = fs.existsSync(BYPASSED_FILE) ? JSON.parse(fs.readFileSync(BYPASSED_FILE, 'utf8')) : [];
+  const existingBypassed = !FROM_MONGODB && fs.existsSync(BYPASSED_FILE) ? JSON.parse(fs.readFileSync(BYPASSED_FILE, 'utf8')) : [];
 
   log(`Total entries: ${allEntries.length} | Direct: ${allEntries.filter(e => e.host !== 'Shortlink').length} | Shortlinks: ${allEntries.filter(e => e.host === 'Shortlink').length} | Prev bypassed: ${existingBypassed.length}`);
 
   // STEP 2: Bypass
   sep();
+  if (FROM_MONGODB) log('MongoDB-only import mode: scraper, uploader, bypasser, and healer are disabled.');
   if (!NO_BYPASS) {
     log(`STEP 2 — Bypassing shortlinks (concurrency=${CONCURRENCY})...`);
     await phaseBypass(allEntries, existingBypassed, CONCURRENCY, IS_STOP_REQUESTED);
