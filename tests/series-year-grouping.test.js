@@ -95,6 +95,10 @@ test('legacy year-split series documents merge seasons, packs, and their downloa
   assert.deepEqual(merged.seasonYears, { s1: 2018, s4: 2022 });
   assert.equal(merged._groupedDocumentCount, 2);
   assert.deepEqual(merged.downloads.map(file => file.season).sort((a, b) => a - b), [1, 4]);
+  const seasonPack = merged.downloads.find(file => file.season === 1);
+  const seasonFourEpisode = merged.downloads.find(file => file.season === 4);
+  assert.deepEqual(seasonPack.links.map(link => link.url), ['https://gdflix.dev/file/s1-pack']);
+  assert.deepEqual(seasonFourEpisode.links.map(link => link.url), ['https://hubcloud.one/file/s4-e1']);
 });
 
 test('series and anime classification variants with the same TMDB id still produce one parent card', () => {
@@ -120,6 +124,11 @@ test('series and anime classification variants with the same TMDB id still produ
   assert.equal(grouped.length, 1);
   assert.equal(grouped[0].type, 'anime');
   assert.equal(grouped[0].downloads.length, 2);
+  const animeUrls = grouped[0].downloads.flatMap(file => file.links.map(link => link.url)).sort();
+  assert.deepEqual(animeUrls, [
+    'https://gdflix.dev/file/ep1',
+    'https://gdflix.dev/file/ep2',
+  ]);
 });
 
 
