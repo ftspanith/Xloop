@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const axios = require('axios');
-const { buildTitleCandidates, stringSimilarity, searchTMDB } = require('../utils/tmdbSearch');
+const { buildTitleCandidates, stringSimilarity, searchTMDB, searchOMDB } = require('../utils/tmdbSearch');
 
 test('shared title engine includes sequel, Roman numeral and spelling variants', () => {
   const pushpa = buildTitleCandidates('Pushpa 2 The Rule', 'Pushpa 2 The Rule', 2024);
@@ -139,6 +139,58 @@ test('long fuzzy titles still require a strong title match and a nearby release 
       tmdbKey: 'test-key', messageYear: 2010, yearHints: [2010],
     });
     assert.equal(result, null);
+  } finally {
+    axios.get = originalGet;
+  }
+});
+
+test('OMDb refuses a same-name movie when its year conflicts with the explicit title year', async () => {
+  const originalGet = axios.get;
+  const calls = [];
+  axios.get = async (url, config = {}) => {
+    calls.push({ url, params: config.params || {} });
+    return { data: {
+      Response: 'True', Title: 'Robo', Year: '2019', imdbID: 'tt2019000',
+      Poster: 'https://example.invalid/robo-2019.jpg', Type: 'movie',
+    } };
+  };
+
+  try {
+    const result = await searchOMDB('Robo', 2010, false, 'test-key', { yearHints: [2010, 2019] });
+    assert.equal(result, null);
+    assert.ok(calls.every(call => call.params.y === 2010 || call.params.y === undefined));
+  } finally {
+    axios.get = originalGet;
+  }
+});
+
+test('OMDb does not treat a short different canonical title as an alias without TMDB verification', async () => {
+  const originalGet = axios.get;
+  axios.get = async () => ({ data: {
+    Response: 'True', Title: 'Enthiran', Year: '2010', imdbID: 'tt1305797',
+    Poster: 'https://example.invalid/enthiran.jpg', Type: 'movie',
+  } });
+
+  try {
+    const result = await searchOMDB('Robo', 2010, false, 'test-key', { yearHints: [2010] });
+    assert.equal(result, null);
+  } finally {
+    axios.get = originalGet;
+  }
+});
+
+test('OMDb accepts the exact title when both title and year agree', async () => {
+  const originalGet = axios.get;
+  axios.get = async () => ({ data: {
+    Response: 'True', Title: 'Robo', Year: '2010', imdbID: 'tt2010000',
+    Poster: 'https://example.invalid/robo-2010.jpg', Type: 'movie',
+  } });
+
+  try {
+    const result = await searchOMDB('Robo', 2010, false, 'test-key', { yearHints: [2010] });
+    assert.ok(result);
+    assert.equal(result.title, 'Robo');
+    assert.equal(result.year, 2010);
   } finally {
     axios.get = originalGet;
   }
