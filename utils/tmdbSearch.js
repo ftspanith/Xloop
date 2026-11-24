@@ -652,8 +652,10 @@ async function searchOMDB(title, year, isSeries, omdbKey, options = {}) {
     const n = Number(value);
     return Number.isInteger(n) && n >= 1900 && n <= 2099 ? n : null;
   };
-  const yearHints = [...new Set([year, ...(Array.isArray(options.yearHints) ? options.yearHints : [])]
+  const primaryYear = validYear(year);
+  const yearHints = [...new Set([primaryYear, ...(Array.isArray(options.yearHints) ? options.yearHints : [])]
     .map(validYear).filter(Boolean))];
+  const compactTitle = normalizeMatchTitle(cleanTitle).replace(/\s+/g, '');
 
   async function omdbFetch(t, queryYear) {
     return fetchWithRetry(async () => {
@@ -661,29 +663,40 @@ async function searchOMDB(title, year, isSeries, omdbKey, options = {}) {
       if (queryYear) params.y = queryYear;
       const res = await axios.get('https://www.omdbapi.com/', { params, timeout: 10000 });
       const d = res.data;
-      if (!d || d.Response === 'False') return null;
+      if (!d || d.Response === 'False' || !d.Title) return null;
+
+      const returnedTitle = String(d.Title || '');
+      const titleSimilarity = stringSimilarity(cleanTitle, returnedTitle);
+      const exactTitle = normalizeMatchTitle(cleanTitle) === normalizeMatchTitle(returnedTitle);
+      // OMDb has no reliable cross-language alternative-title list. Never
+      // attach a different canonical title's poster or IMDb ID by fuzzy guess.
+      const titleMatches = compactTitle.length <= 4 ? exactTitle : (exactTitle || titleSimilarity >= 0.86);
+      if (!titleMatches) return null;
+
       const yearText = String(d.Year || '');
       const omdbYears = (yearText.match(/19\d{2}|20\d{2}/g) || []).map(Number);
       const omdbYear = omdbYears[0] || null;
-      const yearDiff = omdbYear && yearHints.length
-        ? Math.min(...yearHints.map(hint => Math.abs(hint - omdbYear)))
-        : null;
-      // IMDb often returns a series' complete run as "2018–2024".
-      // A filename year inside that range is a valid season match, even though
-      // the parent card must retain the first-air year.
+      const yearDiff = primaryYear && omdbYear
+        ? Math.abs(primaryYear - omdbYear)
+        : (omdbYear && yearHints.length
+          ? Math.min(...yearHints.map(hint => Math.abs(hint - omdbYear)))
+          : null);
       const insideSeriesRun = isSeries && omdbYears.length > 1 &&
         yearHints.some(hint => hint >= omdbYears[0] - 2 && hint <= omdbYears[omdbYears.length - 1] + 2);
-      if (yearDiff != null && yearDiff > (isSeries ? 5 : 3) && !insideSeriesRun) return null;
+      if (primaryYear && !omdbYear) return null;
+      if (yearDiff != null && yearDiff > (isSeries ? 5 : 2) && !insideSeriesRun) return null;
+
+      const runtimeMinutes = parseInt(d.Runtime, 10);
       return {
-        imdbId:      d.imdbID || '',
-        title:       d.Title || title,
+        imdbId: d.imdbID || '',
+        title: d.Title || title,
         description: d.Plot && d.Plot !== 'N/A' ? d.Plot : '',
-        poster:      d.Poster && d.Poster !== 'N/A' ? d.Poster : '',
-        rating:      d.imdbRating && d.imdbRating !== 'N/A' ? parseFloat(d.imdbRating) : 0,
-        year:        omdbYear || yearHints[0] || null,
-        genre:       d.Genre && d.Genre !== 'N/A' ? d.Genre.split(', ') : [],
-        duration:    d.Runtime && d.Runtime !== 'N/A'
-          ? (() => { const m = parseInt(d.Runtime); return `${Math.floor(m/60)}h ${m%60}m`; })()
+        poster: d.Poster && d.Poster !== 'N/A' ? d.Poster : '',
+        rating: d.imdbRating && d.imdbRating !== 'N/A' ? parseFloat(d.imdbRating) : 0,
+        year: omdbYear || primaryYear || yearHints[0] || null,
+        genre: d.Genre && d.Genre !== 'N/A' ? d.Genre.split(', ') : [],
+        duration: d.Runtime && d.Runtime !== 'N/A' && Number.isFinite(runtimeMinutes)
+          ? (Math.floor(runtimeMinutes / 60) + 'h ' + (runtimeMinutes % 60) + 'm')
           : '',
         type: d.Type === 'series' ? 'series' : 'movie',
         originalLanguage: '',
@@ -692,7 +705,10 @@ async function searchOMDB(title, year, isSeries, omdbKey, options = {}) {
   }
 
   const candidates = [cleanTitle, title].filter((value, index, all) => value && all.indexOf(value) === index);
-  const queryYears = yearHints.length ? yearHints : [null];
+  const usableYears = primaryYear
+    ? [primaryYear, ...yearHints.filter(value => value !== primaryYear && Math.abs(value - primaryYear) <= 2)]
+    : yearHints;
+  const queryYears = usableYears.length ? usableYears : [null];
   for (const candidate of candidates) {
     for (const queryYear of [...queryYears, null]) {
       const result = await omdbFetch(candidate, queryYear);
@@ -701,5 +717,4 @@ async function searchOMDB(title, year, isSeries, omdbKey, options = {}) {
   }
   return null;
 }
-
 module.exports = { buildTitleCandidates, searchTMDB, searchOMDB, stringSimilarity };
