@@ -85,7 +85,7 @@ app.use('/api/', (req, res, next) => {
   res.json = function (body) {
     const status = res.statusCode;
     const existingCacheControl = String(res.getHeader('Cache-Control') || '');
-    const explicitlyNoStore = /\\bno-store\\b/i.test(existingCacheControl);
+    const explicitlyNoStore = existingCacheControl.toLowerCase().includes('no-store');
 
     if (status >= 200 && status < 300 && !explicitlyNoStore) {
       res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=30, stale-while-revalidate=120');
