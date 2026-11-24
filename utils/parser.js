@@ -1075,6 +1075,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   //   Also look forward: consecutive URLs after this one share the same filename slot.
   const pairs=[];
   const processedUrlIdx=new Set(); // avoid double-processing URLs in forward scan
+  const consumedSizeLineIdx=new Set(); // post-URL sizes belong to the preceding file
 
   for (let i=0;i<lines.length;i++) {
     if (processedUrlIdx.has(i)) continue;
@@ -1094,7 +1095,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const scanStart = Math.max(0, j - 14);
     for (let scan=j; scan>=scanStart; scan--) {
       const candidate = lines[scan];
-      if (!fsz && isSizeLine(candidate)) fsz = extractSizeFromMeta(candidate);
+      if (!fsz && isSizeLine(candidate) && !consumedSizeLineIdx.has(scan)) fsz = extractSizeFromMeta(candidate);
       // A standalone size line also satisfies the broad "file descriptor"
       // heuristic (because it contains GB/MB); never let it replace filename.
       if (isSizeLine(candidate)) continue;
@@ -1118,14 +1119,17 @@ function parseMessageBlock(rawText, messageId, msgDate) {
       if (fnLineIdx >= 0) {
         // Some channels place the size label just before the filename.
         for (let scan=fnLineIdx - 1; scan >= Math.max(0, fnLineIdx - 8); scan--) {
+          if (isUrl(lines[scan]) || isFileDesc(lines[scan])) break;
+          if (consumedSizeLineIdx.has(scan)) continue;
           if (isSizeLine(lines[scan])) { fsz = extractSizeFromMeta(lines[scan]); if (fsz) break; }
           if (!isMetadataLine(lines[scan])) break;
         }
         // Other channels place it after the filename and before the URL.
         if (!fsz) {
           for (let scan=fnLineIdx + 1; scan < i; scan++) {
-            if (isSizeLine(lines[scan])) { fsz = extractSizeFromMeta(lines[scan]); if (fsz) break; }
             if (isUrl(lines[scan])) break;
+            if (consumedSizeLineIdx.has(scan)) continue;
+            if (isSizeLine(lines[scan])) { fsz = extractSizeFromMeta(lines[scan]); if (fsz) break; }
           }
         }
       }
@@ -1134,7 +1138,11 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     // next filename so one quality variant cannot inherit another's size.
     if (!fsz) {
       for (let scan=i + 1; scan < Math.min(lines.length, i + 10); scan++) {
-        if (isSizeLine(lines[scan])) { fsz = extractSizeFromMeta(lines[scan]); if (fsz) break; }
+        if (isSizeLine(lines[scan])) {
+          fsz = extractSizeFromMeta(lines[scan]);
+          if (fsz) consumedSizeLineIdx.add(scan);
+          if (fsz) break;
+        }
         if (isFileDesc(lines[scan])) break;
       }
     }
