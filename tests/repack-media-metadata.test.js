@@ -123,6 +123,20 @@ test('repack-first ranking preserves every main and repack variant', () => {
   assert.equal(ranked.length, 2);
 });
 
+test('newest repack upload ranks ahead of older repacks without deleting either', () => {
+  const ranked = rankVariantsForDisplay([
+    { title: 'Example Film', quality: '1080p', size: '5.2 GB', isRepack: true, releaseType: 'Repack', sourceDate: '2024-01-01', url: 'https://x/old-repack' },
+    { title: 'Example Film', quality: '1080p', size: '2.4 GB', isRepack: true, releaseType: 'Repack', sourceDate: '2025-02-01', url: 'https://x/new-repack' },
+    { title: 'Example Film', quality: '1080p', size: '6.1 GB', sourceDate: '2023-01-01', url: 'https://x/main' },
+  ]);
+
+  assert.deepEqual(ranked.map(item => item.url), [
+    'https://x/new-repack',
+    'https://x/old-repack',
+    'https://x/main',
+  ]);
+  assert.equal(ranked.length, 3);
+});
 test('import matching keeps repack and main releases in separate download groups', () => {
   const root = path.join(__dirname, '..');
   const pipeline = fs.readFileSync(path.join(root, 'pipeline_full.js'), 'utf8');
@@ -138,4 +152,5 @@ test('import matching keeps repack and main releases in separate download groups
   assert.match(extractedSchema, /runtimeMinutes:\s+\{ type: Number/);
   assert.match(pipeline, /isRepack: !!dl\.isRepack/);
   assert.match(watch, /title="Repack release">REPACK/);
+  assert.match(watch, /Telegram message date/);
 });
