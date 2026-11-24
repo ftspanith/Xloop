@@ -284,7 +284,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   };
   const yearCompatible = value => {
     const actualYear = dateYear(value);
-    return !hintYear || !actualYear || Math.abs(hintYear - actualYear) <= maxYearDifference;
+    return !hintYear || (!!actualYear && Math.abs(hintYear - actualYear) <= maxYearDifference);
   };
   // Filename years belong to individual TV seasons; compare them against
   // TMDB's season air_date, never against the show's first_air_date.
@@ -575,21 +575,35 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     });
   }
 
+  function buildSearchParams(endpoint, query, searchYear, label) {
+    const params = { query, _algo: label };
+    if (searchYear) {
+      if (endpoint === 'movie') {
+        params.year = searchYear;
+        params.primary_release_year = searchYear;
+        params.region = 'IN';
+      } else if (endpoint === 'tv') {
+        params.first_air_date_year = searchYear;
+      }
+    }
+    return params;
+  }
+
   // ── Phase 1: Strict thresholds — all 14 candidate algorithms ────────────────
   for (let i = 0; i < candidates.length; i++) {
     const q     = candidates[i];
     const label = `A${i + 1}`;
     const strats = [];
-    if (hintYear) strats.push({ ep: typeEp,  params: { query: q, year: hintYear, _algo: label } });
+    if (hintYear) strats.push({ ep: typeEp, params: buildSearchParams(typeEp, q, hintYear, label) });
     // A distinct filename year is a fallback search hint, but for a TV series
     // it is not treated as the show's premiere year by the scorer.
     const alternateSearchYear = !isSeries
-      ? yearHints.find(candidate => candidate !== hintYear)
-      : (!options.messageYear && hintYear ? null : yearHints.find(candidate => candidate !== hintYear));
-    if (alternateSearchYear) strats.push({ ep: typeEp, params: { query: q, year: alternateSearchYear, _algo: label } });
+      ? yearHints.find(candidate => candidate !== hintYear && Math.abs(candidate - hintYear) <= maxYearDifference)
+      : (!options.messageYear && hintYear ? null : yearHints.find(candidate => candidate !== hintYear && (!hintYear || Math.abs(candidate - hintYear) <= maxYearDifference)));
+    if (alternateSearchYear) strats.push({ ep: typeEp, params: buildSearchParams(typeEp, q, alternateSearchYear, label) });
     strats.push(          { ep: typeEp,  params: { query: q, _algo: label } });
     strats.push(          { ep: 'multi', params: { query: q, _algo: label } });
-    if (hintYear) strats.push({ ep: otherEp, params: { query: q, year: hintYear, _algo: label } });
+    if (hintYear) strats.push({ ep: otherEp, params: buildSearchParams(otherEp, q, hintYear, label) });
     strats.push(          { ep: otherEp, params: { query: q, _algo: label } });
 
     for (const { ep, params } of strats) {
@@ -606,13 +620,13 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     const q     = candidates[i];
     const label = `R${i + 1}`;
     const strats = [
-      { ep: typeEp,  params: { query: q, ...(hintYear ? { year: hintYear } : {}), _algo: label } },
-      ...(!isSeries && yearHints.some(candidate => candidate !== hintYear)
-        ? [{ ep: typeEp, params: { query: q, year: yearHints.find(candidate => candidate !== hintYear), _algo: label } }]
+      { ep: typeEp,  params: buildSearchParams(typeEp, q, hintYear, label) },
+      ...(!isSeries && yearHints.some(candidate => candidate !== hintYear && (!hintYear || Math.abs(candidate - hintYear) <= maxYearDifference))
+        ? [{ ep: typeEp, params: buildSearchParams(typeEp, q, yearHints.find(candidate => candidate !== hintYear && (!hintYear || Math.abs(candidate - hintYear) <= maxYearDifference)), label) }]
         : []),
       { ep: typeEp,  params: { query: q, _algo: label } },
       { ep: 'multi', params: { query: q, _algo: label } },
-      { ep: otherEp, params: { query: q, ...(hintYear ? { year: hintYear } : {}), _algo: label } },
+      { ep: otherEp, params: buildSearchParams(otherEp, q, hintYear, label) },
       { ep: otherEp, params: { query: q, _algo: label } },
     ];
     for (const { ep, params } of strats) {
