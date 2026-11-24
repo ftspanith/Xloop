@@ -10,6 +10,7 @@ const {
   extractTelegramLinks,
   isAllowedTelegramDownloadUrl,
 } = require('../utils/telegram-ingestion');
+const { classifyUrl: classifyUrlForTest } = require('../utils/parser');
 
 test('dedupes overlapping Telegram exports by channel and message id', () => {
   const messages = [
@@ -101,4 +102,27 @@ test('shared Telegram extraction retains approved providers and rejects all othe
   assert.deepEqual(new Set(result.links.map((link) => link.host)), new Set(['GDFlix', 'HubCloud', 'TMBCloud']));
   assert.equal(result.links.length, 3);
   assert.equal(result.stats.rejectedLinks, 2);
+});
+
+
+test('allowlist and normalizer accept provider subdomains on rotated TLDs', () => {
+  const examples = [
+    ['https://edge.gdflix.xyz/file/abc', 'GDFlix', 'https://gdflix.dev/file/abc'],
+    ['https://mirror.hubcloud.app/file/abc', 'HubCloud', 'https://hubcloud.one/file/abc'],
+    ['https://cdn.tmbcloud.cloud/file/abc', 'TMBCloud', 'https://tmbcloud.dev/file/abc'],
+  ];
+  for (const [url, host, normalized] of examples) {
+    assert.equal(isAllowedTelegramDownloadUrl(url), true, url);
+    assert.equal(classifyUrlForTest(url), host, url);
+    assert.equal(normalizeTelegramUrl(url), normalized, url);
+  }
+});
+
+test('provider matching does not accept lookalike unrelated hostnames', () => {
+  const rejected = [
+    'https://notgdflix.example.com/file/abc',
+    'https://gdflix.example.com/file/abc',
+    'https://hubcloud.example.com/file/abc',
+  ];
+  for (const url of rejected) assert.equal(isAllowedTelegramDownloadUrl(url), false, url);
 });
