@@ -91,7 +91,10 @@ function scoreVariant(item) {
   const hdr = add('HDR / Dolby Vision', hdrScore(item.hdr || item.filename));
   const audio = add('audio format', audioScore(item.audio || item.filename));
   const completeness = completenessScore(item);
-  return { ...item, qualityScore: source + resolution + codec + hdr + audio + completeness, scoreBreakdown: {source,resolution,codec,hdr,audio,completeness}, scoreReasons: reasons };
+  const cinema = (item.isIMAX ? 3 : 0) + (item.aspectRatio ? 1 : 0) + (item.runtimeMinutes ? 1 : 0);
+  if (cinema) reasons.push('cinema metadata');
+  return { ...item, qualityScore: source + resolution + codec + hdr + audio + completeness + cinema,
+    scoreBreakdown: {source,resolution,codec,hdr,audio,completeness,cinema}, scoreReasons: reasons };
 }
 
 function nearDuplicateGroups(items, tolerance = 0.01) {
@@ -152,35 +155,82 @@ function analyzeVariantSet(downloads = [], options = {}) {
 
 
 /**
- * Display ordering for combined results from every selected Telegram account.
- * Size establishes the global order; releases within an 8% size window are
- * re-ordered by the existing format/quality score. No link is removed.
+ * Parse Telegram upload dates (ISO strings, Unix seconds or milliseconds).
+ */
+function uploadTimestamp(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number' || /^\d{10,13}$/.test(String(value).trim())) {
+    const n = Number(value);
+    const ms = String(Math.trunc(n)).length <= 10 ? n * 1000 : n;
+    return Number.isFinite(ms) ? ms : null;
+  }
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * A repack can be explicit in the release name, or inferred only when a later
+ * upload improves the technical score over an earlier matching release.
+ * Caller supplies variants from the already matched Movie/episode record.
+ */
+function inferRepackStatus(candidate, existingVariants = []) {
+  if (candidate?.isRepack || /^repack$/i.test(candidate?.releaseType || '')) {
+    return {
+      isRepack: true,
+      releaseType: 'repack',
+      repackReason: candidate.repackReason || 'Explicit repack marker',
+    };
+  }
+  const candidateDate = uploadTimestamp(candidate?.uploadDate || candidate?.date);
+  if (!candidateDate) return { isRepack: false, releaseType: 'main', repackReason: '' };
+  const candidateScore = scoreVariant(candidate).qualityScore;
+  const olderBetterment = (Array.isArray(existingVariants) ? existingVariants : []).some(existing => {
+    const oldDate = uploadTimestamp(existing?.uploadDate || existing?.date);
+    if (!oldDate || candidateDate <= oldDate) return false;
+    if ((existing.quality || '') !== (candidate.quality || '')) return false;
+    if ((existing.season ?? null) !== (candidate.season ?? null)) return false;
+    if ((existing.episode ?? null) !== (candidate.episode ?? null)) return false;
+    return candidateScore >= scoreVariant(existing).qualityScore + 4;
+  });
+  return olderBetterment
+    ? { isRepack: true, releaseType: 'repack', repackReason: 'Later upload with stronger technical metadata' }
+    : { isRepack: false, releaseType: 'main', repackReason: '' };
+}
+
+/**
+ * Within each quality tier, keep all repacks above original/main releases.
+ * Preserve the established size-first and close-size metadata ranking within
+ * each release class; this is ordering only and never deletes older links.
  */
 function rankVariantsForDisplay(items = [], options = {}) {
   const tolerance = Number.isFinite(options.sizeTolerance) ? options.sizeTolerance : 0.08;
   const ranked = (Array.isArray(items) ? items : []).map(scoreVariant);
-  const sized = ranked
-    .map(item => ({ item, bytes: sizeToBytes(item.size || item.sizeBytes) }))
-    .filter(entry => entry.bytes > 0)
-    .sort((a, b) => b.bytes - a.bytes);
-  const unsized = ranked
-    .filter(item => !(sizeToBytes(item.size || item.sizeBytes) > 0))
-    .sort((a, b) => b.qualityScore - a.qualityScore);
-  const ordered = [];
-
-  for (let i = 0; i < sized.length;) {
-    const anchor = sized[i].bytes;
-    const cluster = [sized[i]];
-    let j = i + 1;
-    while (j < sized.length && (anchor - sized[j].bytes) / anchor <= tolerance) {
-      cluster.push(sized[j]);
-      j++;
+  const rankClass = (entries) => {
+    const sized = entries
+      .map(item => ({ item, bytes: sizeToBytes(item.size || item.sizeBytes) }))
+      .filter(entry => entry.bytes > 0)
+      .sort((a, b) => b.bytes - a.bytes);
+    const unsized = entries
+      .filter(item => !(sizeToBytes(item.size || item.sizeBytes) > 0))
+      .sort((a, b) => b.qualityScore - a.qualityScore);
+    const ordered = [];
+    for (let i = 0; i < sized.length;) {
+      const anchor = sized[i].bytes;
+      const cluster = [sized[i]];
+      let j = i + 1;
+      while (j < sized.length && (anchor - sized[j].bytes) / anchor <= tolerance) {
+        cluster.push(sized[j]);
+        j++;
+      }
+      cluster.sort((a, b) => b.item.qualityScore - a.item.qualityScore || b.bytes - a.bytes);
+      ordered.push(...cluster.map(entry => entry.item));
+      i = j;
     }
-    cluster.sort((a, b) => b.item.qualityScore - a.item.qualityScore || b.bytes - a.bytes);
-    ordered.push(...cluster.map(entry => entry.item));
-    i = j;
-  }
-  return [...ordered, ...unsized];
+    return [...ordered, ...unsized];
+  };
+  const repacks = ranked.filter(item => item.isRepack || item.releaseType === 'repack');
+  const main = ranked.filter(item => !item.isRepack && item.releaseType !== 'repack');
+  return [...rankClass(repacks), ...rankClass(main)];
 }
 
-module.exports = { sizeToBytes, titleKey, scoreVariant, analyzeVariantSet, nearDuplicateGroups, rankVariantsForDisplay };
+module.exports = { sizeToBytes, titleKey, scoreVariant, analyzeVariantSet, nearDuplicateGroups, rankVariantsForDisplay, inferRepackStatus, uploadTimestamp };
