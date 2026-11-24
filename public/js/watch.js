@@ -254,6 +254,19 @@ function detectAudioChannelsForDisplay(download) {
 }
 
 function buildAudioDisplayTag(download, audioValue) {
+  const tracks = Array.isArray(download?.audioTracks) ? download.audioTracks : [];
+  const explicitTrackLabels = tracks.map(track => {
+    const codec = normalizeAudioDisplayLabel(track?.codec);
+    if (!codec) return '';
+    const channels = detectAudioChannelsForDisplay({ audioChannels: track?.channels || '' });
+    const language = String(track?.language || '').trim();
+    return codec
+      + (channels ? ' + ' + channels : '')
+      + (language ? ' (' + language + ')' : '');
+  }).filter(Boolean);
+  const uniqueTrackLabels = [...new Set(explicitTrackLabels)];
+  if (uniqueTrackLabels.length >= 2) return uniqueTrackLabels.join(' / ');
+
   const audio = normalizeAudioDisplayLabel(audioValue || download?.audio);
   if (!audio) return '';
   const channels = detectAudioChannelsForDisplay(download);
