@@ -471,19 +471,25 @@ router.post('/import-batch', auth, async (req, res) => {
         const cleanTitle = cleanTitleForApi(rep.title || '', rep.messageYear || rep.year);
         if (!cleanTitle || cleanTitle.length < 2) { skipped++; continue; }
 
-        // Check duplicate
-        const escapedTitle = cleanTitle.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+        // Reuse the same show record even when this upload is for a later season.
+        const escapedTitle = cleanTitle.replace(/[.*+?^$()|[\\]{}]/g, '\\$&');
         const expectedTypes = isSer ? { $in: ['series', 'anime'] } : 'movie';
         let existing = null;
         if (rep.tmdbIdHint) existing = await Movie.findOne({ tmdbId: String(rep.tmdbIdHint), type: expectedTypes });
         if (!existing && isSer && rep.messageYear) {
-          existing = await Movie.findOne({ title: { $regex: '^' + escapedTitle + '
-
+          existing = await Movie.findOne({ title: { $regex: '^' + escapedTitle + '$', $options: 'i' }, type: expectedTypes, year: Number(rep.messageYear) });
+        }
+        if (!existing && !isSer && rep.year) {
+          existing = await Movie.findOne({ title: { $regex: '^' + escapedTitle + '$', $options: 'i' }, type: expectedTypes, year: Number(rep.year) });
+        }
+        if (!existing) existing = await Movie.findOne({ title: { $regex: '^' + escapedTitle + '$', $options: 'i' }, type: expectedTypes });
         // Full TMDB + OMDB enrichment
         let meta = {};
         const tmdbSeason = rep.season || null;
         const yearHints = [...new Set([rep.messageYear, rep.year, ...(rep.yearCandidates || []), ...group.items.map(file => file.fileYear)].filter(Boolean).map(Number))];
-        const tmdb = await searchTMDB(cleanTitle, isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year), isSer, tmdbSeason, group.msgDate, rep.imdbId || null, rep.tmdbIdHint || null, yearHints);
+        const seasonYearHints = group.items.map(file => file.fileYear).filter(Boolean);
+        const titleYearHint = isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year);
+        const tmdb = await searchTMDB(cleanTitle, titleYearHint, isSer, tmdbSeason, group.msgDate, rep.imdbId || null, rep.tmdbIdHint || null, yearHints, seasonYearHints);
         if (tmdb) {
           Object.assign(meta, tmdb);
           // Always fetch OMDB for rating, imdbId, and fallback poster
@@ -498,12 +504,12 @@ router.post('/import-batch', auth, async (req, res) => {
             if (omdb.poster && omdb.poster !== meta.poster) meta.posterFallback = omdb.poster;
           }
         } else {
-          const omdb = await searchOMDB(cleanTitle, rep.year, isSer);
+          const omdb = await searchOMDB(cleanTitle, titleYearHint, isSer, yearHints);
           if (omdb) Object.assign(meta, omdb, { tmdbId: '' });
         }
         // Google Image fallback when poster still empty
         if (!meta.poster) {
-          const gImg = await searchGoogleImage(rep.title, rep.messageYear || rep.year, isSer);
+          const gImg = await searchGoogleImage(rep.title, titleYearHint, isSer);
           if (gImg) { meta.poster = gImg; emit(`[IMG] Google image: ${rep.title}`); }
         }
 
@@ -539,7 +545,7 @@ router.post('/import-batch', auth, async (req, res) => {
 
           let dbRec = existing;
           if (!dbRec && meta.tmdbId) {
-            dbRec = await Movie.findOne({ tmdbId: meta.tmdbId });
+            dbRec = await Movie.findOne({ tmdbId: meta.tmdbId, type: expectedTypes });
             existing = dbRec;
           }
 
@@ -585,6 +591,15 @@ router.post('/import-batch', auth, async (req, res) => {
 
             const metaSet = {};
             if (!dbRec.backdrop       && meta.backdrop)       metaSet.backdrop       = meta.backdrop;
+            if (!dbRec.releaseDate    && meta.releaseDate)    metaSet.releaseDate    = meta.releaseDate;
+            if (meta.year && meta.releaseDate && (!dbRec.tmdbId || String(dbRec.tmdbId) === String(meta.tmdbId))) {
+              metaSet.year = meta.year;
+            }
+            const seasonYear = meta.seasonYear || newDl.fileYear;
+            if (correctSeason && seasonYear &&
+                Number(dbRec.seasonYears?.['s' + correctSeason] || 0) !== Number(seasonYear)) {
+              metaSet['seasonYears.s' + correctSeason] = Number(seasonYear);
+            }
             if (!dbRec.poster         && meta.poster)         metaSet.poster         = meta.poster;
             if (!dbRec.posterFallback && meta.posterFallback) metaSet.posterFallback = meta.posterFallback;
             if (!dbRec.tmdbId         && meta.tmdbId)         metaSet.tmdbId         = meta.tmdbId;
@@ -631,7 +646,9 @@ router.post('/import-batch', auth, async (req, res) => {
               type: finalType, totalSeasons: meta.totalSeasons || 0,
               description: meta.description || '',
               poster: meta.poster || '', posterFallback: meta.posterFallback || '',
-              backdrop: meta.backdrop || '',
+              backdrop: meta.backdrop || '', releaseDate: meta.releaseDate || '',
+              seasonYears: Object.fromEntries(group.items.filter(file => file.season && file.fileYear)
+                .map(file => ['s' + file.season, Number(file.fileYear)])),
               rating: meta.rating || 0, year: meta.year || rep.messageYear || (isSer ? null : rep.year) || null,
               genre: meta.genre || [], duration: meta.duration || '', quality, language: origLang2,
               formats: [quality].filter(Boolean), codecs: [codec].filter(c => c && c !== 'Other'),
