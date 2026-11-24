@@ -97,7 +97,7 @@ function normalizeUrl(url) {
 }
 
 // Only accept these as valid bypassed direct URLs (reliable cloud hosts only)
-const DIRECT_HOST_RE = /gdflix|hubcloud|1fichier|filemoon|streamtape|pixeldrain|krakenfiles|buzzheavier|doodstream|mixdrop/i;
+const DIRECT_HOST_RE = /gdflix|hubcloud|tmbcloud|1fichier|filemoon|streamtape|pixeldrain|krakenfiles|buzzheavier|doodstream|mixdrop/i;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BYPASS ENGINE  (ported from bypass_bot.js — bypassSofturl)
