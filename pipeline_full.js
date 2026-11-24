@@ -631,7 +631,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           candidate, isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year), isSer, rep.season, group.msgDate,
           rep.imdbId || null, rep.tmdbIdHint || null, yearHints,
           group.items.filter(file => !rep.season || Number(file.season) === Number(rep.season))
-            .map(file => file.fileYear || extractYear([file.filename])).filter(Boolean)
+            .map(file => file.fileYear || extractYear([file.filename]) || (!rep.messageYear ? file.year : null)).filter(Boolean)
         );
         if (tmdb) {
           if (candidateIndex > 0) {
