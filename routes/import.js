@@ -12,7 +12,7 @@ const {
   extractAudio,
   extractYear,
 } = require('../utils/parser');
-const { searchTMDB: _sharedSearchTMDB, searchOMDB: _sharedSearchOMDB } = require('../utils/tmdbSearch');
+const { searchTMDB: _sharedSearchTMDB, searchOMDB: _sharedSearchOMDB, stringSimilarity: sharedStringSimilarity } = require('../utils/tmdbSearch');
 
 
 // ── Server-side API keys (fallback when client doesn't pass them) ──
@@ -218,46 +218,11 @@ async function fetchOMDB(parsed, omdbKey) {
     parsed.messageYear, parsed.year, ...(parsed.yearCandidates || []),
     ...(parsed.downloads || []).map(file => file.fileYear || extractYear([file.filename])),
   ].filter(Boolean).map(Number))];
-  const shared = await _sharedSearchOMDB(
+  // Use only the shared validator. A yearless direct OMDb retry can reintroduce
+  // the unrelated same-name film rejected by the TMDB confidence gate.
+  return _sharedSearchOMDB(
     parsed.rawTitle || parsed.title, titleYearHint, isSeries, omdbKey, { yearHints }
   );
-  if (shared) return shared;
-
-  try {
-    const cleanTitle = cleanTitleForApi(parsed.rawTitle || parsed.title);
-    const params = { t: cleanTitle, apikey: omdbKey, type: isSeries ? 'series' : 'movie', plot: 'short' };
-    if (titleYearHint) params.y = titleYearHint;
-    const res = await axios.get('https://www.omdbapi.com/', { params, timeout: 30000 });
-    let d = res.data;
-    if (!d || d.Response === 'False') {
-      const fallbackParams = { t: cleanTitle, apikey: omdbKey, plot: 'short' };
-      if (titleYearHint) fallbackParams.y = titleYearHint;
-      const res2 = await axios.get('https://www.omdbapi.com/', { params: fallbackParams, timeout: 30000 });
-      if (!res2.data || res2.data.Response === 'False') return null;
-      d = res2.data;
-    }
-    const yearText = String(d.Year || '');
-    const years = (yearText.match(/19\\d{2}|20\\d{2}/g) || []).map(Number);
-    const omdbYear = years[0] || titleYearHint;
-    const insideRun = isSeries && years.length > 1 &&
-      yearHints.some(value => value >= years[0] - 2 && value <= years[years.length - 1] + 2);
-    const yearDiff = omdbYear && yearHints.length
-      ? Math.min(...yearHints.map(value => Math.abs(value - omdbYear))) : null;
-    if (yearDiff != null && yearDiff > (isSeries ? 5 : 3) && !insideRun) return null;
-    return {
-      imdbId: d.imdbID || '',
-      title: d.Title || parsed.title,
-      description: d.Plot && d.Plot !== 'N/A' ? d.Plot : '',
-      poster: d.Poster && d.Poster !== 'N/A' ? d.Poster : '',
-      rating: d.imdbRating && d.imdbRating !== 'N/A' ? parseFloat(d.imdbRating) : 0,
-      year: omdbYear,
-      genre: d.Genre && d.Genre !== 'N/A' ? d.Genre.split(', ') : [],
-      duration: d.Runtime && d.Runtime !== 'N/A'
-        ? (() => { const m = parseInt(d.Runtime, 10); return Math.floor(m / 60) + 'h ' + (m % 60) + 'm'; })()
-        : '',
-      type: d.Type === 'series' ? 'series' : 'movie',
-    };
-  } catch (_) { return null; }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -287,13 +252,25 @@ async function fetchIMDB(parsed) {
 
     if (results.length === 0) return null;
 
-    let best = results[0];
-    if (parsed.year) {
-      const yearMatches = results.filter(r => r.year && Math.abs(r.year - parsed.year) <= 2);
-      if (yearMatches.length > 0) best = yearMatches[0];
-    }
-    
-    if (!best.poster) return null; // We only care if it has a poster
+    const yearHint = Number(parsed.messageYear || parsed.year) || null;
+    const yearMatches = yearHint
+      ? results.filter(item => item.year && Math.abs(Number(item.year) - yearHint) <= 2)
+      : results;
+    if (!yearMatches.length) return null;
+
+    const normalizedQuery = cleanTitleForApi(parsed.rawTitle || parsed.title).toLowerCase();
+    const compactLength = normalizedQuery.replace(/[^a-z0-9]/g, '').length;
+    const ranked = yearMatches.map(item => ({
+      item,
+      similarity: sharedStringSimilarity(normalizedQuery, item.title),
+      exact: normalizedQuery.replace(/[^a-z0-9]/g, '') ===
+        cleanTitleForApi(item.title).toLowerCase().replace(/[^a-z0-9]/g, ''),
+    })).filter(row => compactLength <= 4 ? row.exact : (row.exact || row.similarity >= 0.86))
+      .sort((a, b) => Number(b.exact) - Number(a.exact) || b.similarity - a.similarity);
+    if (!ranked.length) return null;
+    const best = ranked[0].item;
+
+    if (!best.poster) return null; // Only use a poster after title/year verification
 
     return {
       imdbId: best.imdbId,
@@ -751,10 +728,8 @@ router.post('/fetch-meta', auth, async (req, res) => {
   tmdb = tmdbResult;
   omdb = omdbResult;
 
-  // If TMDB failed confidence check, try a relaxed TMDB search (no year constraint)
-  if (!tmdb && tmdbKey) {
-    tmdb = await fetchTMDB({ ...parsed, year: null }, tmdbKey);
-  }
+  // Do not discard an explicit release-year hint after a failed match.
+  // A false negative is safer than attaching a same-name movie from another year.
 
   // 3-Tier Fallback for manual poster fix
   let imdbFallback = null;
