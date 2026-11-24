@@ -102,7 +102,7 @@ test('parser keeps the original and repack as separate variants in one Telegram 
     'https://gdflix.dev/file/main-file',
     'Example.Film.2024.1080p.WEB-DL.Telugu.REPACK.mkv',
     'https://gdflix.dev/file/repack-file',
-  ].join('\\n'), 505);
+  ].join('\n'), 505);
 
   assert.ok(parsed);
   assert.equal(parsed.downloads.length, 2);
