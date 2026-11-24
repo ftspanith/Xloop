@@ -413,7 +413,7 @@ function recomputeAggregates(doc) {
   // Root codecs are video codecs only. Older records may have audio formats
   // mistakenly copied into this aggregate; keep audio on each download row.
   doc.codecs  = [...new Set(dls.map(d => d.codec || detectCodecLocal(d.filename)))].filter(c =>
-    c && c !== 'Other' && !/^(?:E-?AC-?3|DDP|DD\+?|AC-?3|DTS|TRUEHD|ATMOS|AAC|FLAC|MP3|OPUS|ALAC|L?PCM|VORBIS|AC4|WMA|DOLBY DIGITAL)/i.test(String(c).trim())
+    c && c !== 'Other' && !/^(?:E-?AC-?3|DDP|DD\+?|AC-?3|DTS|TRUEHD|ATMOS|AAC|FLAC|MP3|OPUS|ALAC|L?PCM|VORBIS|AC4|WMA|DOLBY)/i.test(String(c).trim())
   );
   const allLangs = [];
   dls.forEach(d => {
