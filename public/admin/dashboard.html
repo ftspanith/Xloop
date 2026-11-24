@@ -852,7 +852,18 @@
     }).join('');
   }
 
+  let _dashboardLoadInFlight = false;
+  let _dashboardRefreshQueued = false;
+
   async function loadDashboard() {
+    // A slow refresh must not overlap the next 5-second poll. If a manual
+    // refresh arrives while one is running, queue one fresh pass afterward.
+    if (_dashboardLoadInFlight) {
+      _dashboardRefreshQueued = true;
+      return;
+    }
+    _dashboardLoadInFlight = true;
+
     try {
       const [mRes, sRes, aRes] = await Promise.all([
         apiFetch('/api/movies?limit=10&type=movie&sort=updatedAt'),
@@ -884,6 +895,12 @@
         document.getElementById('retryDashboardLoad')?.addEventListener('click', loadDashboard);
       }
       showToast('Error loading dashboard: ' + (err.message || 'API request failed'), true);
+    } finally {
+      _dashboardLoadInFlight = false;
+      if (_dashboardRefreshQueued) {
+        _dashboardRefreshQueued = false;
+        setTimeout(loadDashboard, 0);
+      }
     }
   }
 
