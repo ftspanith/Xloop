@@ -249,10 +249,13 @@ function parseExplicitAudioTrackLine(line) {
   const codec = extractAudio(payload);
   if (!codec) return null;
 
+  const channels = detectAudioChannels(payload) || '';
   const languages = [...new Set((detectAllLanguages(payload) || []).filter(language => language && language !== 'Multi'))];
+  // Codec alone is too weak: require an explicit channel layout or one language.
+  if (!channels && languages.length !== 1) return null;
   return {
     codec,
-    channels: detectAudioChannels(payload) || '',
+    channels,
     language: languages.length === 1 ? languages[0] : '',
   };
 }
