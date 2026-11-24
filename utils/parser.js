@@ -984,7 +984,7 @@ function extractYear(sources) {
   // P1: bracketed year — most reliable signal in Telegram posts like "Title (2023)"
   for (const s of sources) {
     if (!s) continue;
-    const m = s.match(/[\[({]\s*(19\d{2}|20[012]\d)\s*[\])}]/);
+    const m = s.match(/[\[({]\s*(19\d{2}|20\\d)\s*[\])}]/);
     if (m) return parseInt(m[1], 10);
   }
   // P2a: For dot-separated filenames, collect ALL separator-bounded years and
@@ -998,7 +998,7 @@ function extractYear(sources) {
     const searchIn = qualMatch ? s.substring(0, qualMatch.index) : s;
     // Find ALL years in the pre-quality section
     const allYears = [];
-    const yearRE = /[._\-\s](19\d{2}|20[012]\d)[._\-\s]/g;
+    const yearRE = /[._\-\s](19\d{2}|20\\d)[._\-\s]/g;
     let ym;
     while ((ym = yearRE.exec(searchIn)) !== null) {
       allYears.push(parseInt(ym[1], 10));
@@ -1012,19 +1012,19 @@ function extractYear(sources) {
   // P2b: year embedded between dots/underscores/dashes — single year case
   for (const s of sources) {
     if (!s) continue;
-    const m = s.match(/[._\-](19\d{2}|20[012]\d)[._\-\s]/);
+    const m = s.match(/[._\-](19\d{2}|20\\d)[._\-\s]/);
     if (m) return parseInt(m[1], 10);
   }
   // P3: year at tail, just before file extension or end of string
   for (const s of sources) {
     if (!s) continue;
-    const m = s.match(/(19\d{2}|20[012]\d)\s*(?:$|\.(?:mkv|mp4|avi|mov|ts|zip|rar))/i);
+    const m = s.match(/(19\d{2}|20\\d)\s*(?:$|\.(?:mkv|mp4|avi|mov|ts|zip|rar))/i);
     if (m) return parseInt(m[1], 10);
   }
   // P4: first year anywhere (last resort — may grab year from title name like "2001")
   for (const s of sources) {
     if (!s) continue;
-    const m = s.match(/\b(19\d{2}|20[012]\d)\b/);
+    const m = s.match(/\b(19\d{2}|20\\d)\b/);
     if (m) return parseInt(m[1], 10);
   }
   return null;
@@ -1324,7 +1324,8 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   const fullText=lines.join(' ');
   // Keep the title/message year (usually the show's first-air year) separate
   // from each filename year (often the year a later season was released).
-  const messageYear = extractYear([masterTitle]);
+  const titleIsFilename = String(masterTitle || '').trim() === String(firstFn || '').trim() || isFileDesc(masterTitle);
+  const messageYear = titleIsFilename ? null : extractYear([masterTitle]);
   const fileYearCandidates = extractYearCandidates(pairs.map(pair => pair.rawFilename));
   const filenameYear = fileYearCandidates[0] || extractYear([firstFn]);
   const yearCandidates = [...new Set([messageYear, ...fileYearCandidates].filter(Boolean))];
