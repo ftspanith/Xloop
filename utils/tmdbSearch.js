@@ -20,23 +20,76 @@ const axios = require('axios');
 const { cleanTitleForApi } = require('./parser');
 
 // ─── Levenshtein string similarity (0–1) ─────────────────────────────────────
-function stringSimilarity(a, b) {
-  a = (a || '').toLowerCase().trim();
-  b = (b || '').toLowerCase().trim();
+function normalizeMatchTitle(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function editSimilarity(a, b) {
+  const left = Array.from(a);
+  const right = Array.from(b);
   if (a === b) return 1;
-  const longer  = a.length > b.length ? a : b;
-  const shorter = a.length > b.length ? b : a;
-  if (longer.length === 0) return 1;
-  const m = longer.length, n = shorter.length;
-  const dp = Array.from({ length: m + 1 }, (_, i) =>
-    Array.from({ length: n + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0)
-  );
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      dp[i][j] = longer[i-1] === shorter[j-1]
-        ? dp[i-1][j-1]
-        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
-  return (m - dp[m][n]) / m;
+  if (!left.length || !right.length) return 0;
+  const maxLength = Math.max(left.length, right.length);
+  if (Math.abs(left.length - right.length) > Math.max(4, Math.floor(maxLength * 0.6))) return 0;
+  let previous = Array.from({ length: right.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= left.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= right.length; j++) {
+      current[j] = Math.min(
+        current[j - 1] + 1,
+        previous[j] + 1,
+        previous[j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1)
+      );
+    }
+    previous = current;
+  }
+  return 1 - previous[right.length] / maxLength;
+}
+
+// Similarity also tolerates punctuation/spacing variations ("Hanu-Man" vs
+// "Hanu Man"), compact title spellings ("DJTillu" vs "DJ Tillu"), and a
+// single misspelled word without throwing away sequel numbers.
+function stringSimilarity(a, b) {
+  const left = normalizeMatchTitle(a);
+  const right = normalizeMatchTitle(b);
+  if (left === right) return 1;
+  if (!left || !right) return 0;
+
+  const edit = editSimilarity(left, right);
+  const compactLeft = left.replace(/\s+/g, '');
+  const compactRight = right.replace(/\s+/g, '');
+  const compact = editSimilarity(compactLeft, compactRight) * 0.97;
+
+  const leftTokens = left.split(' ').filter(Boolean);
+  const rightTokens = right.split(' ').filter(Boolean);
+  const available = new Set(rightTokens.map((token, index) => index));
+  let matched = 0;
+  for (const token of leftTokens) {
+    let bestIndex = -1;
+    let bestScore = 0;
+    for (const index of available) {
+      const candidate = rightTokens[index];
+      const score = editSimilarity(token, candidate);
+      const minimum = Math.min(token.length, candidate.length);
+      const threshold = minimum <= 3 ? 1 : (minimum <= 5 ? 0.8 : 0.72);
+      if (score >= threshold && score > bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    }
+    if (bestIndex >= 0) {
+      matched++;
+      available.delete(bestIndex);
+    }
+  }
+  const tokenScore = (2 * matched) / (leftTokens.length + rightTokens.length);
+  return Math.max(edit, compact, tokenScore * 0.92);
 }
 
 // ─── fetchWithRetry ───────────────────────────────────────────────────────────
@@ -172,7 +225,18 @@ function buildTitleCandidates(rawTitle, cleanedTitle, year) {
     .trim();
   if (partToNum !== cleanedTitle) add(partToNum);
 
-  // Algorithm 12b: Raw unclean title (when cleanTitleForApi over-strips)
+  // Algorithm 12b: punctuation/spacing-normalized title.
+  const spacedTitle = cleanedTitle
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (spacedTitle.toLowerCase() !== cleanedTitle.toLowerCase()) add(spacedTitle);
+
+  // Algorithm 12c: compact spelling variant (e.g. "DJ Tillu" → "DJTillu").
+  const compactTitle = cleanedTitle.replace(/[^\p{L}\p{M}\p{N}]+/gu, '');
+  if (compactTitle.length >= 5 && compactTitle.toLowerCase() !== cleanedTitle.toLowerCase()) add(compactTitle);
+
+  // Algorithm 12d: raw unclean title (when cleanTitleForApi over-strips).
   const rawC = (rawTitle || '').replace(/\s+/g, ' ').trim();
   if (rawC && rawC.toLowerCase() !== cleanedTitle.toLowerCase()) add(rawC);
 
@@ -217,7 +281,9 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   }
 
   const BASE     = 'https://api.themoviedb.org/3';
-  const hintYear = year || (msgDate ? new Date(msgDate).getFullYear() : null);
+  // Telegram upload date is not a release-year hint. Using it as one causes
+  // false year penalties for older films posted in a newer channel message.
+  const hintYear = year ? Number(year) : null;
   const isShort  = cleanTitle.trim().split(/\s+/).length <= 2;
   const typeEp   = isSeries ? 'tv' : 'movie';
   const otherEp  = isSeries ? 'movie' : 'tv';
@@ -304,23 +370,31 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       if (!results.length) return null;
 
       const queryTitle = params.query;
-      const scored = results.slice(0, 10).map(r => {
+      const scored = results.slice(0, 30).map(r => {
         const rTitle   = r.title || r.name || '';
         const rOrig    = r.original_title || r.original_name || '';
         const rYear    = r.release_date ? parseInt(r.release_date, 10) : r.first_air_date ? parseInt(r.first_air_date, 10) : null;
         const rType    = ep === 'multi' ? (r.media_type === 'tv' ? 'series' : 'movie') : (ep === 'tv' ? 'series' : 'movie');
-        const simMain  = Math.max(
-          stringSimilarity(cleanTitleForApi(rTitle), queryTitle),
-          stringSimilarity(cleanTitleForApi(rOrig),  queryTitle)
+        let simMain = Math.max(
+          stringSimilarity(rTitle, queryTitle),
+          stringSimilarity(rOrig, queryTitle)
         );
-        let score = simMain * 60;
+        const queryNumbers = normalizeMatchTitle(queryTitle).match(/\b\d+\b/g) || [];
+        const resultNumbers = normalizeMatchTitle(rTitle + ' ' + rOrig).match(/\b\d+\b/g) || [];
+        // Keep sequels distinct: a candidate containing a sequel number should
+        // not confidently resolve to the original title with that number absent.
+        if (queryNumbers.length && !queryNumbers.some(number => resultNumbers.includes(number))) {
+          simMain *= 0.72;
+        }
+
+        let score = simMain * 70;
         if (hintYear && rYear) {
           const d = Math.abs(hintYear - rYear);
-          score += d === 0 ? 30 : d === 1 ? 15 : d <= 2 ? 5 : -20;
-        } else if (!hintYear && !rYear) score += 5;
-        if ((isSeries ? 'series' : 'movie') === rType) score += 15; else score -= 10;
-        if (r.popularity > 50)  score += 5;
-        if (r.popularity > 200) score += 5;
+          score += d === 0 ? 20 : d === 1 ? 10 : d <= 2 ? 4 : -8;
+        } else if (!hintYear && !rYear) score += 3;
+        if ((isSeries ? 'series' : 'movie') === rType) score += 12; else score -= 8;
+        if (r.popularity > 50) score += 3;
+        if (r.popularity > 200) score += 2;
         return { r, score, simMain };
       });
 
@@ -379,6 +453,8 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       { ep: typeEp,  params: { query: q, ...(hintYear ? { year: hintYear } : {}), _algo: label } },
       { ep: typeEp,  params: { query: q, _algo: label } },
       { ep: 'multi', params: { query: q, _algo: label } },
+      { ep: otherEp, params: { query: q, ...(hintYear ? { year: hintYear } : {}), _algo: label } },
+      { ep: otherEp, params: { query: q, _algo: label } },
     ];
     for (const { ep, params } of strats) {
       const result = await runStrategy(ep, params, false);
