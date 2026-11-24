@@ -192,11 +192,11 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       if (label === 'Multi') continue;
       if (re.test(languageText) && !detectedLangs.includes(label)) detectedLangs.push(label);
     }
-    const hasMultiMarker = /\b(?:multi(?:[.\s_-]?audio)?|tri[.\s_-]?audio|bilingual)\b/i.test(languageText);
-    const hasDualMarker = /\bdual(?:[.\s_-]?audio)?\b/i.test(languageText);
-    const languageType = detectedLangs.length >= 3 ? 'Multi'
-      : detectedLangs.length === 2 ? 'Dual'
-      : detectedLangs.length === 1 ? 'Single'
+    const hasMultiMarker = /\b(?:multi(?:[.\s_-]?audio)?|tri[.\s_-]?audio)\b/i.test(languageText);
+    const hasDualMarker = /\b(?:dual(?:[.\s_-]?audio)?|bilingual)\b/i.test(languageText);
+    const languageType = hasMultiMarker || detectedLangs.length >= 3 ? 'Multi'
+      : hasDualMarker || detectedLangs.length === 2 ? 'Dual'
+      : detectedLangs.length === 1 ? 'Single' : '';
       : hasMultiMarker ? 'Multi' : hasDualMarker ? 'Dual' : '';
     const isMulti = languageType === 'Multi';
     const langLabel = detectedLangs.length ? detectedLangs.join(' + ') : languageType;
