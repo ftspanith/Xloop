@@ -301,10 +301,10 @@ async function triggerPipeline(token) {
     return;
   }
 
-  log('Triggering Full Pipeline on Vercel...');
-  const res = await apiRequest('POST', '/api/orchestrator/start', { skipScraper: false }, token);
+  log(uploadOnly ? 'Triggering Skip Scraper / import-only pipeline on Vercel (preserve existing catalogue)...' : 'Triggering Full Pipeline on Vercel...');
+  const res = await apiRequest('POST', '/api/orchestrator/start', { skipScraper: uploadOnly }, token);
   if (res.status === 200) {
-    ok('Full Pipeline started! Watch progress at:');
+    ok(`${uploadOnly ? 'Skip Scraper / import-only pipeline' : 'Full Pipeline'} started! Watch progress at:`);
     log(`  → ${SITE_URL}/admin/dashboard.html`);
   } else {
     warn(`Pipeline trigger response: ${JSON.stringify(res.body)}`);
