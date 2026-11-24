@@ -150,3 +150,24 @@ test('a known year prevents an exact-title match from linking to a film nine yea
     axios.get = originalGet;
   }
 });
+test('ultra-short titles do not fuzzy-match a different word even in the same year', async () => {
+  const originalGet = axios.get;
+  axios.get = async (url) => {
+    if (url.includes('/search/')) {
+      return { data: { results: [
+        { id: 2010, title: 'Robot', original_title: 'Robot', release_date: '2010-08-01', popularity: 80 },
+      ] } };
+    }
+    if (url.endsWith('/movie/2010/alternative_titles')) {
+      return { data: { id: 2010, titles: [] } };
+    }
+    throw new Error('A non-exact short-title candidate must not be fetched: ' + url);
+  };
+
+  try {
+    const result = await searchTMDB('Robo', 2010, false, null, null, null, null, { tmdbKey: 'test-key' });
+    assert.equal(result, null);
+  } finally {
+    axios.get = originalGet;
+  }
+});
