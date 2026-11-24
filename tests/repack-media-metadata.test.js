@@ -20,6 +20,7 @@ test('classifies one, two, and three-or-more named audio languages correctly', (
   assert.equal(classifyLanguages('Hindi + English').languageCount, 2);
   assert.equal(classifyLanguages([], 'DUAL AUDIO').languageType, 'Dual');
   assert.equal(classifyLanguages([], 'MULTI AUDIO').languageType, 'Multi');
+  assert.equal(classifyLanguages([], 'BILINGUAL').languageType, 'Dual');
 });
 
 test('detects repacks and keeps proper releases distinct', () => {
@@ -88,6 +89,8 @@ test('parser exposes media metadata and release status on individual download va
 
   assert.ok(parsed);
   assert.equal(parsed.downloads[0].isRepack, true);
+  assert.equal(parsed.isRepack, true);
+  assert.equal(parsed.releaseType, 'Repack');
   assert.equal(parsed.downloads[0].languageType, 'Dual');
   assert.equal(parsed.languageType, 'Dual');
   assert.equal(parsed.certification, 'U/A 13+');
