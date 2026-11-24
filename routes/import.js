@@ -201,7 +201,6 @@ async function fetchTMDB(parsed, tmdbKey) {
   if (!result) return null;
   return {
     ...result,
-    language: result.originalLanguage || '',
     confidenceReasons: [`Matched via algorithm ${result._algo || 'A1'} (${result.confidence}pts)`],
     isAnime: false,
   };
@@ -613,10 +612,7 @@ router.post('/bulk', auth, async (req, res) => {
     }
 
     // ── Resolve final language ────────────────────────────
-    let finalLanguage = language;
-    if ((finalLanguage === 'Multi' || finalLanguage === 'Hindi' || !finalLanguage) && meta.language) {
-      finalLanguage = meta.language;
-    }
+    const finalLanguage = language || '';
 
     const movieData = {
       title:              finalTitle,
@@ -624,11 +620,12 @@ router.post('/bulk', auth, async (req, res) => {
       imdbId:             meta.imdbId   || '',
       type:               finalType,
       totalSeasons:       meta.totalSeasons || 0,
+      originalLanguage:    meta.originalLanguage || '',
       description:        meta.description  || '',
       poster:             meta.poster        || '',
       backdrop:           meta.backdrop      || '',
       rating:             meta.rating        || 0,
-      year:               meta.year || parsed.messageYear || (isSeries ? null : (year || new Date().getFullYear())),
+      year:               meta.year || parsed.messageYear || (isSeries ? null : (year || null)),
       releaseDate:        meta.releaseDate || '',
       seasonYears:        Object.fromEntries(downloads.filter(file => file.season && file.fileYear)
         .map(file => [`s${file.season}`, Number(file.fileYear)])),
@@ -636,6 +633,7 @@ router.post('/bulk', auth, async (req, res) => {
       duration:           meta.duration || '',
       quality:            quality || 'HD',
       language:           finalLanguage,
+      languages:           [...new Set(downloads.flatMap(download => String(download.language || '').split(',').map(value => value.trim()).filter(Boolean)))],
       downloads,
       telegramMessageIds: msgObj.id ? [msgObj.id] : [],
       _importMeta: {
@@ -1008,12 +1006,16 @@ router.post('/manual-add', auth, async (req, res) => {
       .filter(download => download.season && download.fileYear)
       .map(download => ['s' + download.season, Number(download.fileYear)]));
     if (selectedSeason && meta.seasonYear) seasonYears['s' + selectedSeason] = Number(meta.seasonYear);
+    const availableLanguages = [...new Set(downloads.flatMap(download =>
+      String(download.language || '').split(',').map(value => value.trim()).filter(Boolean)
+    ))];
     const movie = await Movie.create({
       title: title || finalTitle,
       tmdbId: meta.tmdbId || '',
       imdbId: meta.imdbId || '',
       type: finalType,
       totalSeasons: meta.totalSeasons || 0,
+      originalLanguage: meta.originalLanguage || '',
       description: meta.description || '',
       poster: poster || meta.poster || '',
       posterFallback: meta.posterFallback || '',
@@ -1021,11 +1023,12 @@ router.post('/manual-add', auth, async (req, res) => {
       releaseDate: meta.releaseDate || '',
       seasonYears,
       rating: rating !== undefined ? rating : (meta.rating || 0),
-      year: meta.year || parsed.messageYear || (isTv ? null : (year || new Date().getFullYear())),
+      year: meta.year || parsed.messageYear || (isTv ? null : (year || null)),
       genre: genre?.length ? genre : (meta.genre || []),
       duration: duration || meta.duration || '',
       quality: downloads[0]?.quality || 'HD',
-      language: meta.originalLanguage || 'Telugu',
+      language: availableLanguages.join(', '),
+      languages: availableLanguages,
       streamEmbed: streamEmbed || '',
       isFeatured: !!isFeatured,
       isTrending: !!isTrending,
@@ -1319,6 +1322,7 @@ router.post('/manual-batch', auth, async (req, res) => {
           imdbId: meta.imdbId || '',
           type: finalType,
           totalSeasons: meta.totalSeasons || 0,
+          originalLanguage: meta.originalLanguage || '',
           description: meta.description || '',
           poster: meta.poster || '',
           posterFallback: meta.posterFallback || '',
@@ -1330,7 +1334,7 @@ router.post('/manual-batch', auth, async (req, res) => {
           genre: meta.genre || [],
           duration: meta.duration || '',
           quality: downloads[0].quality,
-          language: meta.originalLanguage || rep.language || '',
+          language: rep.language || '',
           formats: [...new Set(downloads.map(download => download.quality))].filter(Boolean),
           codecs: [...new Set(downloads.map(download => download.codec))].filter(codec => codec && codec !== 'Other'),
           languages: [...new Set(downloads.map(download => download.language))].filter(Boolean),
