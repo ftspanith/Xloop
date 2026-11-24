@@ -141,6 +141,7 @@ function extractTelegramLinks(inputMessages, account = '1') {
           language, quality: download.quality || parsed.quality || 'HD',
           size: download.size || '', filename: download.filename || '',
           codec: download.codec || '', hdr: download.hdr || '', audio: download.audio || '',
+          source: download.source || '', container: download.container || '',
           bitDepth: download.bitDepth || '', audioChannels: download.audioChannels || '',
           host, url, bypassedUrl: null,
           sourceAccount: String(message.sourceAccount || account || '1'),
