@@ -336,7 +336,7 @@ function extractRuntimeMinutes(value) {
 function detectCBFCCertification(value) {
   const s = String(value || '').replace(/_/g, ' ');
   const contextual = s.match(/(?:CBFC|CENSOR(?:ED)?|CERT(?:IFICATE)?|RATING)\s*[:._ -]*\s*(U\s*\/\s*A|UA|U|A|S)(?:\s*[-._ ]?\s*(7|13|16|18)\s*\+?)?/i);
-  const ageOnly = s.match(/\b(U\s*\/\s*A|UA)\s*(7|13|16|18)\s*\+?\b/i);
+  const ageOnly = s.match(/\b(U\s*\/\s*A|UA)\s*(7|13|16|18)\s*\+?(?!\d)/i);
   const m = contextual || ageOnly;
   if (!m) return '';
   const base = m[1].replace(/\s/g, '').replace('/', '').toUpperCase();
