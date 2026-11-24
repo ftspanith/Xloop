@@ -41,7 +41,7 @@ test('Telegram ingestion accepts bare rotated provider URLs and normalizes them'
       'edge.new5.gdflix.xyz/file/bare-gdflix',
       'Another.Sample.Film.2024.720p.WEB-DL.1.2GB.mkv',
       'mirror.hubcloud.app/file/bare-hubcloud',
-    ].join('\\n'),
+    ].join('\n'),
   };
   const result = extractTelegramLinks([message], '1');
   assert.equal(result.links.length, 2);
