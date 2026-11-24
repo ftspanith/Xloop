@@ -38,6 +38,7 @@ const {
   detectBitDepth, detectAudioChannels, detectSource, detectContainer,
   normalizeQuality, extractSize, detectAllLanguages, extractSeasonEpisode,
   classifyLanguages, extractMediaMetadata, normalizeGdflixUrl, isJunkTitle,
+  isGenericTitleCandidate,
 } = require('./utils/parser');
 const sharedMetadataSearch = require('./utils/tmdbSearch');
 const { analyzeVariantSet, rankVariantsForDisplay } = require('./utils/variant-intelligence');
@@ -535,13 +536,18 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
     let searchTitle = rep.rawTitle || rep.title || '';
     for (const source of titleSources) {
       const candidate = cleanTitleForApi(source, rep.year);
-      if (candidate && candidate.length >= 2 && !isJunkTitle(candidate)) {
+      if (candidate && candidate.length >= 2 &&
+          !isJunkTitle(candidate) && !isGenericTitleCandidate(candidate)) {
         cleanTitle = candidate;
-        if (!searchTitle || isJunkTitle(searchTitle)) searchTitle = source;
+        const currentSearchTitle = cleanTitleForApi(searchTitle, rep.year);
+        if (!searchTitle || isJunkTitle(currentSearchTitle) ||
+            isGenericTitleCandidate(currentSearchTitle)) searchTitle = source;
         break;
       }
     }
-    if (cleanTitle && (!searchTitle || isJunkTitle(cleanTitleForApi(searchTitle, rep.year)))) {
+    const normalizedSearchTitle = cleanTitleForApi(searchTitle, rep.year);
+    if (cleanTitle && (!searchTitle || isJunkTitle(normalizedSearchTitle) ||
+        isGenericTitleCandidate(normalizedSearchTitle))) {
       searchTitle = cleanTitle;
     }
 
