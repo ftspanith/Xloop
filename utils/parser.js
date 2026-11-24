@@ -175,6 +175,8 @@ function detectHost(url) {
 // ─── METADATA LINE DETECTOR ───────────────────────────────────────────────────
 // Returns true for lines that are channel/format headers, NOT real title/filename lines
 function isMetadataLine(line) {
+  const metadataText = String(line || '').trim();
+  if (/^(?:Runtime|Run\\s*time|Duration|Length|Aspect\\s*Ratio|Screen\\s*Ratio|AR|CBFC|Censor(?:ship)?|Certificate|Certification|Format)\\s*[:=]/i.test(metadataText)) return true;
   const s = (line || '').trim();
   if (!s) return false;
   // Pure hashtag-only lines: '#NF_WEBDL #MULTI_AUDIO'
