@@ -531,6 +531,7 @@ router.post('/telegram-sync/chunk', auth, express.json({ limit: '3mb' }), async 
         language: allowedString(item.language, 80),
         season: item.season == null ? null : Number(item.season),
         episode: item.episode == null ? null : Number(item.episode),
+        fileYear: item.fileYear == null ? null : Number(item.fileYear),
         type: allowedString(item.type, 30) || 'movie',
         filename: allowedString(item.filename, 1000),
         codec: allowedString(item.codec, 80),
@@ -941,7 +942,7 @@ router.get('/collection-links', auth, async (req, res) => {
 
     const regex = new RegExp('^' + title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
     const links = await ExtractedLink.find({ title: regex })
-      .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels audioTracks sourceAccount')
+      .select('title year quality size filename fileYear language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels audioTracks sourceAccount')
       .sort({ quality: -1, size: -1 })
       .maxTimeMS(8000)
       .lean();
