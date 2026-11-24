@@ -384,7 +384,7 @@ function recomputeAggregates(doc) {
   const dls = doc.downloads || [];
 
   // Sort downloads: quality order first, then size descending within each quality
-  const QUALITY_ORDER = ['4K', '1080p', '720p', '480p', '360p', 'HD'];
+  const QUALITY_ORDER = ['8K', '4K', '1440p', '1080p', '720p', '576p', '540p', '480p', '360p', '240p', 'SD', 'HD'];
   dls.sort((a, b) => {
     const qa = QUALITY_ORDER.indexOf(a.quality); 
     const qb = QUALITY_ORDER.indexOf(b.quality);
@@ -631,7 +631,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       const newDl = {
         quality, size, filename, language, codec, hdr, audio, source, container, bitDepth, audioChannels,
         season: correctSeason, episode: correctEpisode,
-        links: [{ host, url: finalUrl, isFast: /gdflix|hubcloud|gdlink/i.test(finalUrl) }],
+        links: [{ host, url: finalUrl, isFast: /gdflix|hubcloud|gdlink|tmbcloud/i.test(finalUrl) }],
       };
 
       if (dbRec) {
