@@ -10,28 +10,31 @@ function normalize(value) {
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
+    // Keep Unicode letters, combining marks, and numbers (Telugu, Hindi, Korean, etc.).
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
     .trim();
 }
 
 function levenshtein(a, b) {
+  const left = Array.from(a);
+  const right = Array.from(b);
   if (a === b) return 0;
-  if (!a.length) return b.length;
-  if (!b.length) return a.length;
-  if (Math.abs(a.length - b.length) > 2) return Math.max(a.length, b.length);
-  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
+  if (!left.length) return right.length;
+  if (!right.length) return left.length;
+  if (Math.abs(left.length - right.length) > 2) return Math.max(left.length, right.length);
+  let previous = Array.from({ length: right.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= left.length; i++) {
     const current = [i];
-    for (let j = 1; j <= b.length; j++) {
+    for (let j = 1; j <= right.length; j++) {
       current[j] = Math.min(
         current[j - 1] + 1,
         previous[j] + 1,
-        previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+        previous[j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1)
       );
     }
     previous = current;
   }
-  return previous[b.length];
+  return previous[right.length];
 }
 
 function relevanceScore(movie, query, tokens) {
@@ -90,7 +93,7 @@ router.get('/', async (req, res) => {
       const tokens = normalizedQuery.split(' ').filter(token => token.length > 1).slice(0, 8);
       const escaped = escapeRegex(q);
       // Match all but the final character too, so a one-character typo can still retrieve candidates.
-    const tokenPatterns = tokens.map(token => new RegExp(escapeRegex(token.slice(0, Math.min(3, token.length))), 'i'));
+    const tokenPatterns = tokens.map(token => new RegExp(escapeRegex(Array.from(token).slice(0, 3).join('')), 'i'));
       const searchFilter = {
         ...filter,
         $or: [
