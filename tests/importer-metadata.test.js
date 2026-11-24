@@ -153,7 +153,7 @@ test('recovers per-file sizes placed between filenames and download URLs', () =>
     'Example.Film.2024.720p.WEB-DL.mkv',
     '💾 1.1 GB',
     'https://mirror.hubcloud.app/file/size-two',
-  ].join('\\n'), 77, '2024-08-01');
+  ].join('\n'), 77, '2024-08-01');
 
   assert.ok(parsed);
   assert.equal(parsed.downloads.length, 2);
@@ -184,7 +184,7 @@ test('recovers a labelled size placed immediately before its filename', () => {
     'Size: 3.25 GB',
     'Another.Film.2022.1080p.BluRay.mkv',
     'https://node.gdflix.xyz/file/size-before',
-  ].join('\\n'), 78, '2022-10-01');
+  ].join('\n'), 78, '2022-10-01');
 
   assert.ok(parsed);
   assert.equal(parsed.downloads[0].size, '3.25GB');
