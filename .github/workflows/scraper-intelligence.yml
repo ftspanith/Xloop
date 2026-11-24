@@ -13,13 +13,15 @@ on:
       - 'utils/variant-intelligence.js'
       - 'utils/tmdbSearch.js'
       - 'pipeline_full.js'
+      - 'utils/extractedLinkMerge.js'
+      - 'tests/extracted-link-merge.test.js'
+      - 'routes/scrape.js'
       - 'utils/pipelineScope.js'
       - 'tests/pipeline-scope.test.js'
       - 'tests/orchestrator-safety.test.js'
       - 'routes/orchestrator.js'
       - 'tests/importer-metadata.test.js'
       - 'models/Movie.js'
-      - 'routes/scrape.js'
       - 'models/ExtractedLink.js'
       - 'scrape_api.js'
       - 'scrape-and-upload.js'
@@ -32,6 +34,9 @@ on:
       - 'utils/parser.js'
       - 'tests/importer-metadata.test.js'
       - 'pipeline_full.js'
+      - 'utils/extractedLinkMerge.js'
+      - 'tests/extracted-link-merge.test.js'
+      - 'routes/scrape.js'
       - 'utils/pipelineScope.js'
       - 'tests/pipeline-scope.test.js'
       - 'tests/orchestrator-safety.test.js'
@@ -41,7 +46,6 @@ on:
       - 'tests/telegram-ingestion.test.js'
       - 'utils/telegram-ingestion.js'
       - 'utils/variant-intelligence.js'
-      - 'routes/scrape.js'
       - 'models/ExtractedLink.js'
       - 'scrape_api.js'
       - 'scrape-and-upload.js'
@@ -60,6 +64,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:pipeline-safety
+      - run: npm run test:extracted-link-merge
       - run: npm run test:scraper-intelligence
       - run: npm run test:video-formats
       - run: npm run test:importer-metadata
