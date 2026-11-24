@@ -26,4 +26,5 @@ test('preserves complete filename metadata for the MongoDB importer', () => {
   assert.equal(entry.codec, 'HEVC');
   assert.equal(entry.audio, 'EAC3');
   assert.equal(entry.year, 2023);
+  assert.equal(entry.rawTitle, 'Sample Movie (2023)');
 });
