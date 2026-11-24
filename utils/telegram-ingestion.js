@@ -133,7 +133,7 @@ function extractTelegramLinks(inputMessages, account = '1') {
           continue;
         }
         const entry = {
-          messageId: parsed.messageId, title: parsed.title,
+          messageId: parsed.messageId, title: parsed.title, rawTitle: parsed.rawTitle || parsed.title,
           year: parsed.year == null ? null : parsed.year,
           type: parsed.type || (parsed.isSeries ? 'series' : 'movie'),
           contentType: parsed.contentType || '', isSeries: !!parsed.isSeries,
