@@ -1,6 +1,6 @@
 // Keep audio formats out of the catalogue's video-codec chips, including legacy data.
 function getVisibleVideoCodecs(item) {
-  const audioCodec = /^(?:E-?AC-?3|DDP|DD\+?|AC-?3|DTS|TRUEHD|ATMOS|AAC|FLAC|MP3|OPUS|ALAC|L?PCM|VORBIS|AC4|WMA|DOLBY DIGITAL)/i;
+  const audioCodec = /^(?:E-?AC-?3|DDP|DD\+?|AC-?3|DTS|TRUEHD|ATMOS|AAC|FLAC|MP3|OPUS|ALAC|L?PCM|VORBIS|AC4|WMA|DOLBY)/i;
   return Array.isArray(item && item.codecs)
     ? item.codecs.filter(codec => {
         const value = String(codec || '').trim();
