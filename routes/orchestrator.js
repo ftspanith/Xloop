@@ -200,7 +200,7 @@ async function setPipelineRunningFlag(running, progressData = null) {
 }
 
 // ── Start pipeline (auth via ?token= since EventSource cannot send headers) ──
-router.get('/start', auth, async (req, res) => {  const scope = String(req.query.scope || 'all').trim().toLowerCase();
+router.get('/start', auth, async (req, res) => {\n  const scope = String(req.query.scope || 'all').trim().toLowerCase();
   const titleFilter = String(req.query.titleFilter || '').trim().slice(0, 200);
   if (!['all', 'daily', 'title'].includes(scope)) {
     return res.status(400).json({ error: 'Invalid scope. Use all, daily, or title.' });
@@ -332,7 +332,7 @@ router.get('/start', auth, async (req, res) => {  const scope = String(req.query
 // ── Start pipeline (POST — backward compat for dashboard.html) ────────────────
 // dashboard.html uses POST; orchestrator.html uses GET EventSource.
 // This POST version just kicks off via the shared broadcast channel.
-router.post('/start', auth, async (req, res) => {  const body = req.body || {};
+router.post('/start', auth, async (req, res) => {\n  const body = req.body || {};
   const scope = String(body.scope || 'all').trim().toLowerCase();
   const titleFilter = String(body.titleFilter || '').trim().slice(0, 200);
   if (!['all', 'daily', 'title'].includes(scope)) {
