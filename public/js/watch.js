@@ -243,10 +243,10 @@ function normalizeAudioDisplayLabel(value) {
 
 function detectAudioChannelsForDisplay(download) {
   const stored = String(download?.audioChannels || '').trim();
-  const layouts = /^(?:9\.1\.6|7\.1\.6|7\.1\.4|5\.1\.4|5\.1\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)$/;
+  const layouts = /^(?:9\.1\.6|9\.1\.4|7\.1\.6|7\.1\.4|5\.1\.4|5\.1\.2|3\.1\.2|7\.2|5\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)$/;
   if (layouts.test(stored)) return stored;
   const technicalText = [download?.filename || '', download?.tags || ''].join(' ');
-  const match = technicalText.match(/(?<!\d)(9\.1\.6|7\.1\.6|7\.1\.4|5\.1\.4|5\.1\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)(?!\d)/i);
+  const match = technicalText.match(/(?<!\d)(9\.1\.6|9\.1\.4|7\.1\.6|7\.1\.4|5\.1\.4|5\.1\.2|3\.1\.2|7\.2|5\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3.0|2\.1|2\.0|1\.0)(?!\d)/i);
   if (match) return match[1];
   if (/\b(?:STEREO|2CH)\b/i.test(technicalText)) return '2.0';
   if (/\b(?:MONO|1CH)\b/i.test(technicalText)) return '1.0';
