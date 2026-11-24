@@ -96,7 +96,7 @@ function mergeSeriesDocuments(input) {
   );
   const primary = { ...sorted[0] };
   const fillFields = [
-    'tmdbId', 'imdbId', 'description', 'poster', 'posterFallback',
+    'tmdbId', 'imdbId', 'originalLanguage', 'description', 'poster', 'posterFallback',
     'backdrop', 'releaseDate', 'year', 'rating', 'duration', 'runtimeMinutes',
     'certification', 'totalSeasons',
   ];
