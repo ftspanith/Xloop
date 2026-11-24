@@ -405,7 +405,7 @@ router.post('/import-batch', auth, async (req, res) => {
   const mongoose = require('mongoose');
   const ExtractedLinkM = require('../models/ExtractedLink');
   const Movie = require('../models/Movie');
-  const { cleanTitleForApi, detectHost, classifyUrl } = require('../utils/parser');
+  const { cleanTitleForApi, detectHost, classifyUrl, extractYear } = require('../utils/parser');
   const { normalizeTelegramUrl } = require('../utils/telegram-ingestion');
   const { searchTMDB, searchOMDB, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates, searchGoogleImage } = require('../pipeline_full');
 
