@@ -71,7 +71,7 @@ test('Telegram ingestion carries only explicitly parsed multi-audio track detail
       '2. AAC | 2.0 | 128 kb/s | Hindi',
       'Multi.Audio.Sample.Film.2024.1080p.WEB-DL.HEVC.2GB.mkv',
       'https://gdflix.dev/file/multi-audio-ingestion',
-    ].join('\\n'),
+    ].join('\n'),
   };
   const result = extractTelegramLinks([message], '1');
   assert.equal(result.links.length, 1);
