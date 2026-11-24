@@ -134,16 +134,20 @@ function scoreMatch(parsed, tmdbResult) {
     reasons.push('Near perfect title match boost (+15)');
   }
 
-  // 2. Year match
-  if (parsed.year && tmdbResult.year) {
-    const yearDiff = Math.abs(parsed.year - tmdbResult.year);
-    if (yearDiff === 0)      { score += 30; reasons.push('Year exact match'); }
+  // For TV shows, message/title year is the premiere year. A later filename year
+  // is checked against TMDB season air_date by the shared matcher, not here.
+  const comparisonYear = parsed.isSeries
+    ? (parsed.messageYear || null)
+    : (parsed.messageYear || parsed.year || null);
+  if (comparisonYear && tmdbResult.year) {
+    const yearDiff = Math.abs(comparisonYear - tmdbResult.year);
+    if (yearDiff === 0) { score += 30; reasons.push('Year exact match'); }
     else if (yearDiff === 1) { score += 15; reasons.push('Year off by 1'); }
-    else if (yearDiff <= 2)  { score += 5;  reasons.push(`Year off by ${yearDiff}`); }
-    else                     { score -= 10; reasons.push(`Year mismatch (${yearDiff} years off)`); }
+    else if (yearDiff <= 2) { score += 5; reasons.push('Year off by ' + yearDiff); }
+    else { score -= 10; reasons.push('Year mismatch (' + yearDiff + ' years off)'); }
   } else {
-    score += 10; // no year to compare, neutral
-    reasons.push('No year to compare');
+    score += 10;
+    reasons.push('No parent year to compare');
   }
 
   // 3. Content type match
@@ -236,7 +240,7 @@ async function fetchOMDB(parsed, omdbKey) {
     const omdbYear = d.Year ? parseInt(d.Year, 10) : titleYearHint;
     const yearDiff = omdbYear && yearHints.length
       ? Math.min(...yearHints.map(value => Math.abs(value - omdbYear))) : null;
-    const omdbRange = (String(d.Year || '').match(/19\\d{2}|20\\d{2}/g) || []).map(Number);
+    const omdbRange = (String(d.Year || '').match(/19\d{2}|20\d{2}/g) || []).map(Number);
     const withinRun = isSeries && omdbRange.length > 1 &&
       yearHints.some(value => value >= omdbRange[0] && value <= omdbRange[omdbRange.length - 1]);
     if (yearDiff != null && yearDiff > (isSeries ? 5 : 3) && !withinRun) return null;
@@ -545,13 +549,13 @@ router.post('/bulk', auth, async (req, res) => {
       : finalType === 'series' ? { $in: ['series', 'anime'] } : 'movie';
     if (!existing) {
       existing = await Movie.findOne({
-        title: { $regex: `^${finalTitle.replace(/[.*+?^$\{\}()|[\]\\\\]/g, '\\\\$&')}$`, $options: 'i' },
+        title: new RegExp('^' + escapeRegex(finalTitle) + '$', 'i'),
         type: expectedTypes,
       });
     }
     if (!existing && finalTitle !== title) {
       existing = await Movie.findOne({
-        title: { $regex: `^${title.replace(/[.*+?^$\{\}()|[\]\\\\]/g, '\\\\$&')}$`, $options: 'i' },
+        title: new RegExp('^' + escapeRegex(title) + '$', 'i'),
         type: expectedTypes,
       });
     }
@@ -877,7 +881,7 @@ router.post('/manual-add', auth, async (req, res) => {
 
   const tmdbId = meta.tmdbId || '';
   let existing = tmdbId ? await Movie.findOne({ tmdbId }) : null;
-  if (!existing) existing = await Movie.findOne({ title: { $regex: `^${finalTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } });
+        title: new RegExp('^' + escapeRegex(finalTitle) + '$', 'i'),
 
   if (existing && !overwrite) {
     for (const newDl of downloads) {
