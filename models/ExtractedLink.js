@@ -19,6 +19,8 @@ const extractedLinkSchema = new mongoose.Schema({
   title:       { type: String, default: '' },
   rawTitle:    { type: String, default: '' },
   year:        { type: Number, default: null },
+  messageYear: { type: Number, default: null },
+  yearCandidates: { type: [Number], default: [] },
   quality:     { type: String, default: 'HD' },
   size:        { type: String, default: '' },
   language:    { type: String, default: '' },
