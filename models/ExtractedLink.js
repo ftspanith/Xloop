@@ -33,6 +33,7 @@ const extractedLinkSchema = new mongoose.Schema({
   container:   { type: String, default: '' },
   bitDepth:    { type: String, default: '' },
   audioChannels:{ type: String, default: '' },
+  fileYear:    { type: Number, default: null },
   audioTracks: { type: [AudioTrackSchema], default: [] },
   isRepack:    { type: Boolean, default: false },
   releaseType: { type: String, default: 'Original' },
