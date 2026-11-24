@@ -1030,6 +1030,15 @@ function extractYear(sources) {
   return null;
 }
 
+function extractYearCandidates(sources) {
+  const years = [];
+  for (const source of sources || []) {
+    const year = extractYear([source]);
+    if (year && !years.includes(year)) years.push(year);
+  }
+  return years;
+}
+
 // ─── MASTER PARSER ───────────────────────────────────────────────────────────
 function parseMessageBlock(rawText, messageId, msgDate) {
   if (!rawText||typeof rawText!=='string') return null;
@@ -1313,7 +1322,14 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   }
 
   const fullText=lines.join(' ');
-  const year=extractYear([masterTitle,firstFn,fullText]);
+  // Keep the title/message year (usually the show's first-air year) separate
+  // from each filename year (often the year a later season was released).
+  const messageYear = extractYear([masterTitle]);
+  const fileYearCandidates = extractYearCandidates(pairs.map(pair => pair.rawFilename));
+  const filenameYear = fileYearCandidates[0] || extractYear([firstFn]);
+  const yearCandidates = [...new Set([messageYear, ...fileYearCandidates].filter(Boolean))];
+  const year = messageYear || filenameYear || extractYear([fullText]);
+  if (year && !yearCandidates.includes(year)) yearCandidates.push(year);
   const {season,episode}=extractSeasonEpisode(fullText);
   const contentType=detectContentType(fullText);
   const isSeries=contentType==='series'||contentType==='anime'||season!==null;
@@ -1524,6 +1540,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const fileIsIMAX = /\bIMAX\b/i.test(fileContext);
     const {season:ds,episode:de}=extractSeasonEpisode(rawFn);
     const fs=ds??season, fe=de??episode;
+    const fileYear = extractYear([rawFn]) || null;
     const fileIdentity = stripEmojis(rawFn).toLowerCase().replace(/\s+/g, ' ').trim();
     const key=`${quality}__${size||'nosize'}__${releaseMeta.releaseType}__S${fs??''}E${fe??''}__${fileIdentity||pair.url}`;
 
@@ -1542,7 +1559,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
       languageType:effectiveLangInfo.languageType, languageCount:effectiveLangInfo.languageCount,
       isRepack:releaseMeta.isRepack, releaseType:releaseMeta.releaseType,
       isIMAX:fileIsIMAX, aspectRatio:fileAspectRatio,
-      season:fs,episode:fe,links:[]
+      season:fs,episode:fe,fileYear,links:[]
     };
     if (!fileMap[key].links.find(l=>l.url===pair.url)) {
       fileMap[key].links.push({host:detectHost(pair.url),url:normalizeGdflixUrl(pair.url),isFast:/gdflix\.dev|hubcloud|gdlink/i.test(pair.url)});
@@ -1575,7 +1592,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 
   const mediaMetadata = extractMediaMetadata(fullText);
   return {
-    title:cleanedTitle,rawTitle:masterTitle,year,language,languages:allLanguages,
+    title:cleanedTitle,rawTitle:masterTitle,year,messageYear,filenameYear,yearCandidates,language,languages:allLanguages,
     languageType:languageInfo.languageType, languageCount:languageInfo.languageCount,
     quality:bestQuality,contentType,isSeries,season,episode,downloads,messageId,
     date:msgDate||null,imdbId,tmdbIdHint,_isBatchList,
@@ -1592,7 +1609,7 @@ module.exports = {
   extractSize,toMB,detectHost,detectLanguage,detectAllLanguages,detectContentType,
   extractSeasonEpisode,detectCodec,detectContainer,detectHDR,detectBitDepth,detectAudioChannels,extractAudio,detectSource,isJunkTitle,isGenericTitleCandidate,isMetadataLine,
   normalizeLanguageList,classifyLanguages,detectReleaseMetadata,extractAspectRatio,extractRuntime,extractCertification,extractMediaMetadata,
-  extractTitleFromStreamingUrl, normalizeGdflixUrl, isKnownProviderHost,
+  extractTitleFromStreamingUrl, normalizeGdflixUrl, isKnownProviderHost,\n  extractYear, extractYearCandidates,
   parseManualInput,
 };
 
