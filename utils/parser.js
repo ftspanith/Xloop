@@ -1314,6 +1314,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     quality:bestQuality,contentType,isSeries,season,episode,downloads,messageId,
     date:msgDate||null,imdbId,tmdbIdHint,_isBatchList,
     isRepack:mediaMetadata.isRepack, releaseType:mediaMetadata.releaseType,
+    isRepack:mediaMetadata.isRepack, releaseType:mediaMetadata.releaseType,
     isIMAX:mediaMetadata.isIMAX, aspectRatio:mediaMetadata.aspectRatio,
     runtimeMinutes:mediaMetadata.runtimeMinutes, duration:mediaMetadata.duration,
     certification:mediaMetadata.certification
