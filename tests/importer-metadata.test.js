@@ -342,6 +342,7 @@ test('catalogue schema and import paths persist original language separately fro
   assert.match(schema, /originalLanguage:\s*\{\s*type:\s*String/);
   assert.match(pipeline, /originalLanguage:\s*meta\.originalLanguage\s*\|\|\s*''/);
   assert.match(importer, /originalLanguage:\s*meta\.originalLanguage\s*\|\|\s*''/);
+  assert.match(importer, /originalLanguage:\s*\(tmdb\?\.originalLanguage\s*\|\|\s*''\)/);
   assert.doesNotMatch(importer, /language:\s*result\.originalLanguage/);
   assert.doesNotMatch(importer, /language:\s*meta\.originalLanguage\s*\|\|\s*'Telugu'/);
 });
