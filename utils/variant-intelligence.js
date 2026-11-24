@@ -14,6 +14,17 @@ function sizeToBytes(value) {
   return Math.round(n * factor);
 }
 
+function dateToTimestamp(value) {
+  if (value == null || value === '') return 0;
+  const raw = String(value).trim();
+  if (/^\d{10,13}$/.test(raw)) {
+    const numeric = Number(raw);
+    return numeric < 1e12 ? numeric * 1000 : numeric;
+  }
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function titleKey(item) {
   return String(item?.title || item?.filename || '')
     .toLowerCase()
@@ -168,9 +179,16 @@ function rankVariantsForDisplay(items = [], options = {}) {
   const ranked = (Array.isArray(items) ? items : []).map(scoreVariant);
 
   // Keep every original/main release, but put explicitly-labelled repacks first.
-  // Within each release class, retain the established size-first ordering and
-  // quality scoring for close-size encodes.
-  function rankReleaseClass(releases) {
+  function rankReleaseClass(releases, preferNewestPost = false) {
+    if (preferNewestPost) {
+      // Among repacks of the same resolution, the newest Telegram repost wins.
+      return [...releases].sort((a, b) =>
+        dateToTimestamp(b.sourceDate || b.date) - dateToTimestamp(a.sourceDate || a.date) ||
+        b.qualityScore - a.qualityScore ||
+        (sizeToBytes(b.size || b.sizeBytes) || 0) - (sizeToBytes(a.size || a.sizeBytes) || 0)
+      );
+    }
+
     const sized = releases
       .map(item => ({ item, bytes: sizeToBytes(item.size || item.sizeBytes) }))
       .filter(entry => entry.bytes > 0)
@@ -197,7 +215,6 @@ function rankVariantsForDisplay(items = [], options = {}) {
 
   const repacks = ranked.filter(item => item.isRepack);
   const originals = ranked.filter(item => !item.isRepack);
-  return [...rankReleaseClass(repacks), ...rankReleaseClass(originals)];
+  return [...rankReleaseClass(repacks, true), ...rankReleaseClass(originals)];
 }
-
 module.exports = { sizeToBytes, titleKey, isRepackVariant, scoreVariant, analyzeVariantSet, nearDuplicateGroups, rankVariantsForDisplay };
