@@ -1113,6 +1113,13 @@ async function main(opts = {}) {
                     codec: dl.codec, hdr: dl.hdr, audio: dl.audio,
                     source: dl.source, container: dl.container,
                     bitDepth: dl.bitDepth, audioChannels: dl.audioChannels,
+                    isRepack: !!dl.isRepack, releaseType: dl.releaseType || 'Original',
+                    isIMAX: !!dl.isIMAX || !!parsed.isIMAX,
+                    aspectRatio: dl.aspectRatio || parsed.aspectRatio || '',
+                    languageType: dl.languageType || parsed.languageType || '',
+                    languageCount: dl.languageCount ?? parsed.languageCount ?? 0,
+                    runtimeMinutes: parsed.runtimeMinutes ?? null, duration: parsed.duration || '',
+                    certification: parsed.certification || '',
                     imdbId: parsed.imdbId || null, tmdbIdHint: parsed.tmdbIdHint || null,
                     messageId: msg.id || null, date: msg.date || msg.date_unixtime || null,
                   });
