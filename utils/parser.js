@@ -610,24 +610,35 @@ function extractAudio(fn) {
   const hasAtmos = /DOLBY[\s._-]*ATMOS|\bATMOS\b/.test(s);
   let codec = null;
 
-  // Prefer the underlying audio codec while preserving Atmos as an enhancement.
+  // Prefer the most specific codec spelling before matching its family.
   if (/TRUEHD/.test(s)) codec = 'TrueHD';
   else if (/DTS[.\s_-]?X\b/.test(s)) codec = 'DTS:X';
   else if (/DTS[.\s_-]?HD[.\s_-]?MA\b/.test(s)) codec = 'DTS-HD MA';
   else if (/DTS[.\s_-]?HD[.\s_-]?HRA\b/.test(s)) codec = 'DTS-HD HRA';
   else if (/DTS[.\s_-]?HD\b/.test(s)) codec = 'DTS-HD';
-  else if (/\bDTS\b/.test(s)) codec = 'DTS';
+  else if (/DTS[.\s_-]?ES\b/.test(s)) codec = 'DTS-ES';
+  else if (/DTS[.\s_-]?96[./\s_-]?24\b/.test(s)) codec = 'DTS 96/24';
+  else if (/DTS[.\s_-]?EXPRESS\b/.test(s)) codec = 'DTS Express';
+  else if (/E[.\s_-]?AC[.\s_-]?3[.\s_-]*JOC\b|\bDDP[.\s_-]*JOC\b|DOLBY[.\s_-]*DIGITAL[.\s_-]*PLUS[.\s_-]*JOC/.test(s)) codec = 'EAC3 JOC';
   else if (/E[.\s_-]?AC[.\s_-]?3|\bDDP(?:\+|\d+(?:\.\d+)?)?|\bDD\+|DOLBY[.\s_-]*DIGITAL[.\s_-]*PLUS/.test(s)) codec = 'EAC3';
   else if (/\bAC[.\s_-]?3\b|\bDD(?=\d|[.\s_-]|$)|\bDOLBY[.\s_-]*DIGITAL\b/.test(s)) codec = 'DD';
   else if (/\bAC[.\s_-]?4\b/.test(s)) codec = 'AC4';
-  else if (/\b(?:HE[.\s_-]?)?AAC(?:[.\s_-]?LC)?\b/.test(s)) codec = 'AAC';
+  else if (/\bMPEG[.\s_-]*H(?:\s*3D)?\b/.test(s)) codec = 'MPEG-H';
+  else if (/\bAURO[.\s_-]?3D\b/.test(s)) codec = 'Auro-3D';
+  else if (/\bHE[.\s_-]?AAC\b|\bHEAAC\b/.test(s)) codec = 'HE-AAC';
+  else if (/\bAAC[.\s_-]?LC\b/.test(s)) codec = 'AAC-LC';
+  else if (/\bAAC\b/.test(s)) codec = 'AAC';
   else if (/\bFLAC\b/.test(s)) codec = 'FLAC';
   else if (/\bOPUS\b/.test(s)) codec = 'Opus';
   else if (/\bALAC\b/.test(s)) codec = 'ALAC';
-  else if (/\bL?PCM\b/.test(s)) codec = 'PCM';
+  else if (/\bLPCM\b/.test(s)) codec = 'LPCM';
+  else if (/\bPCM\b/.test(s)) codec = 'PCM';
   else if (/\bVORBIS\b/.test(s)) codec = 'Vorbis';
   else if (/\bMP3\b/.test(s)) codec = 'MP3';
   else if (/\bMP2\b|MPEG[.\s_-]*AUDIO/.test(s)) codec = 'MP2';
+  else if (/\bMLP\b/.test(s)) codec = 'MLP';
+  else if (/\bWMA[.\s_-]*LOSSLESS\b/.test(s)) codec = 'WMA Lossless';
+  else if (/\bWMA[.\s_-]*PRO\b/.test(s)) codec = 'WMA Pro';
   else if (/\bWMA\b/.test(s)) codec = 'WMA';
 
   if (hasAtmos) return codec ? codec + ' Atmos' : 'Atmos';
