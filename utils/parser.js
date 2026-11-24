@@ -485,7 +485,7 @@ function detectBitDepth(fn) {
 function detectAudioChannels(fn) {
   const s = String(fn || '').toUpperCase();
   // Check immersive layouts before shorter prefixes (e.g. 5.1.2 before 5.1).
-  const m = s.match(/(?<![\d.])(9\.1\.6|7\.1\.6|7\.1\.4|5\.1\.4|5\.1\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)(?![\d.])/);
+  const m = s.match(/(?<!\d)(9\.1\.6|7\.1\.6|7\.1\.4|5\.1\.4|5\.1\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)(?!\d)/);
   if (m) return m[1];
   if (/\b(?:STEREO|2CH)\b/.test(s)) return '2.0';
   if (/\b(?:MONO|1CH)\b/.test(s)) return '1.0';
