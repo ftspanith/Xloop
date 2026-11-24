@@ -104,17 +104,38 @@ function isKnownProviderHost(value) {
   return !!getProviderDomain(value);
 }
 
-// Strip provider subdomains and canonicalize the main mirrors while retaining
-// path, query, fragment and protocol.
+// Keep the repository's existing canonical domains stable. Only genuinely new
+// TLD rotations fall back to a default host, while mirror subdomains collapse
+// to the same root domain that older imports already used.
+const KNOWN_PROVIDER_DOMAINS = new Set([
+  'gdflix.dev', 'gdflix.to', 'gdflix.one', 'gdflix.link', 'gdflix.net',
+  'gdflix.dad', 'gdflix.cfd', 'gdflix.io', 'gdlink.dev',
+  'gdtot.dad', 'gdtot.one', 'gdtot.sbs', 'extralink.cfd',
+  'neolinks.sbs', 'gtlinks.me',
+  'hubcloud.foo', 'hubcloud.one', 'hubcloud.art', 'hubcloud.cx',
+  'hubcloud.lol', 'hubcloud.bz', 'hubcloud.club', 'hubcloud.in',
+  'hubcloud.to', 'hubcloud.work', 'hubcloud.zone', 'hubcloud.dev',
+  'hubcloud.me', 'hubcloud.best',
+  'drivehub.dev', 'drivehub.to', 'drivehub.in', 'drivehub.online',
+  'tmbcloud.dev', 'tmbcloud.online', 'tmbcloud.lol',
+]);
+
 function normalizeGdflixUrl(value) {
   try {
     const parsed = new URL(String(value || '').trim());
     const provider = getProviderDomain(parsed.hostname);
     if (!provider) return value;
-    if (provider.brand === 'gdflix' || provider.brand === 'gdlink') parsed.hostname = 'gdflix.dev';
-    else if (provider.brand === 'hubcloud' || provider.brand === 'drivehub') parsed.hostname = 'hubcloud.one';
-    else if (provider.brand === 'tmbcloud') parsed.hostname = 'tmbcloud.dev';
-    else parsed.hostname = provider.domain;
+    if (KNOWN_PROVIDER_DOMAINS.has(provider.domain)) {
+      parsed.hostname = provider.domain;
+    } else if (provider.brand === 'gdflix' || provider.brand === 'gdlink') {
+      parsed.hostname = 'gdflix.dev';
+    } else if (provider.brand === 'hubcloud' || provider.brand === 'drivehub') {
+      parsed.hostname = 'hubcloud.one';
+    } else if (provider.brand === 'tmbcloud') {
+      parsed.hostname = 'tmbcloud.dev';
+    } else {
+      parsed.hostname = provider.domain;
+    }
     return parsed.toString();
   } catch (_) {
     return value;
