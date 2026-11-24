@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const Movie = require('../models/Movie');
+const { dedupeSeriesDocuments } = require('../utils/seriesGrouping');
 
 function escapeRegex(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -50,7 +51,7 @@ function relevanceScore(movie, query, tokens) {
   }
   const description = normalize(movie.description);
   const genres = normalize((movie.genre || []).join(' '));
-  const languages = normalize([movie.language, ...(movie.languages || [])].join(' '));
+  const languages = normalize([movie.language, movie.originalLanguage, ...(movie.languages || [])].join(' '));
 
   if (title === query) score += 160;
   else if (title.startsWith(query)) score += 115;
@@ -92,6 +93,7 @@ router.get('/', async (req, res) => {
     let results = [];
     let total = 0;
     let matchedTotal = null;
+    let truncated = false;
     if (q) {
       const normalizedQuery = normalize(q);
       const tokens = normalizedQuery.split(' ').filter(token => token.length > 1).slice(0, 8);
@@ -104,6 +106,7 @@ router.get('/', async (req, res) => {
           { title: { $regex: escaped, $options: 'i' } },
           { description: { $regex: escaped, $options: 'i' } },
           { language: { $regex: escaped, $options: 'i' } },
+          { originalLanguage: { $regex: escaped, $options: 'i' } },
           { languages: { $regex: escaped, $options: 'i' } },
           { genre: { $regex: escaped, $options: 'i' } },
           ...tokenPatterns.flatMap(pattern => [
@@ -116,8 +119,17 @@ router.get('/', async (req, res) => {
         Movie.countDocuments(searchFilter)
       ]);
       matchedTotal = count;
-      total = candidates.length;
-      results = candidates
+      truncated = count > candidates.length;
+      // A TV show may have one staged record per season/upload. Search should
+      // return one parent Series/Anime result, merging season posters/years
+      // and download variants through the same canonical grouping helper.
+      const movieCandidates = candidates.filter(movie => movie.type === 'movie');
+      const seriesCandidates = dedupeSeriesDocuments(
+        candidates.filter(movie => movie.type === 'series' || movie.type === 'anime')
+      );
+      const uniqueCandidates = [...movieCandidates, ...seriesCandidates];
+      total = uniqueCandidates.length;
+      results = uniqueCandidates
         .map(movie => ({ movie, score: relevanceScore(movie, normalizedQuery, tokens) }))
         .sort((a, b) => b.score - a.score || (Number(b.movie.rating) || 0) - (Number(a.movie.rating) || 0) || new Date(b.movie.createdAt) - new Date(a.movie.createdAt))
         .slice((page - 1) * limit, page * limit)
@@ -132,7 +144,7 @@ router.get('/', async (req, res) => {
     }
 
     res.json({
-      results, total, matchedTotal, truncated: matchedTotal !== null && matchedTotal > total, page, pages: Math.ceil(total / limit),
+      results, total, matchedTotal, truncated, page, pages: Math.ceil(total / limit),
       movies: results.filter(item => item.type === 'movie'),
       series: results.filter(item => item.type === 'series' || item.type === 'anime')
     });

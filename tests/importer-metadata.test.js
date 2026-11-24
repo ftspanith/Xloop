@@ -19,6 +19,7 @@ const { buildTitleCandidates } = require('../utils/tmdbSearch');
 const { recomputeAggregates } = require('../pipeline_full');
 
 const pipelineSource = fs.readFileSync(path.join(__dirname, '..', 'pipeline_full.js'), 'utf8');
+const importSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'import.js'), 'utf8');
 const sharedSearchSource = fs.readFileSync(path.join(__dirname, '..', 'utils', 'tmdbSearch.js'), 'utf8');
 const { analyzeVariantSet } = require('../utils/variant-intelligence');
 
@@ -35,6 +36,12 @@ test('shared TMDB candidate engine produces sequel, subtitle and Roman numeral v
     2017
   );
   assert.ok(baahubali.includes('Baahubali 2 The Conclusion'));
+});
+
+test('manual metadata lookup never retries with an explicit title year removed', () => {
+  assert.doesNotMatch(importSource, /fetchTMDB\(\{\s*\.\.\.parsed,\s*year:\s*null\s*\}/);
+  assert.match(importSource, /return _sharedSearchOMDB\(/);
+  assert.match(importSource, /Only use a poster after title\/year verification/);
 });
 
 test('Telegram parser preserves IDs and all rich filename metadata for DB importer', () => {
@@ -133,7 +140,7 @@ test('recognizes additional surround channel layouts without guessing from forma
 test('MongoDB-only importer calls the shared TMDB/OMDb engine and poster fallback chain', () => {
   assert.match(pipelineSource, /sharedMetadataSearch\.searchTMDB\(/);
   assert.match(pipelineSource, /sharedMetadataSearch\.searchOMDB\(/);
-  assert.match(pipelineSource, /searchGoogleImage\(rep\.title, rep\.year, isSer\)/);
+  assert.match(pipelineSource, /searchGoogleImage\(rep\.title, isSer \? \(rep\.messageYear \|\| null\) : \(rep\.messageYear \|\| rep\.year\), isSer\)/);
   assert.match(pipelineSource, /validatePoster\(meta\.poster\)/);
   assert.match(pipelineSource, /rep\.imdbId \|\| null, rep\.tmdbIdHint \|\| null/);
   assert.match(pipelineSource, /const needsMetadata = !existing/);
@@ -262,7 +269,8 @@ test('recovers a labelled size placed immediately before its filename', () => {
 
 test('explicit MongoDB catalogue reset preserves the ExtractedLink source collection', () => {
   assert.match(pipelineSource, /_argv\.includes\('--clean-catalogue'\)/);
-  assert.match(pipelineSource, /const NO_WIPE\s+= FROM_MONGODB \? !CLEAN_CATALOGUE/);
+  assert.match(pipelineSource, /const requestedNoWipe = FROM_MONGODB \? !CLEAN_CATALOGUE/);
+  assert.match(pipelineSource, /const NO_WIPE = requestedNoWipe \|\| scope !== 'all' \|\| RESUME/);
   assert.match(pipelineSource, /await Movie\.deleteMany\(\{\}\)/);
   assert.match(pipelineSource, /ExtractedLink\.find\(\{\}\)\.lean\(\)/);
   assert.match(pipelineSource, /ExtractedLink source preserved/);
@@ -321,4 +329,27 @@ test('pipeline retries TMDB and OMDb with per-file release title candidates', ()
   assert.match(pipelineSource, /\.\.\.group\.items\.map\(item => item && item\.filename\)/);
   assert.ok(pipelineSource.includes('[TMDB] Filename/title fallback matched:'));
   assert.match(pipelineSource, /for \(const candidate of tmdbSearchCandidates\.slice\(0, 4\)\)/);
+});
+
+
+test('catalogue schema and import paths persist original language separately from downloads', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const schema = fs.readFileSync(path.join(root, 'models', 'Movie.js'), 'utf8');
+  const pipeline = fs.readFileSync(path.join(root, 'pipeline_full.js'), 'utf8');
+  const importer = fs.readFileSync(path.join(root, 'routes', 'import.js'), 'utf8');
+  assert.match(schema, /originalLanguage:\s*\{\s*type:\s*String/);
+  assert.match(pipeline, /originalLanguage:\s*meta\.originalLanguage\s*\|\|\s*''/);
+  assert.match(importer, /originalLanguage:\s*meta\.originalLanguage\s*\|\|\s*''/);
+  assert.match(importer, /originalLanguage:\s*\(tmdb\?\.originalLanguage\s*\|\|\s*''\)/);
+  assert.doesNotMatch(importer, /language:\s*result\.originalLanguage/);
+  assert.doesNotMatch(importer, /language:\s*meta\.originalLanguage\s*\|\|\s*'Telugu'/);
+});
+
+test('missing release years remain unknown instead of being replaced by the current year', () => {
+  const pipeline = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'pipeline_full.js'), 'utf8');
+  const importer = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'routes', 'import.js'), 'utf8');
+  assert.doesNotMatch(pipeline, /year:\s*meta\.year[^\n]*new Date\(\)\.getFullYear\(\)/);
+  assert.doesNotMatch(importer, /year:\s*meta\.year[^\n]*new Date\(\)\.getFullYear\(\)/);
 });

@@ -200,7 +200,11 @@ async function setPipelineRunningFlag(running, progressData = null) {
 }
 
 // ── Start pipeline (auth via ?token= since EventSource cannot send headers) ──
-router.get('/start', auth, async (req, res) => {
+router.get('/start', auth, async (req, res) => {  const scope = String(req.query.scope || 'all').trim().toLowerCase();
+  const titleFilter = String(req.query.titleFilter || '').trim().slice(0, 200);
+  if (!['all', 'daily', 'title'].includes(scope)) return res.status(400).json({ error: 'Invalid scope. Use all, daily, or title.' });
+  if (scope === 'title' && titleFilter.length < 3) return res.status(400).json({ error: 'titleFilter must contain at least 3 characters for title scope.' });
+
   // Check MongoDB flag first — catches stale flags from crashed/timed-out runs
   try {
     const PipelineCache = require('../models/PipelineCache');
@@ -228,8 +232,7 @@ router.get('/start', auth, async (req, res) => {
 
   const skipScraper = req.query.skipScraper === 'true';
   const resume = req.query.resume === 'true';
-  const scope       = req.query.scope || 'all';          // 'all' | 'daily' | 'title'
-  const titleFilter = (req.query.titleFilter || '').trim();
+  // Scope and titleFilter validated before pipeline state changes.
   // If skipBypass is explicitly passed, parse it. Otherwise default to skipScraper.
   const skipBypass = req.query.skipBypass ? req.query.skipBypass === 'true' : skipScraper;
   const scopeLabel  = scope === 'daily' ? ' [Today\'s New]' : scope === 'title' && titleFilter ? ` [Title: ${titleFilter}]` : '';
@@ -294,7 +297,8 @@ router.get('/start', auth, async (req, res) => {
       await runPipeline({
         // skipBypass is always defined here (line 156), so just use it directly
         noBypass: !!skipBypass,
-        noWipe: !!skipScraper,
+        // Daily/title imports and resumes must never wipe the catalogue.
+        noWipe: !!skipScraper || scope !== 'all' || !!resume,
         fromMongoDB: !!skipScraper,
         resume: !!resume,
         importSrc,
@@ -324,7 +328,12 @@ router.get('/start', auth, async (req, res) => {
 // ── Start pipeline (POST — backward compat for dashboard.html) ────────────────
 // dashboard.html uses POST; orchestrator.html uses GET EventSource.
 // This POST version just kicks off via the shared broadcast channel.
-router.post('/start', auth, async (req, res) => {
+router.post('/start', auth, async (req, res) => {  const body = req.body || {};
+  const scope = String(body.scope || 'all').trim().toLowerCase();
+  const titleFilter = String(body.titleFilter || '').trim().slice(0, 200);
+  if (!['all', 'daily', 'title'].includes(scope)) return res.status(400).json({ error: 'Invalid scope. Use all, daily, or title.' });
+  if (scope === 'title' && titleFilter.length < 3) return res.status(400).json({ error: 'titleFilter must contain at least 3 characters for title scope.' });
+
   // Check MongoDB flag first — catches stale flags from crashed/timed-out runs on ANY instance
   try {
     const PipelineCache = require('../models/PipelineCache');
@@ -351,7 +360,7 @@ router.post('/start', auth, async (req, res) => {
     return res.status(400).json({ error: 'Pipeline is already running' });
   }
 
-  const { skipScraper, resume, skipBypass, scope = 'all', titleFilter = '' } = req.body || {};
+  const { skipScraper, resume, skipBypass } = body;
   const scopeLabel = scope === 'daily' ? ' [Today\'s New]' : (scope === 'title' && titleFilter ? ` [Title: ${titleFilter}]` : '');
   const label = (skipScraper ? 'Skip Scraper (import-only)' : 'Full Pipeline') + scopeLabel;
 
@@ -375,7 +384,8 @@ router.post('/start', auth, async (req, res) => {
         // If skipBypass not explicitly set, default to skipScraper
         // (Skip Scraper = import-only = no bypass needed)
         noBypass: skipBypass !== undefined ? !!skipBypass : !!skipScraper,
-        noWipe: !!skipScraper,
+        // Daily/title imports and resumes must never wipe the catalogue.
+        noWipe: !!skipScraper || scope !== 'all' || !!resume,
         fromMongoDB: !!skipScraper,
         resume: !!resume,
         scope,
@@ -405,7 +415,7 @@ router.post('/import-batch', auth, async (req, res) => {
   const mongoose = require('mongoose');
   const ExtractedLinkM = require('../models/ExtractedLink');
   const Movie = require('../models/Movie');
-  const { cleanTitleForApi, detectHost, classifyUrl } = require('../utils/parser');
+  const { cleanTitleForApi, detectHost, classifyUrl, extractYear } = require('../utils/parser');
   const { normalizeTelegramUrl } = require('../utils/telegram-ingestion');
   const { searchTMDB, searchOMDB, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates, searchGoogleImage } = require('../pipeline_full');
 
@@ -434,7 +444,9 @@ router.post('/import-batch', auth, async (req, res) => {
 
       const cTitle = cleanTitleForApi(item.title || '', item.year);
       if (!cTitle || cTitle.length < 2) continue;
-      const key = cTitle.toLowerCase() + '__' + (item.year || '');
+      const isSeriesEntry = !!(item.isSeries || item.contentType === 'series' || item.contentType === 'anime');
+      const groupYear = isSeriesEntry ? (item.messageYear || '') : (item.messageYear || item.year || '');
+      const key = cTitle.toLowerCase() + '__' + groupYear;
       if (!groups.has(key)) groups.set(key, { items: [], msgDate: item.date || null });
       groups.get(key).items.push({ ...item, url: normalizedUrl, host: detectHost(normalizedUrl) });
     }
@@ -466,23 +478,40 @@ router.post('/import-batch', auth, async (req, res) => {
       try {
         const rep = group.items[0];
         const isSer = !!(rep.isSeries || rep.contentType === 'series' || rep.contentType === 'anime');
-        const cleanTitle = cleanTitleForApi(rep.title || '', rep.year);
+        const cleanTitle = cleanTitleForApi(rep.title || '', rep.messageYear || rep.year);
         if (!cleanTitle || cleanTitle.length < 2) { skipped++; continue; }
 
-        // Check duplicate
-        const escapedTitle = cleanTitle.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
-        let existing = rep.year
-          ? await Movie.findOne({ title: { $regex: '^' + escapedTitle + '$', $options: 'i' }, year: Number(rep.year) })
-          : await Movie.findOne({ title: { $regex: '^' + escapedTitle + '$', $options: 'i' } });
+        // Reuse the same show record even when an upload belongs to a later season.
+        const escapedTitle = [...cleanTitle].map(char =>
+          '$^.*+?()[]{}|'.includes(char) || char === String.fromCharCode(92)
+            ? String.fromCharCode(92) + char : char
+        ).join('');
+        const titleRegex = new RegExp('^' + escapedTitle + '$', 'i');
+        const expectedTypes = isSer ? { $in: ['series', 'anime'] } : 'movie';
+        let existing = null;
+        if (rep.tmdbIdHint) existing = await Movie.findOne({ tmdbId: String(rep.tmdbIdHint), type: expectedTypes });
+        if (!existing && isSer && rep.messageYear) {
+          existing = await Movie.findOne({ title: titleRegex, type: expectedTypes, year: Number(rep.messageYear) });
+        }
+        if (!existing && !isSer && rep.year) {
+          existing = await Movie.findOne({ title: titleRegex, type: expectedTypes, year: Number(rep.year) });
+        }
+        if (!existing) existing = await Movie.findOne({ title: titleRegex, type: expectedTypes });
 
         // Full TMDB + OMDB enrichment
         let meta = {};
         const tmdbSeason = rep.season || null;
-        const tmdb = await searchTMDB(cleanTitle, rep.year, isSer, tmdbSeason, group.msgDate, rep.imdbId || null, rep.tmdbIdHint || null);
+        const yearHints = [...new Set([rep.messageYear, rep.year, ...(rep.yearCandidates || []),
+          ...group.items.map(file => file.fileYear || extractYear([file.filename]))].filter(Boolean).map(Number))];
+        const seasonYearHints = group.items.filter(file => !tmdbSeason || Number(file.season) === Number(tmdbSeason))
+          .map(file => file.fileYear || extractYear([file.filename]) || (!rep.messageYear ? file.year : null)).filter(Boolean);
+        const titleYearHint = isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year);
+        const tmdb = await searchTMDB(cleanTitle, titleYearHint, isSer, tmdbSeason, group.msgDate,
+          rep.imdbId || null, rep.tmdbIdHint || null, yearHints, seasonYearHints);
         if (tmdb) {
           Object.assign(meta, tmdb);
           // Always fetch OMDB for rating, imdbId, and fallback poster
-          const omdb = await searchOMDB(cleanTitle, rep.year, isSer);
+          const omdb = await searchOMDB(cleanTitle, titleYearHint, isSer, yearHints);
           if (omdb) {
             if (!meta.rating && omdb.rating)           meta.rating = omdb.rating;
             if (!meta.description && omdb.description) meta.description = omdb.description;
@@ -493,12 +522,12 @@ router.post('/import-batch', auth, async (req, res) => {
             if (omdb.poster && omdb.poster !== meta.poster) meta.posterFallback = omdb.poster;
           }
         } else {
-          const omdb = await searchOMDB(cleanTitle, rep.year, isSer);
+          const omdb = await searchOMDB(cleanTitle, titleYearHint, isSer, yearHints);
           if (omdb) Object.assign(meta, omdb, { tmdbId: '' });
         }
         // Google Image fallback when poster still empty
         if (!meta.poster) {
-          const gImg = await searchGoogleImage(rep.title, rep.year, isSer);
+          const gImg = await searchGoogleImage(rep.title, titleYearHint, isSer);
           if (gImg) { meta.poster = gImg; emit(`[IMG] Google image: ${rep.title}`); }
         }
 
@@ -534,13 +563,14 @@ router.post('/import-batch', auth, async (req, res) => {
 
           let dbRec = existing;
           if (!dbRec && meta.tmdbId) {
-            dbRec = await Movie.findOne({ tmdbId: meta.tmdbId });
+            dbRec = await Movie.findOne({ tmdbId: meta.tmdbId, type: expectedTypes });
             existing = dbRec;
           }
 
           const newDl = {
             quality, size, filename: item.filename || '', language, codec, hdr, audio, audioTracks,
             season: correctSeason, episode: item.episode ?? null,
+            fileYear: item.fileYear || extractYear([item.filename]) || null,
             links: [{ host, url: finalUrl, isFast: /gdflix|hubcloud|gdlink/i.test(finalUrl) }],
           };
 
@@ -578,6 +608,12 @@ router.post('/import-batch', auth, async (req, res) => {
             }
 
             const metaSet = {};
+            if (!dbRec.releaseDate && meta.releaseDate) metaSet.releaseDate = meta.releaseDate;
+            if (meta.year && meta.releaseDate && (!dbRec.tmdbId || String(dbRec.tmdbId) === String(meta.tmdbId))) {
+              metaSet.year = meta.year;
+            }
+            const seasonYear = meta.seasonYear || newDl.fileYear;
+            if (correctSeason && seasonYear) metaSet['seasonYears.s' + correctSeason] = Number(seasonYear);
             if (!dbRec.backdrop       && meta.backdrop)       metaSet.backdrop       = meta.backdrop;
             if (!dbRec.poster         && meta.poster)         metaSet.poster         = meta.poster;
             if (!dbRec.posterFallback && meta.posterFallback) metaSet.posterFallback = meta.posterFallback;
@@ -626,7 +662,10 @@ router.post('/import-batch', auth, async (req, res) => {
               description: meta.description || '',
               poster: meta.poster || '', posterFallback: meta.posterFallback || '',
               backdrop: meta.backdrop || '',
-              rating: meta.rating || 0, year: meta.year || rep.year || null,
+              releaseDate: meta.releaseDate || '',
+              seasonYears: Object.fromEntries(group.items.filter(file => file.season && file.fileYear)
+                .map(file => ['s' + file.season, Number(file.fileYear)])),
+              rating: meta.rating || 0, year: meta.year || rep.messageYear || (isSer ? null : rep.year) || null,
               genre: meta.genre || [], duration: meta.duration || '', quality, language: origLang2,
               formats: [quality].filter(Boolean), codecs: [codec].filter(c => c && c !== 'Other'),
               languages: (language || origLang2).split(',').map(l => l.trim()).filter(Boolean),
@@ -811,7 +850,7 @@ router.get('/logs', auth, async (req, res) => {
 
 
 module.exports = router;
-router.get('/start-local', async (req, res) => {
+router.get('/start-local', auth, async (req, res) => {
   if (pipelineRunning) return res.status(400).json({ error: 'Pipeline is already running' });
 
   const skipScraper = req.query.skipScraper === 'true';

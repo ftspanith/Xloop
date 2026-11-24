@@ -227,6 +227,13 @@ function getAvailableLanguageLabels(downloads) {
   return [...labels];
 }
 
+function formatDownloadLanguageLabel(languageType, lang) {
+  // Multi is intentionally branded as MULTi; never append the same label twice.
+  if (languageType === 'Multi') return 'MULTi';
+  if (languageType === 'Dual') return 'DUAL';
+  return lang || '';
+}
+
 function normalizeAudioDisplayLabel(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -608,8 +615,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       ? `<span class="dl-row-se">${row.season?'S'+String(row.season).padStart(2,'0'):''}${row.episode?'E'+String(row.episode).padStart(2,'0'):''}</span>`
       : '';
 
-    const langText = ['Dual', 'Multi'].includes(row.languageType) && row.lang && row.lang !== row.languageType.toUpperCase()
-      ? `${row.languageType.toUpperCase()} · ${row.lang}` : row.lang;
+    const langText = formatDownloadLanguageLabel(row.languageType, row.lang);
     const langBadge = langText
       ? `<span class="dl-row-lang">${langText}</span>`
       : '';
@@ -758,6 +764,7 @@ async function loadEpisodes(downloads, fallbackImg, language, type, id) {
     seasons[ts.seasonNumber] = {
       tmdbCount: ts.episodeCount,
       name: ts.name || `Season ${ts.seasonNumber}`,
+      year: Number(ts.year) || null,
       eps: {},
       packs: []  // Season packs (full season zip files, episode=null)
     };
@@ -768,7 +775,9 @@ async function loadEpisodes(downloads, fallbackImg, language, type, id) {
     downloads.forEach(dl => {
       // Read the real season from the filename if the DB season is wrong
       const s = dl.season || 1;
-      if (!seasons[s]) seasons[s] = { tmdbCount: 0, name: `Season ${s}`, eps: {}, packs: [] };
+      const downloadYear = Number(dl.fileYear || dl.seasonYear) || null;
+      if (!seasons[s]) seasons[s] = { tmdbCount: 0, name: `Season ${s}`, year: downloadYear, eps: {}, packs: [] };
+      else if (!seasons[s].year && downloadYear) seasons[s].year = downloadYear;
       
       // If episode is null/undefined, it's a SEASON PACK (full-season zip)
       if (!dl.episode) {
@@ -828,7 +837,7 @@ async function loadEpisodes(downloads, fallbackImg, language, type, id) {
       const epBadge = totalEps > 0 ? `<span style="font-size:0.68em; background:${badgeColor}; color:#fff; border-radius:4px; padding:1px 5px; margin-left:4px;">${haveEps}/${totalEps}</span>` : '';
       return `
         <button class="season-btn ${isActive}" style="animation-delay:${delay}s" onclick="selectSeason(${s})">
-          Season ${s} ${epBadge}
+          Season ${s}${sd.year ? ' · ' + sd.year : ''} ${epBadge}
         </button>
       `;
     }).join('');
