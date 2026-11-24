@@ -1264,7 +1264,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const {season:ds,episode:de}=extractSeasonEpisode(rawFn);
     const fs=ds??season, fe=de??episode;
     const fileIdentity = stripEmojis(rawFn).toLowerCase().replace(/\s+/g, ' ').trim();
-    const key=`${quality}__${size||'nosize'}__S${fs??''}E${fe??''}__${fileIdentity||pair.url}`;
+    const key=`${quality}__${size||'nosize'}__${releaseMeta.releaseType}__S${fs??''}E${fe??''}__${fileIdentity||pair.url}`;
 
     const audio = extractAudio(rawFn) || null;
     const bitDepth = detectBitDepth(rawFn);
