@@ -579,6 +579,9 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       _emitter(`[WARN]  No TMDB — raw title: "${meta.title}"`);
     }
 
+    // Preserve an IMDb ID explicitly parsed from Telegram even when OMDb is not configured.
+    if (!meta.imdbId && rep.imdbId) meta.imdbId = rep.imdbId;
+
     const tmdbGenres  = (meta.genre || []).map(g => (g||'').toLowerCase());
     const isAnimation = tmdbGenres.some(g => /animation|anime/i.test(g));
     const origLang    = (meta.originalLanguage || '').toLowerCase();
@@ -1027,8 +1030,13 @@ async function main(opts = {}) {
                     title: parsed.title, year: parsed.year,
                     quality: dl.quality, size: dl.size, language: dl.language,
                     season: dl.season ?? null, episode: dl.episode ?? null,
-                    type: parsed.type, filename: dl.filename,
+                    type: parsed.type, contentType: parsed.contentType, isSeries: !!parsed.isSeries,
+                    filename: dl.filename,
                     codec: dl.codec, hdr: dl.hdr, audio: dl.audio,
+                    source: dl.source, container: dl.container,
+                    bitDepth: dl.bitDepth, audioChannels: dl.audioChannels,
+                    imdbId: parsed.imdbId || null, tmdbIdHint: parsed.tmdbIdHint || null,
+                    messageId: msg.id || null, date: msg.date || msg.date_unixtime || null,
                   });
                 }
               }
