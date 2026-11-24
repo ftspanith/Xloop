@@ -1,0 +1,38 @@
+name: Search UI Regression Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "public/search.html"
+      - "public/css/style.css"
+      - "public/js/app.js"
+      - "routes/search.js"
+      - "test/search-ui-regressions.test.js"
+      - "package.json"
+      - ".github/workflows/search-ui-regression.yml"
+  push:
+    branches:
+      - ui/search-motion-responsive-refine
+    paths:
+      - "public/search.html"
+      - "public/css/style.css"
+      - "public/js/app.js"
+      - "routes/search.js"
+      - "test/search-ui-regressions.test.js"
+      - "package.json"
+      - ".github/workflows/search-ui-regression.yml"
+
+jobs:
+  search-ui-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run search UI regression tests
+        run: npm run test:search-ui
