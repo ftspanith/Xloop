@@ -227,6 +227,56 @@ function getAvailableLanguageLabels(downloads) {
   return [...labels];
 }
 
+function normalizeAudioDisplayLabel(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return raw
+    .replace(/E[.\s_-]?AC[.\s_-]?3/ig, 'DDP')
+    .replace(/\bDDP\+?/ig, 'DDP')
+    .replace(/\bDD\+|\bDD[.\s_-]+PLUS/ig, 'DDP')
+    .replace(/DOLBY[.\s_-]*DIGITAL[.\s_-]*PLUS/ig, 'DDP')
+    .replace(/AC[.\s_-]?3/ig, 'DD')
+    .replace(/DOLBY[.\s_-]*DIGITAL/ig, 'DD')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function detectAudioChannelsForDisplay(download) {
+  const stored = String(download?.audioChannels || '').trim();
+  const layouts = /^(?:9\.1\.6|7\.1\.6|7\.1\.4|5\.1\.4|5\.1\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)$/;
+  if (layouts.test(stored)) return stored;
+  const technicalText = [download?.filename || '', download?.tags || ''].join(' ');
+  const match = technicalText.match(/(?<!\d)(9\.1\.6|7\.1\.6|7\.1\.4|5\.1\.4|5\.1\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)(?!\d)/i);
+  if (match) return match[1];
+  if (/\b(?:STEREO|2CH)\b/i.test(technicalText)) return '2.0';
+  if (/\b(?:MONO|1CH)\b/i.test(technicalText)) return '1.0';
+  return '';
+}
+
+function buildAudioDisplayTag(download, audioValue) {
+  const audio = normalizeAudioDisplayLabel(audioValue || download?.audio);
+  if (!audio) return '';
+  const channels = detectAudioChannelsForDisplay(download);
+  return channels ? audio + ' + ' + channels : audio;
+}
+
+function buildTechnicalMetadataTags(info, download) {
+  const dl = download || {};
+  const videoParts = [
+    info?.hdr,
+    info?.source,
+    info?.codec,
+    String(dl.bitDepth || '').trim(),
+  ].filter(Boolean);
+  if (dl.isIMAX || /\bIMAX\b/i.test(dl.filename || '')) videoParts.push('IMAX');
+  if (dl.aspectRatio) videoParts.push('AR ' + dl.aspectRatio);
+  const audioTag = buildAudioDisplayTag(dl, info?.audio);
+  const parts = [...videoParts];
+  if (audioTag) parts.push(audioTag);
+  if ((videoParts.length || audioTag) && info?.platform) parts.push(info.platform);
+  return parts.join(' · ');
+}
+
 // ── Flat-list download section ─────────────────────────────────────────────────
 function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
   if (!rawDownloads || rawDownloads.length === 0) return '';
@@ -307,8 +357,8 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       else if (/dts[.\s_-]?hd[.\s_-]?ma/i.test(fn)) audio = 'DTS-HD MA';
       else if (/dts[.\s_-]?hd/i.test(fn)) audio = 'DTS-HD';
       else if (/\bdts\b/i.test(fn)) audio = 'DTS';
-      else if (/e[.\s_-]?ac[.\s_-]?3|\bddp|dd\+/i.test(fn)) audio = /\batmos\b/i.test(fn) ? 'EAC3 Atmos' : 'EAC3';
-      else if (/\bac[.\s_-]?3\b|\bdd5[.\s_-]?1|\bdd\b/i.test(fn)) audio = 'DD';
+      else if (/e[.\s_-]?ac[.\s_-]?3|\bddp\+?|\bdd\+|dolby[.\s_-]*digital[.\s_-]*plus/i.test(fn)) audio = /\batmos\b/i.test(fn) ? 'DDP Atmos' : 'DDP';
+      else if (/\bac[.\s_-]?3\b|\bdd5[.\s_-]?1|\bdd\b|dolby[.\s_-]*digital/i.test(fn)) audio = 'DD';
       else if (/\bac[.\s_-]?4\b/i.test(fn)) audio = 'AC4';
       else if (/\baac\b/i.test(fn)) audio = 'AAC';
       else if (/\bflac\b/i.test(fn)) audio = 'FLAC';
@@ -330,7 +380,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     else if (/ atv[.\- ]|appletv|apple/i.test(fn))            platform = 'ATV';
 
     // ── DB-stored field fallbacks (when filename is absent or too short to parse) ─
-    if (!codec  && dl.codec)  codec  = dl.codec;
+    if (!codec  && dl.codec && dl.codec !== 'Other') codec = dl.codec;
     if (!audio  && dl.audio)  audio  = dl.audio;
     if (!hdr    && dl.hdr)    hdr    = dl.hdr;
     if (!source && dl.source) source = dl.source;
@@ -359,22 +409,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     if (!dl.links || dl.links.length === 0) return;
     const info = parseDlInfo(dl);
 
-    const techParts = [];
-    if (info.hdr)      techParts.push(info.hdr);
-    if (info.source)   techParts.push(info.source);
-    if (info.codec)    techParts.push(info.codec);
-    // EAC3 remains in the download metadata but is not useful as a standalone
-    // visible chip; show an Atmos enhancement, if present, without the codec.
-    const visibleAudio = String(info.audio || '')
-      .replace(/\bE[.\s_-]?AC[.\s_-]?3\b/ig, '')
-      .replace(/^[\s+,&/·-]+|[\s+,&/·-]+$/g, '')
-      .trim();
-    if (visibleAudio) techParts.push(visibleAudio);
-    if (dl.audioChannels) techParts.push(dl.audioChannels);
-    if (info.platform) techParts.push(info.platform);
-    if (dl.isIMAX || /\bIMAX\b/i.test(dl.filename || '')) techParts.push('IMAX');
-    if (dl.aspectRatio) techParts.push('AR ' + dl.aspectRatio);
-    const techTags = techParts.filter(Boolean).join(' · ');
+    const techTags = buildTechnicalMetadataTags(info, dl);
 
     // Cleaned display filename (strip inline size bracket — size shown separately)
     let displayName = (dl.filename || '').trim();
@@ -422,7 +457,6 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
         isIMAX:      !!dl.isIMAX,
         aspectRatio: dl.aspectRatio || '',
         sourceDate:  dl.sourceDate || dl.date || '',
-        postedDate:  formatTelegramDate(dl.sourceDate || dl.date),
         rank:        HOST_RANK[hostLabel] ?? 99,
         season:      dl.season,
         episode:     dl.episode,
@@ -457,11 +491,6 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     }
     const parsed = Date.parse(raw);
     return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  function formatTelegramDate(value) {
-    const timestamp = telegramDateToMs(value);
-    return timestamp ? new Date(timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
   }
 
   function sizeToBytes(value) {
@@ -553,9 +582,6 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     const repackBadge = row.isRepack
       ? '<span class="dl-row-lang" title="Repack release">REPACK</span>'
       : '';
-    const postedBadge = row.postedDate
-      ? `<span class="dl-row-lang" title="Telegram message date">Posted ${row.postedDate}</span>`
-      : '';
 
     return `
       <div class="dl-row" data-quality="${row.quality}">
@@ -568,7 +594,6 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
             ${row.size ? `<span class="dl-dot">·</span><span class="dl-row-size">${row.size}</span>` : ''}
             ${hdrBadge}
             ${repackBadge}
-            ${postedBadge}
             ${langBadge}
           </div>
           ${row.techTags ? `<div class="dl-row-tags">${row.techTags}</div>` : ''}
