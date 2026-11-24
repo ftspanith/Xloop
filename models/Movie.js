@@ -53,6 +53,7 @@ const MovieSchema = new mongoose.Schema({
   description: { type: String, default: '' },
   genre:       [{ type: String }],
   year:        { type: Number },
+  releaseDate: { type: String, default: '' }
   rating:      { type: Number, default: 0, min: 0, max: 10 },
   quality:     { type: String, default: '1080p' },
   language:    { type: String, default: '' },
