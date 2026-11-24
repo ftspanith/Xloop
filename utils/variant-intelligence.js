@@ -221,29 +221,44 @@ function inferRepackStatus(candidate, existingVariants = []) {
 function rankVariantsForDisplay(items = [], options = {}) {
   const tolerance = Number.isFinite(options.sizeTolerance) ? options.sizeTolerance : 0.08;
   const ranked = (Array.isArray(items) ? items : []).map(scoreVariant);
+  const qualityOrder = ['8K', '4K', '1440p', '1080p', '720p', '576p', '540p', '480p', '360p', '240p', 'SD', 'HD'];
+
   const rankClass = (entries) => {
-    const sized = entries
-      .map(item => ({ item, bytes: sizeToBytes(item.size || item.sizeBytes) }))
-      .filter(entry => entry.bytes > 0)
-      .sort((a, b) => b.bytes - a.bytes);
-    const unsized = entries
-      .filter(item => !(sizeToBytes(item.size || item.sizeBytes) > 0))
-      .sort((a, b) => b.qualityScore - a.qualityScore);
+    // Keep quality ordering inside each release class, but keep all repacks
+    // ahead of main/original releases even when their resolutions differ.
+    const qualityKeys = [...new Set(entries.map(item => item.quality || 'HD'))]
+      .sort((a, b) => {
+        const ai = qualityOrder.indexOf(a);
+        const bi = qualityOrder.indexOf(b);
+        return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+      });
     const ordered = [];
-    for (let i = 0; i < sized.length;) {
-      const anchor = sized[i].bytes;
-      const cluster = [sized[i]];
-      let j = i + 1;
-      while (j < sized.length && (anchor - sized[j].bytes) / anchor <= tolerance) {
-        cluster.push(sized[j]);
-        j++;
+    for (const quality of qualityKeys) {
+      const group = entries.filter(item => (item.quality || 'HD') === quality);
+      const sized = group
+        .map(item => ({ item, bytes: sizeToBytes(item.size || item.sizeBytes) }))
+        .filter(entry => entry.bytes > 0)
+        .sort((a, b) => b.bytes - a.bytes);
+      const unsized = group
+        .filter(item => !(sizeToBytes(item.size || item.sizeBytes) > 0))
+        .sort((a, b) => b.qualityScore - a.qualityScore);
+      for (let i = 0; i < sized.length;) {
+        const anchor = sized[i].bytes;
+        const cluster = [sized[i]];
+        let j = i + 1;
+        while (j < sized.length && (anchor - sized[j].bytes) / anchor <= tolerance) {
+          cluster.push(sized[j]);
+          j++;
+        }
+        cluster.sort((a, b) => b.item.qualityScore - a.item.qualityScore || b.bytes - a.bytes);
+        ordered.push(...cluster.map(entry => entry.item));
+        i = j;
       }
-      cluster.sort((a, b) => b.item.qualityScore - a.item.qualityScore || b.bytes - a.bytes);
-      ordered.push(...cluster.map(entry => entry.item));
-      i = j;
+      ordered.push(...unsized);
     }
-    return [...ordered, ...unsized];
+    return ordered;
   };
+
   const repacks = ranked.filter(item => item.isRepack || item.releaseType === 'repack');
   const main = ranked.filter(item => !item.isRepack && item.releaseType !== 'repack');
   return [...rankClass(repacks), ...rankClass(main)];
