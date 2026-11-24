@@ -676,7 +676,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       const codec    = item.codec || detectCodec(filename) || 'Other';
       const hdr      = item.hdr || detectHDR(filename) || null;
       const audio    = item.audio || extractAudio(filename) || null;
-      const source   = detectSource(item.source || filename) || detectSource(filename) || item.source || null;
+      const source   = detectSource(filename) || detectSource(item.source) || item.source || null;
       const container = item.container || detectContainer(filename) || null;
       const bitDepth = item.bitDepth || detectBitDepth(filename) || null;
       const audioChannels = item.audioChannels || detectAudioChannels(filename) || null;

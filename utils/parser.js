@@ -1441,8 +1441,8 @@ function parseManualInput(line) {
     .replace(/\s{2,}/g, ' ')
     .trim();
 
-  // Remove trailing noise words
-  title = title.replace(/\s*(BluRay|WEB-?DL|WEBRip|DVDRip|HDTV|Blu-?Ray|Remux|Extended|Theatrical|Directors\.?Cut)\s*/gi, ' ').trim();
+  // Remove source and edition markers from the manually parsed title.
+  title = title.replace(/\s*(BluRay|WEB-?DL|WEBRip|DVDRip|DVD[ ._-]?[59]|DVD|HDTV|Blu-?Ray|Remux|REMUX|Extended|Theatrical|Directors\.?Cut)\s*/gi, ' ').trim();
   title = cleanTitleForApi(title) || title;
 
   return { title, year, quality, size, codec, container, hdr, audio, audioChannels, source, language, season, episode, type, raw };
