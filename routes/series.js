@@ -129,7 +129,7 @@ router.get('/', async (req, res) => {
 // GET /api/series/:id/tmdb-data
 router.get('/:id/tmdb-data', async (req, res) => {
   try {
-    const series = await Movie.findById(req.params.id).select('tmdbId seasonYears').lean();
+    const series = await getGroupedRecord(req.params.id);
     if (!series || !series.tmdbId || !TMDB_KEY) return res.json({ seasons: [] });
     const tmdbRes = await axios.get(
       'https://api.themoviedb.org/3/tv/' + series.tmdbId,
