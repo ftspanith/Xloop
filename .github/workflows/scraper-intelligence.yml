@@ -10,6 +10,10 @@ on:
       - 'utils/variant-intelligence.js'
       - 'utils/tmdbSearch.js'
       - 'pipeline_full.js'
+      - 'utils/pipelineScope.js'
+      - 'tests/pipeline-scope.test.js'
+      - 'tests/orchestrator-safety.test.js'
+      - 'routes/orchestrator.js'
       - 'tests/importer-metadata.test.js'
       - 'models/Movie.js'
       - 'routes/scrape.js'
@@ -48,6 +52,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run test:pipeline-safety
       - run: npm run test:scraper-intelligence
       - run: npm run test:video-formats
       - run: npm run test:importer-metadata
