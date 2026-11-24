@@ -227,6 +227,13 @@ function getAvailableLanguageLabels(downloads) {
   return [...labels];
 }
 
+function formatDownloadLanguageLabel(languageType, lang) {
+  // Multi is intentionally branded as MULTi; never append the same label twice.
+  if (languageType === 'Multi') return 'MULTi';
+  if (languageType === 'Dual') return 'DUAL';
+  return lang || '';
+}
+
 function normalizeAudioDisplayLabel(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -608,8 +615,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       ? `<span class="dl-row-se">${row.season?'S'+String(row.season).padStart(2,'0'):''}${row.episode?'E'+String(row.episode).padStart(2,'0'):''}</span>`
       : '';
 
-    const langText = ['Dual', 'Multi'].includes(row.languageType) && row.lang && row.lang !== row.languageType.toUpperCase()
-      ? `${row.languageType.toUpperCase()} · ${row.lang}` : row.lang;
+    const langText = formatDownloadLanguageLabel(row.languageType, row.lang);
     const langBadge = langText
       ? `<span class="dl-row-lang">${langText}</span>`
       : '';
