@@ -186,18 +186,20 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       { re: /मराठी/,              label: 'Marathi' },
       { re: /\bmulti\b/i,         label: 'Multi' },
     ];
+    const languageText = [fn, tags, dl.language || '', fallbackLang || ''].join(' ');
     let detectedLangs = [];
     for (const { re, label } of LANG_MAP) {
-      if (re.test(fn) || re.test(tags)) {
-        if (!detectedLangs.includes(label)) detectedLangs.push(label);
-      }
+      if (label === 'Multi') continue;
+      if (re.test(languageText) && !detectedLangs.includes(label)) detectedLangs.push(label);
     }
-    if (detectedLangs.length === 0 && dl.language && dl.language !== 'Unknown') detectedLangs.push(dl.language);
-    else if (detectedLangs.length === 0 && fallbackLang) detectedLangs.push(fallbackLang);
-
-    const specificLangs = detectedLangs.filter(l => l !== 'Multi');
-    const isMulti  = detectedLangs.includes('Multi') || specificLangs.length > 1;
-    const langLabel = isMulti ? 'Multi' : (detectedLangs[0] || '');
+    const hasMultiMarker = /\b(?:multi(?:[.\s_-]?audio)?|tri[.\s_-]?audio|bilingual)\b/i.test(languageText);
+    const hasDualMarker = /\bdual(?:[.\s_-]?audio)?\b/i.test(languageText);
+    const languageType = detectedLangs.length >= 3 ? 'Multi'
+      : detectedLangs.length === 2 ? 'Dual'
+      : detectedLangs.length === 1 ? 'Single'
+      : hasMultiMarker ? 'Multi' : hasDualMarker ? 'Dual' : '';
+    const isMulti = languageType === 'Multi';
+    const langLabel = detectedLangs.length ? detectedLangs.join(' + ') : languageType;
 
     let res = dl.quality || 'HD';
     // Override from filename if filename has explicit quality token
@@ -276,7 +278,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     else if (codec && /avc|h\.264|x264/i.test(codec))  codec = 'AVC';
     else if (codec && /av1/i.test(codec))               codec = 'AV1';
 
-    return { lang: langLabel, res, hdr, codec, source, audio, platform, isMulti,
+    return { lang: langLabel, languageType, languageCount: detectedLangs.length, res, hdr, codec, source, audio, platform, isMulti,
              season: dl.season || null, episode: dl.episode || null };
   }
 
@@ -302,6 +304,8 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     if (info.codec)    techParts.push(info.codec);
     if (info.audio)    techParts.push(info.audio);
     if (info.platform) techParts.push(info.platform);
+    if (dl.isIMAX || /\bIMAX\b/i.test(dl.filename || '')) techParts.push('IMAX');
+    if (dl.aspectRatio) techParts.push('AR ' + dl.aspectRatio);
     const techTags = techParts.filter(Boolean).join(' · ');
 
     // Cleaned display filename (strip inline size bracket — size shown separately)
@@ -342,7 +346,14 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
         techTags,
         hdr:         info.hdr,
         lang:        info.lang,
+        languageType: info.languageType,
+        languageCount: info.languageCount,
         isMulti:     info.isMulti,
+        isRepack:    !!dl.isRepack || /\bRE[\s._-]?PACK\b/i.test(dl.filename || ''),
+        releaseType: dl.releaseType || '',
+        isIMAX:      !!dl.isIMAX,
+        aspectRatio: dl.aspectRatio || '',
+        sourceDate:  dl.sourceDate || ''
         rank:        HOST_RANK[hostLabel] ?? 99,
         season:      dl.season,
         episode:     dl.episode,
@@ -358,10 +369,10 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
   // Language priority is deliberately a tie-breaker, not a primary grouping.
   // This lets larger Telugu/Hindi files rank above smaller MULTI files.
   const LANG_ORDER = { 'multi':0, 'telugu':1, 'tamil':2, 'hindi':3, 'malayalam':4, 'kannada':5 };
-  function langPriority(lang) {
+  function langPriority(lang, languageType) {
     if (!lang) return 99;
     const l = String(lang).toLowerCase();
-    if (/multi|dual|4-in-1|5-in-1/i.test(l)) return 0;
+    if (languageType === 'Multi' || languageType === 'Dual' || /multi|dual|4-in-1|5-in-1/i.test(l)) return 0;
     for (const [key, val] of Object.entries(LANG_ORDER)) { if (l.includes(key)) return val; }
     return 99;
   }
@@ -398,11 +409,13 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     // 2. Keep resolution tiers intact: 4K > 1080p > 720p ...
     const qa = Q_ORDER[a.quality]??9, qb = Q_ORDER[b.quality]??9;
     if (qa !== qb) return qa - qb;
-    // 3. Compare actual byte counts first within a resolution, largest first.
+    // 3. Keep a same-resolution repack ahead of its older main/original release.
+    if (a.isRepack !== b.isRepack) return a.isRepack ? -1 : 1;
+    // 4. Compare actual byte counts first within a release class.
     const sa = sizeToBytes(a.size), sb = sizeToBytes(b.size);
     if (sb !== sa) return sb - sa;
     // 4. Language is only used when file sizes tie.
-    const la = langPriority(a.lang), lb = langPriority(b.lang);
+    const la = langPriority(a.lang, a.languageType), lb = langPriority(b.lang, b.languageType);
     if (la !== lb) return la - lb;
     // 5. Retain the existing provider preference as the final tie-breaker.
     return a.rank - b.rank;
@@ -443,7 +456,10 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       : '';
 
     const langBadge = row.lang
-      ? `<span class="dl-row-lang">${row.isMulti ? 'MULTI' : row.lang}</span>`
+      ? `<span class="dl-row-lang">${row.languageType === 'Multi' ? 'MULTI' : row.languageType === 'Dual' ? 'DUAL' : row.lang}</span>`
+      : '';
+    const repackBadge = row.isRepack
+      ? '<span class="dl-row-lang" title="Repack release">REPACK</span>'
       : '';
 
     return `
@@ -456,6 +472,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
             <span class="dl-row-quality">${row.quality}</span>
             ${row.size ? `<span class="dl-dot">·</span><span class="dl-row-size">${row.size}</span>` : ''}
             ${hdrBadge}
+            ${repackBadge}
             ${langBadge}
           </div>
           ${row.techTags ? `<div class="dl-row-tags">${row.techTags}</div>` : ''}
