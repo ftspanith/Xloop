@@ -279,7 +279,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   const hintYear = isSeries ? titleYear : (titleYear || yearHints[0] || null);
   const maxYearDifference = 2;
   const dateYear = value => {
-    const match = String(value || '').match(/^(19\\d{2}|20\\d{2})/);
+    const match = String(value || '').match(/^(19\d{2}|20\d{2})/);
     return match ? Number(match[1]) : null;
   };
   const yearCompatible = value => {
