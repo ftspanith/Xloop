@@ -1,5 +1,8 @@
 'use strict';
-const { parseMessageBlock, classifyUrl, isJunkTitle, cleanTitleForApi, normalizeGdflixUrl, isKnownProviderHost } = require('./parser');
+const {
+  parseMessageBlock, classifyUrl, isJunkTitle, isGenericTitleCandidate,
+  cleanTitleForApi, normalizeGdflixUrl, isKnownProviderHost,
+} = require('./parser');
 
 const HOST_PRIORITY = ['GDFlix', 'HubCloud', 'TMBCloud'];
 
@@ -107,11 +110,19 @@ function extractTelegramLinks(inputMessages, account = '1') {
       parsed.rawTitle,
       ...parsed.downloads.map(download => download && download.filename),
     ].filter(Boolean);
-    const recoveredTitle = titleSources
-      .map(value => cleanTitleForApi(value, parsed.year))
-      .find(value => value && value.length >= 2 && !isJunkTitle(value));
-    if (!recoveredTitle) { skipped++; continue; }
+    const recoveredTitleMatch = titleSources
+      .map(source => ({ source, title: cleanTitleForApi(source, parsed.year) }))
+      .find(item => item.title && item.title.length >= 2 &&
+        !isJunkTitle(item.title) && !isGenericTitleCandidate(item.title));
+    if (!recoveredTitleMatch) { skipped++; continue; }
+    const recoveredTitle = recoveredTitleMatch.title;
     parsed.title = recoveredTitle;
+    // When the original heading cleans down to a generic word such as "Movie",
+    // retain the descriptive filename as the title/search source instead.
+    const cleanedRawTitle = cleanTitleForApi(parsed.rawTitle, parsed.year);
+    const resolvedRawTitle = isGenericTitleCandidate(cleanedRawTitle)
+      ? recoveredTitleMatch.source
+      : (parsed.rawTitle || recoveredTitle);
     parsedMessages++;
     const singleFileRelease = parsed.downloads.length === 1 ? parsed.releaseType : '';
 
@@ -127,7 +138,7 @@ function extractTelegramLinks(inputMessages, account = '1') {
           continue;
         }
         const entry = {
-          messageId: parsed.messageId, title: parsed.title, rawTitle: parsed.rawTitle || parsed.title,
+          messageId: parsed.messageId, title: parsed.title, rawTitle: resolvedRawTitle,
           year: parsed.year == null ? null : parsed.year,
           type: parsed.type || (parsed.contentType === 'anime' ? 'anime' : parsed.isSeries ? 'series' : 'movie'),
           contentType: parsed.contentType || '', isSeries: !!parsed.isSeries,
