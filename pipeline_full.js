@@ -864,6 +864,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         if (!dbRec.imdbId         && meta.imdbId)         metaSet.imdbId         = meta.imdbId;
         if (!dbRec.rating         && meta.rating)         metaSet.rating         = meta.rating;
         if (!dbRec.description    && meta.description)    metaSet.description    = meta.description;
+        if (!dbRec.originalLanguage && meta.originalLanguage) metaSet.originalLanguage = meta.originalLanguage;
         if (meta.year && meta.releaseDate &&
             (!dbRec.tmdbId || !meta.tmdbId || String(dbRec.tmdbId) === String(meta.tmdbId)) &&
             Number(dbRec.year || 0) !== Number(meta.year)) metaSet.year = meta.year;
@@ -972,6 +973,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         const newDoc = await Movie.create({
           title: meta.title, tmdbId: meta.tmdbId || '', imdbId: meta.imdbId || '',
           type: finalType, totalSeasons: meta.totalSeasons || 0,
+          originalLanguage: meta.originalLanguage || '',
           description: meta.description || '',
           poster: meta.poster || '', posterFallback: meta.posterFallback || '',
           backdrop: meta.backdrop || '',
@@ -980,7 +982,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           seasonYears: Object.fromEntries(group.items
             .filter(file => file.season && file.fileYear)
             .map(file => [`s${file.season}`, Number(file.fileYear)])),
-          rating: meta.rating || 0, year: meta.year || rep.messageYear || (isSer ? null : (rep.year || item.year || new Date().getFullYear())),
+          rating: meta.rating || 0, year: meta.year || rep.messageYear || (isSer ? null : (rep.year || item.year || null)),
           genre: meta.genre || [], duration: meta.duration || item.duration || rep.duration || '',
           runtimeMinutes: meta.runtimeMinutes || item.runtimeMinutes || rep.runtimeMinutes || null,
           certification: meta.certification || item.certification || rep.certification || '',
