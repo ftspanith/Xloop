@@ -1044,6 +1044,9 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     for (let scan=j; scan>=scanStart; scan--) {
       const candidate = lines[scan];
       if (!fsz && isSizeLine(candidate)) fsz = extractSizeFromMeta(candidate);
+      // A standalone size line also satisfies the broad "file descriptor"
+      // heuristic (because it contains GB/MB); never let it replace filename.
+      if (isSizeLine(candidate)) continue;
       if (isMetadataLine(candidate) || isPromo(candidate) || isLinkLabel(candidate)) continue;
       if (isFileDesc(candidate)) {
         fc = candidate;
@@ -1352,8 +1355,14 @@ function parseMessageBlock(rawText, messageId, msgDate) {
       : (effectiveLangInfo.languageType || language);
 
     const pairLineIndex = lines.findIndex(line => String(line).trim() === String(pair.url || '').trim());
+    const rawFilenameLineIndex = pairLineIndex >= 0
+      ? lines.lastIndexOf(String(rawFn || '').trim(), pairLineIndex)
+      : -1;
+    const pairContextStart = rawFilenameLineIndex >= 0
+      ? rawFilenameLineIndex
+      : Math.max(0, pairLineIndex - 8);
     const pairContext = pairLineIndex >= 0
-      ? lines.slice(Math.max(0, pairLineIndex - 8), pairLineIndex + 1).join(' ')
+      ? lines.slice(pairContextStart, pairLineIndex + 1).join(' ')
       : '';
     const fileContext = rawFn + ' ' + masterTitle + ' ' + pairContext;
     const releaseMeta = detectReleaseMetadata(fileContext);
