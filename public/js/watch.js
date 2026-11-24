@@ -59,6 +59,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const descText  = data.description || '';
     const descShort = descText.length > 240 ? descText.slice(0, 240).trimEnd() + '…' : descText;
+    const runtimeLabel = data.duration || (data.runtimeMinutes
+      ? (Math.floor(data.runtimeMinutes / 60)
+        ? Math.floor(data.runtimeMinutes / 60) + 'h' + (data.runtimeMinutes % 60 ? ' ' + (data.runtimeMinutes % 60) + 'm' : '')
+        : data.runtimeMinutes + ' min')
+      : '');
+    const certificationLabel = data.certification || data.cbfcRating || '';
 
     const cardHtml = `
       <div class="wp-cinema">
@@ -80,7 +86,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             <div class="wp-meta-inline">
               ${data.year     ? `<span class="wp-mi">${data.year}</span>` : ''}
-              ${data.duration ? `<span class="wp-mi">${data.duration}</span>` : ''}
+              ${runtimeLabel ? `<span class="wp-mi">${runtimeLabel}</span>` : ''}
+              ${certificationLabel ? `<span class="wp-mi wp-mi-badge">CBFC ${certificationLabel}</span>` : ''}
               ${starRating    ? `<span class="wp-mi wp-mi-star">${starRating}</span>` : ''}
               ${displayQuality? `<span class="wp-mi wp-mi-badge">${displayQuality}</span>` : ''}
             </div>
@@ -93,11 +100,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         <!-- ── Right: floating info panel ── -->
         <div class="wp-side-panel">
-          ${[data.duration ? `<div class="wp-side-row"><span class="wp-side-label">Runtime</span><span class="wp-side-val">${data.duration}</span></div>` : '',
-             data.language ? `<div class="wp-side-row"><span class="wp-side-label">Language</span><span class="wp-side-val">${data.language.split(',')[0].trim()}</span></div>` : '',
+          ${[runtimeLabel ? `<div class="wp-side-row"><span class="wp-side-label">Runtime</span><span class="wp-side-val">${runtimeLabel}</span></div>` : '',
+             data.language ? `<div class="wp-side-row"><span class="wp-side-label">Language</span><span class="wp-side-val">${data.language.split(',').map(part => part.trim()).join(' + ')}${data.languageType ? ' (' + data.languageType + ')' : ''}</span></div>` : '',
              data.year ? `<div class="wp-side-row"><span class="wp-side-label">Release Year</span><span class="wp-side-val">${data.year}</span></div>` : '',
              displayQuality ? `<div class="wp-side-row"><span class="wp-side-label">Quality</span><span class="wp-side-val">${displayQuality}</span></div>` : '',
-             data.rating ? `<div class="wp-side-row"><span class="wp-side-label">Rating</span><span class="wp-side-val">${data.rating} / 10</span></div>` : ''
+             data.rating ? `<div class="wp-side-row"><span class="wp-side-label">Rating</span><span class="wp-side-val">${data.rating} / 10</span></div>` : '',
+              data.isIMAX ? `<div class="wp-side-row"><span class="wp-side-label">Format</span><span class="wp-side-val">IMAX</span></div>` : '',
+              data.aspectRatio ? `<div class="wp-side-row"><span class="wp-side-label">Screen Ratio</span><span class="wp-side-val">${data.aspectRatio}</span></div>` : '',
+              certificationLabel ? `<div class="wp-side-row"><span class="wp-side-label">CBFC</span><span class="wp-side-val">${certificationLabel}</span></div>` : ''
           ].filter(Boolean).join('')}
         </div>
       </div>
@@ -176,18 +186,19 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       { re: /मराठी/,              label: 'Marathi' },
       { re: /\bmulti\b/i,         label: 'Multi' },
     ];
+    const languageText = [fn, tags, dl.language || fallbackLang || ''].join(' ');
     let detectedLangs = [];
     for (const { re, label } of LANG_MAP) {
-      if (re.test(fn) || re.test(tags)) {
-        if (!detectedLangs.includes(label)) detectedLangs.push(label);
-      }
+      if (label === 'Multi') continue;
+      if (re.test(languageText) && !detectedLangs.includes(label)) detectedLangs.push(label);
     }
-    if (detectedLangs.length === 0 && dl.language && dl.language !== 'Unknown') detectedLangs.push(dl.language);
-    else if (detectedLangs.length === 0 && fallbackLang) detectedLangs.push(fallbackLang);
-
-    const specificLangs = detectedLangs.filter(l => l !== 'Multi');
-    const isMulti  = detectedLangs.includes('Multi') || specificLangs.length > 1;
-    const langLabel = isMulti ? 'Multi' : (detectedLangs[0] || '');
+    const hasMultiMarker = /\b(?:multi(?:[.\s_-]?audio)?|tri[.\s_-]?audio)\b/i.test(languageText);
+    const hasDualMarker = /\b(?:dual(?:[.\s_-]?audio)?|bilingual)\b/i.test(languageText);
+    const languageType = hasMultiMarker || detectedLangs.length >= 3 ? 'Multi'
+      : hasDualMarker || detectedLangs.length === 2 ? 'Dual'
+      : detectedLangs.length === 1 ? 'Single' : (dl.languageType || '');
+    const isMulti = languageType === 'Multi';
+    const langLabel = detectedLangs.length ? detectedLangs.join(' + ') : languageType;
 
     let res = dl.quality || 'HD';
     // Override from filename if filename has explicit quality token
@@ -266,7 +277,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     else if (codec && /avc|h\.264|x264/i.test(codec))  codec = 'AVC';
     else if (codec && /av1/i.test(codec))               codec = 'AV1';
 
-    return { lang: langLabel, res, hdr, codec, source, audio, platform, isMulti,
+    return { lang: langLabel, languageType, languageCount: detectedLangs.length, res, hdr, codec, source, audio, platform, isMulti,
              season: dl.season || null, episode: dl.episode || null };
   }
 
@@ -292,6 +303,8 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     if (info.codec)    techParts.push(info.codec);
     if (info.audio)    techParts.push(info.audio);
     if (info.platform) techParts.push(info.platform);
+    if (dl.isIMAX || /\bIMAX\b/i.test(dl.filename || '')) techParts.push('IMAX');
+    if (dl.aspectRatio) techParts.push('AR ' + dl.aspectRatio);
     const techTags = techParts.filter(Boolean).join(' · ');
 
     // Cleaned display filename (strip inline size bracket — size shown separately)
@@ -332,7 +345,15 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
         techTags,
         hdr:         info.hdr,
         lang:        info.lang,
+        languageType: info.languageType,
+        languageCount: info.languageCount,
         isMulti:     info.isMulti,
+        isRepack:    !!dl.isRepack || /\bre[\s._-]?pack\b/i.test(String(dl.releaseType || '') + ' ' + (dl.filename || '')),
+        releaseType: dl.releaseType || '',
+        isIMAX:      !!dl.isIMAX,
+        aspectRatio: dl.aspectRatio || '',
+        sourceDate:  dl.sourceDate || dl.date || '',
+        postedDate:  formatTelegramDate(dl.sourceDate || dl.date),
         rank:        HOST_RANK[hostLabel] ?? 99,
         season:      dl.season,
         episode:     dl.episode,
@@ -348,16 +369,32 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
   // Language priority is deliberately a tie-breaker, not a primary grouping.
   // This lets larger Telugu/Hindi files rank above smaller MULTI files.
   const LANG_ORDER = { 'multi':0, 'telugu':1, 'tamil':2, 'hindi':3, 'malayalam':4, 'kannada':5 };
-  function langPriority(lang) {
+  function langPriority(lang, languageType) {
     if (!lang) return 99;
     const l = String(lang).toLowerCase();
-    if (/multi|dual|4-in-1|5-in-1/i.test(l)) return 0;
+    if (languageType === 'Multi' || languageType === 'Dual' || /multi|dual|4-in-1|5-in-1/i.test(l)) return 0;
     for (const [key, val] of Object.entries(LANG_ORDER)) { if (l.includes(key)) return val; }
     return 99;
   }
 
   // Convert every supported file-size unit to bytes before comparing.
   // Unsuffixed legacy values and numeric values retain the old MB interpretation.
+  function telegramDateToMs(value) {
+    if (!value) return 0;
+    const raw = String(value).trim();
+    if (/^\d{10,13}$/.test(raw)) {
+      const numeric = Number(raw);
+      return numeric < 1e12 ? numeric * 1000 : numeric;
+    }
+    const parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function formatTelegramDate(value) {
+    const timestamp = telegramDateToMs(value);
+    return timestamp ? new Date(timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+  }
+
   function sizeToBytes(value) {
     if (value == null || value === '') return 0;
     if (typeof value === 'number') {
@@ -388,11 +425,18 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     // 2. Keep resolution tiers intact: 4K > 1080p > 720p ...
     const qa = Q_ORDER[a.quality]??9, qb = Q_ORDER[b.quality]??9;
     if (qa !== qb) return qa - qb;
-    // 3. Compare actual byte counts first within a resolution, largest first.
+    // 3. Keep a same-resolution repack ahead of its older main/original release.
+    if (a.isRepack !== b.isRepack) return a.isRepack ? -1 : 1;
+    // Within repacks of this resolution, prefer the newest Telegram upload.
+    if (a.isRepack && b.isRepack) {
+      const dateDiff = telegramDateToMs(b.sourceDate) - telegramDateToMs(a.sourceDate);
+      if (dateDiff) return dateDiff;
+    }
+    // 4. Compare actual byte counts first within a release class.
     const sa = sizeToBytes(a.size), sb = sizeToBytes(b.size);
     if (sb !== sa) return sb - sa;
     // 4. Language is only used when file sizes tie.
-    const la = langPriority(a.lang), lb = langPriority(b.lang);
+    const la = langPriority(a.lang, a.languageType), lb = langPriority(b.lang, b.languageType);
     if (la !== lb) return la - lb;
     // 5. Retain the existing provider preference as the final tie-breaker.
     return a.rank - b.rank;
@@ -432,8 +476,16 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       ? `<span class="dl-row-se">${row.season?'S'+String(row.season).padStart(2,'0'):''}${row.episode?'E'+String(row.episode).padStart(2,'0'):''}</span>`
       : '';
 
-    const langBadge = row.lang
-      ? `<span class="dl-row-lang">${row.isMulti ? 'MULTI' : row.lang}</span>`
+    const langText = row.languageType && row.lang && row.lang !== row.languageType
+      ? `${row.languageType.toUpperCase()} · ${row.lang}` : row.lang;
+    const langBadge = langText
+      ? `<span class="dl-row-lang">${langText}</span>`
+      : '';
+    const repackBadge = row.isRepack
+      ? '<span class="dl-row-lang" title="Repack release">REPACK</span>'
+      : '';
+    const postedBadge = row.postedDate
+      ? `<span class="dl-row-lang" title="Telegram message date">Posted ${row.postedDate}</span>`
       : '';
 
     return `
@@ -446,6 +498,8 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
             <span class="dl-row-quality">${row.quality}</span>
             ${row.size ? `<span class="dl-dot">·</span><span class="dl-row-size">${row.size}</span>` : ''}
             ${hdrBadge}
+            ${repackBadge}
+            ${postedBadge}
             ${langBadge}
           </div>
           ${row.techTags ? `<div class="dl-row-tags">${row.techTags}</div>` : ''}

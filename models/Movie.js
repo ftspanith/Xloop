@@ -20,6 +20,13 @@ const DownloadSchema = new mongoose.Schema({
   container:{ type: String },  // MKV, MP4, WEBM, AVI, M2TS, etc.
   bitDepth: { type: String },  // 8-bit, 10-bit, 12-bit, etc.
   audioChannels: { type: String }, // 2.0, 5.1, 7.1
+  isRepack: { type: Boolean, default: false },
+  releaseType: { type: String, default: 'Original' }, // Original, Repack, Proper
+  isIMAX: { type: Boolean, default: false },
+  aspectRatio: { type: String, default: '' },
+  languageType: { type: String, enum: ['Single', 'Dual', 'Multi', ''], default: '' },
+  languageCount: { type: Number, default: 0 },
+  sourceDate: { type: String, default: '' },
   links:    [LinkSchema]
 }, { _id: false });
 
@@ -41,6 +48,11 @@ const MovieSchema = new mongoose.Schema({
   quality:     { type: String, default: '1080p' },
   language:    { type: String, default: '' },
   duration:    { type: String, default: '' },
+  runtimeMinutes: { type: Number, default: null },
+  certification: { type: String, default: '' }, // CBFC certificate: U, U/A, A, S
+  isIMAX: { type: Boolean, default: false },
+  aspectRatio: { type: String, default: '' },
+  languageType: { type: String, enum: ['Single', 'Dual', 'Multi', ''], default: '' },
   isFeatured:  { type: Boolean, default: false },
   isTrending:  { type: Boolean, default: false },
   streamEmbed: { type: String, default: '' },

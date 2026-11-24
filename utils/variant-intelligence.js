@@ -14,6 +14,17 @@ function sizeToBytes(value) {
   return Math.round(n * factor);
 }
 
+function dateToTimestamp(value) {
+  if (value == null || value === '') return 0;
+  const raw = String(value).trim();
+  if (/^\d{10,13}$/.test(raw)) {
+    const numeric = Number(raw);
+    return numeric < 1e12 ? numeric * 1000 : numeric;
+  }
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function titleKey(item) {
   return String(item?.title || item?.filename || '')
     .toLowerCase()
@@ -82,6 +93,10 @@ function completenessScore(item) {
   return score;
 }
 
+function isRepackVariant(item) {
+  return !!item?.isRepack || /repack|rerip/i.test(String(item?.releaseType || '') + ' ' + String(item?.filename || ''));
+}
+
 function scoreVariant(item) {
   const reasons = [];
   const add = (label, value) => { if (value > 0) reasons.push(label); return value; };
@@ -91,7 +106,10 @@ function scoreVariant(item) {
   const hdr = add('HDR / Dolby Vision', hdrScore(item.hdr || item.filename));
   const audio = add('audio format', audioScore(item.audio || item.filename));
   const completeness = completenessScore(item);
-  return { ...item, qualityScore: source + resolution + codec + hdr + audio + completeness, scoreBreakdown: {source,resolution,codec,hdr,audio,completeness}, scoreReasons: reasons };
+  const isRepack = isRepackVariant(item);
+  const repack = isRepack ? 100 : 0;
+  if (isRepack) reasons.unshift('repack priority');
+  return { ...item, isRepack, qualityScore: repack + source + resolution + codec + hdr + audio + completeness, scoreBreakdown: {repack,source,resolution,codec,hdr,audio,completeness}, scoreReasons: reasons };
 }
 
 function nearDuplicateGroups(items, tolerance = 0.01) {
@@ -99,7 +117,7 @@ function nearDuplicateGroups(items, tolerance = 0.01) {
   for (const item of items) {
     const bytes = sizeToBytes(item.size || item.sizeBytes);
     if (!bytes) continue;
-    const key = [titleKey(item), item.year || '', item.quality || '', item.codec || '', item.audio || '', item.language || ''].join('|');
+    const key = [titleKey(item), item.year || '', item.quality || '', item.codec || '', item.audio || '', item.language || '', isRepackVariant(item) ? 'repack' : 'main'].join('|');
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key).push({item, bytes});
   }
@@ -159,28 +177,44 @@ function analyzeVariantSet(downloads = [], options = {}) {
 function rankVariantsForDisplay(items = [], options = {}) {
   const tolerance = Number.isFinite(options.sizeTolerance) ? options.sizeTolerance : 0.08;
   const ranked = (Array.isArray(items) ? items : []).map(scoreVariant);
-  const sized = ranked
-    .map(item => ({ item, bytes: sizeToBytes(item.size || item.sizeBytes) }))
-    .filter(entry => entry.bytes > 0)
-    .sort((a, b) => b.bytes - a.bytes);
-  const unsized = ranked
-    .filter(item => !(sizeToBytes(item.size || item.sizeBytes) > 0))
-    .sort((a, b) => b.qualityScore - a.qualityScore);
-  const ordered = [];
 
-  for (let i = 0; i < sized.length;) {
-    const anchor = sized[i].bytes;
-    const cluster = [sized[i]];
-    let j = i + 1;
-    while (j < sized.length && (anchor - sized[j].bytes) / anchor <= tolerance) {
-      cluster.push(sized[j]);
-      j++;
+  // Keep every original/main release, but put explicitly-labelled repacks first.
+  function rankReleaseClass(releases, preferNewestPost = false) {
+    if (preferNewestPost) {
+      // Among repacks of the same resolution, the newest Telegram repost wins.
+      return [...releases].sort((a, b) =>
+        dateToTimestamp(b.sourceDate || b.date) - dateToTimestamp(a.sourceDate || a.date) ||
+        b.qualityScore - a.qualityScore ||
+        (sizeToBytes(b.size || b.sizeBytes) || 0) - (sizeToBytes(a.size || a.sizeBytes) || 0)
+      );
     }
-    cluster.sort((a, b) => b.item.qualityScore - a.item.qualityScore || b.bytes - a.bytes);
-    ordered.push(...cluster.map(entry => entry.item));
-    i = j;
-  }
-  return [...ordered, ...unsized];
-}
 
-module.exports = { sizeToBytes, titleKey, scoreVariant, analyzeVariantSet, nearDuplicateGroups, rankVariantsForDisplay };
+    const sized = releases
+      .map(item => ({ item, bytes: sizeToBytes(item.size || item.sizeBytes) }))
+      .filter(entry => entry.bytes > 0)
+      .sort((a, b) => b.bytes - a.bytes);
+    const unsized = releases
+      .filter(item => !(sizeToBytes(item.size || item.sizeBytes) > 0))
+      .sort((a, b) => b.qualityScore - a.qualityScore);
+    const ordered = [];
+
+    for (let i = 0; i < sized.length;) {
+      const anchor = sized[i].bytes;
+      const cluster = [sized[i]];
+      let j = i + 1;
+      while (j < sized.length && (anchor - sized[j].bytes) / anchor <= tolerance) {
+        cluster.push(sized[j]);
+        j++;
+      }
+      cluster.sort((a, b) => b.item.qualityScore - a.item.qualityScore || b.bytes - a.bytes);
+      ordered.push(...cluster.map(entry => entry.item));
+      i = j;
+    }
+    return [...ordered, ...unsized];
+  }
+
+  const repacks = ranked.filter(item => item.isRepack);
+  const originals = ranked.filter(item => !item.isRepack);
+  return [...rankReleaseClass(repacks, true), ...rankReleaseClass(originals)];
+}
+module.exports = { sizeToBytes, titleKey, isRepackVariant, scoreVariant, analyzeVariantSet, nearDuplicateGroups, rankVariantsForDisplay };
