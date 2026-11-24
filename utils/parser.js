@@ -276,7 +276,7 @@ const LANG_MAP = [
   { name:'Croatian', re:/(?:\b|(?<=\W|^))(croatian|hrv)(?:\b|(?=\W|$))/i },
   { name:'Serbian', re:/(?:\b|(?<=\W|^))(serbian|srp)(?:\b|(?=\W|$))/i },
   { name:'Swahili', re:/(?:\b|(?<=\W|^))(swahili|swa)(?:\b|(?=\W|$))/i },
-  { name:'Multi', re:/(?:\\b|(?<=\\W|^))(multi(?:[.\\-_]?audio)?|tri[.\\-_]?audio)(?:\\b|(?=\\W|$))/i },
+  { name:'Multi', re:/(?:\b|(?<=\W|^))(multi(?:[.\-_]?audio)?|tri[.\-_]?audio)(?:\b|(?=\W|$))/i },
 ];
 const CHAN_LANG = [
   {re:/telugu|tg4u|tollywood/i, lang:'Telugu'},
