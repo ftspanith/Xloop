@@ -11,6 +11,7 @@ const Movie    = require('./models/Movie');
 
 // ── Reuse the SAME cleaner as the importer (no duplicates) ───────────────────
 const { cleanTitleForApi, stripEmojis } = require('./utils/parser');
+const sharedMetadataSearch = require('./utils/tmdbSearch');
 
 const TMDB_KEY = process.env.TMDB_API_KEY || process.env.TMDB_KEY;
 const OMDB_KEY = process.env.OMDB_API_KEY || process.env.OMDB_KEY;
@@ -76,6 +77,43 @@ const TMDB_LANG = {
 async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = null) {
   if (!TMDB_KEY) return null;
   const base = 'https://api.themoviedb.org/3';
+
+  // Shared latest title engine first: direct TMDB/IMDb IDs, all candidate
+  // algorithms, confidence scoring and relaxed search. Preserve the healer's
+  // richer season-list shape and keep the older fuzzy cascade as a fallback.
+  try {
+    const shared = await sharedMetadataSearch.searchTMDB(
+      rawTitle, year, isSeries, null, null, imdbId, knownTmdbId,
+      { tmdbKey: TMDB_KEY, emitter: (line) => console.log(`[HEAL] ${line}`) }
+    );
+    if (shared) {
+      const genres = (shared.genre || []).map((g) => String(g || '').toLowerCase());
+      const originalLanguage = String(shared.originalLanguage || '').toLowerCase();
+      const isAnime = shared.type === 'series' && (
+        /^(japanese|ja)$/.test(originalLanguage) ||
+        (genres.some((g) => /animation|anime/.test(g)) && /^(korean|ko|chinese|zh)$/.test(originalLanguage))
+      );
+      const meta = {
+        ...shared,
+        tmdbTitle: shared.title || rawTitle,
+        actualType: isAnime ? 'anime' : shared.type === 'series' ? 'tv' : 'movie',
+        seasons: [],
+      };
+
+      if (shared.type === 'series' && shared.tmdbId) {
+        try {
+          const details = await axios.get(`${base}/tv/${shared.tmdbId}`, {
+            params: { api_key: TMDB_KEY }, timeout: 8000
+          });
+          meta.seasons = details.data?.seasons || [];
+          meta.totalSeasons = details.data?.number_of_seasons || meta.totalSeasons || 0;
+        } catch (_) {}
+      }
+      return meta;
+    }
+  } catch (error) {
+    console.log(`[HEAL] [WARN] Shared metadata lookup failed; using legacy healer fallback: ${error.message}`);
+  }
   let fastPathFallback = null;
 
   // ── FAST PATH 1: we already know the TMDB ID (re-heal run) ─────────────────
@@ -116,7 +154,7 @@ async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = 
                     try {
                       const params = { apikey: OMDB_KEY, t: canonicalTitle, type };
                       if (y) params.y = y;
-                      const omdbR = await axios.get('http://www.omdbapi.com/', { params, timeout: 6000 });
+                      const omdbR = await axios.get('https://www.omdbapi.com/', { params, timeout: 6000 });
                       const od = omdbR.data;
                       if (od && od.Response !== 'False') {
                         if (!result.poster && od.Poster && od.Poster !== 'N/A') {
@@ -317,7 +355,14 @@ async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = 
 
 
 // ── OMDB fallback (http:// required for free tier) ───────────────────────────
-async function fetchOMDB(rawTitle, year) {
+async function fetchOMDB(rawTitle, year, isSeries = false) {
+  // Prefer the shared OMDb/IMDb lookup used by imports; retain the legacy multi-type fallback below.
+  try {
+    const shared = await sharedMetadataSearch.searchOMDB(rawTitle, year, !!isSeries, OMDB_KEY);
+    if (shared) return { ...shared, tmdbId: null, tmdbTitle: shared.title || '' };
+  } catch (error) {
+    console.log(`[HEAL] [WARN] Shared OMDb lookup failed; using legacy fallback: ${error.message}`);
+  }
   if (!OMDB_KEY) return null;
   const clean = deepCleanStoredTitle(rawTitle);
   if (!clean || clean.length < 2) return null;
@@ -444,7 +489,7 @@ async function healDatabase() {
       );
 
       // Always try OMDB as supplement — fills gaps TMDB leaves empty (e.g. small regional films)
-      const omdbMeta = await fetchOMDB(searchTitle, movie.year);
+      const omdbMeta = await fetchOMDB(searchTitle, movie.year, isSeries);
       if (omdbMeta) {
         if (!meta) {
           meta = omdbMeta;

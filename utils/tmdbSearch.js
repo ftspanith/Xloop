@@ -241,8 +241,9 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       type:             isTv ? 'series' : 'movie',
       totalSeasons:     d.number_of_seasons || 0,
       title:            d.title || d.name || title,
-      description:      extra.seasonOverview || d.overview || '',
-      poster:           extra.seasonPoster || (d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : ''),
+      description:      d.overview || extra.seasonOverview || '',
+      poster:           d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : '',
+      seasonPoster:     extra.seasonPoster || '',
       backdrop:         d.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : '',
       rating:           Math.round((d.vote_average || 0) * 10) / 10,
       year:             d.release_date ? parseInt(d.release_date, 10) : d.first_air_date ? parseInt(d.first_air_date, 10) : hintYear,
@@ -403,7 +404,7 @@ async function searchOMDB(title, year, isSeries, omdbKey) {
     return fetchWithRetry(async () => {
       const params = { t, apikey: omdbKey, type: isSeries ? 'series' : 'movie', plot: 'short' };
       if (y) params.y = y;
-      const res = await axios.get('http://www.omdbapi.com/', { params, timeout: 10000 });
+      const res = await axios.get('https://www.omdbapi.com/', { params, timeout: 10000 });
       const d   = res.data;
       if (!d || d.Response === 'False') return null;
       const omdbYear = d.Year ? parseInt(d.Year) : year;

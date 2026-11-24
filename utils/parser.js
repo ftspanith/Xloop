@@ -334,7 +334,8 @@ function detectBitDepth(fn) {
 
 function detectAudioChannels(fn) {
   const s = String(fn || '').toUpperCase();
-  const m = s.match(/\b(7\.1|5\.1|2\.1|2\.0|1\.0)\b/);
+  // Permit compact release tags such as DDP5.1 as well as spaced "AAC 5.1".
+  const m = s.match(/(?<!\d)(7\.1|5\.1|2\.1|2\.0|1\.0)(?!\d)/);
   return m ? m[1] : null;
 }
 

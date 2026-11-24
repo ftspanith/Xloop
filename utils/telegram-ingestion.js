@@ -133,14 +133,16 @@ function extractTelegramLinks(inputMessages, account = '1') {
           continue;
         }
         const entry = {
-          messageId: parsed.messageId, title: parsed.title,
+          messageId: parsed.messageId, title: parsed.title, rawTitle: parsed.rawTitle || parsed.title,
           year: parsed.year == null ? null : parsed.year,
+          type: parsed.type || (parsed.contentType === 'anime' ? 'anime' : parsed.isSeries ? 'series' : 'movie'),
           contentType: parsed.contentType || '', isSeries: !!parsed.isSeries,
           season: download.season == null ? parsed.season : download.season,
           episode: download.episode == null ? parsed.episode : download.episode,
           language, quality: download.quality || parsed.quality || 'HD',
           size: download.size || '', filename: download.filename || '',
           codec: download.codec || '', hdr: download.hdr || '', audio: download.audio || '',
+          source: download.source || '', container: download.container || '',
           bitDepth: download.bitDepth || '', audioChannels: download.audioChannels || '',
           host, url, bypassedUrl: null,
           sourceAccount: String(message.sourceAccount || account || '1'),
