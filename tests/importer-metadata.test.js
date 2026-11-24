@@ -87,6 +87,7 @@ test('Telegram parser stores multiple audio tracks only when two explicit track 
 test('a single audio row or a DUAL/MULTI marker does not create guessed multi-audio tracks', () => {
   const singleTrackMessage = [
     'Single Track Sample Film (2024)',
+    '#DUAL_AUDIO #MULTI_AUDIO',
     'Audio Tracks:',
     '1. DDP | 5.1 | 640 kb/s | Telugu',
     'Single.Track.Sample.Film.2024.1080p.WEB-DL.HEVC.2GB.mkv',
@@ -110,6 +111,8 @@ test('detects additional common audio codecs used in movie releases', () => {
   assert.equal(extractAudio('Movie.DTS-ES.1080p.mkv'), 'DTS-ES');
   assert.equal(extractAudio('Movie.DTS.96.24.1080p.mkv'), 'DTS 96/24');
   assert.equal(extractAudio('Movie.DTS-Express.1080p.mkv'), 'DTS Express');
+  assert.equal(extractAudio('Movie.DTS-HD.Master.Audio.1080p.mkv'), 'DTS-HD MA');
+  assert.equal(extractAudio('Movie.DTS-HD.High.Resolution.Audio.1080p.mkv'), 'DTS-HD HRA');
   assert.equal(extractAudio('Movie.HE-AAC.1080p.mkv'), 'HE-AAC');
   assert.equal(extractAudio('Movie.AAC-LC.1080p.mkv'), 'AAC-LC');
   assert.equal(extractAudio('Movie.LPCM.1080p.mkv'), 'LPCM');
