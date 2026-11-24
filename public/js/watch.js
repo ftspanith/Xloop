@@ -382,7 +382,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
   function telegramDateToMs(value) {
     if (!value) return 0;
     const raw = String(value).trim();
-    if (/^\\d{10,13}$/.test(raw)) {
+    if (/^\d{10,13}$/.test(raw)) {
       const numeric = Number(raw);
       return numeric < 1e12 ? numeric * 1000 : numeric;
     }
