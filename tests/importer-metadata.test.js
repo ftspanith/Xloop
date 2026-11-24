@@ -269,7 +269,7 @@ test('recovers a labelled size placed immediately before its filename', () => {
 
 test('explicit MongoDB catalogue reset preserves the ExtractedLink source collection', () => {
   assert.match(pipelineSource, /_argv\.includes\('--clean-catalogue'\)/);
-  assert.match(pipelineSource, /const NO_WIPE\s+= FROM_MONGODB \? !CLEAN_CATALOGUE/);
+  assert.match(pipelineSource, /const requestedNoWipe = FROM_MONGODB \? !CLEAN_CATALOGUE/);\n  assert.match(pipelineSource, /const NO_WIPE = requestedNoWipe \|\| scope !== 'all' \|\| RESUME/);
   assert.match(pipelineSource, /await Movie\.deleteMany\(\{\}\)/);
   assert.match(pipelineSource, /ExtractedLink\.find\(\{\}\)\.lean\(\)/);
   assert.match(pipelineSource, /ExtractedLink source preserved/);
