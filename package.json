@@ -30,7 +30,7 @@
     "test:analytics-html": "node test/analytics-html.test.js",
     "test:scraper-intelligence": "node --test tests/scraper-intelligence.test.js test/variant-intelligence.test.js",
     "test:telegram-sync": "node --test test/telegram-sync-contract.test.js",
-    "test:telegram-ingestion": "node --test tests/telegram-ingestion.test.js",
+    "test:telegram-ingestion": "node --test tests/telegram-ingestion.test.js tests/telegram-ingestion-metadata.test.js",
     "import:db": "node pipeline_full.js --from-mongodb",
     "test:metadata-search": "node --test tests/tmdb-search-shared.test.js"
   },
