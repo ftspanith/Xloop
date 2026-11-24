@@ -349,11 +349,11 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
         languageType: info.languageType,
         languageCount: info.languageCount,
         isMulti:     info.isMulti,
-        isRepack:    !!dl.isRepack || /\bRE[\s._-]?PACK\b/i.test(dl.filename || ''),
+        isRepack:    !!dl.isRepack || /\bre[\s._-]?pack\b/i.test(String(dl.releaseType || '') + ' ' + (dl.filename || '')),
         releaseType: dl.releaseType || '',
         isIMAX:      !!dl.isIMAX,
         aspectRatio: dl.aspectRatio || '',
-        sourceDate:  dl.sourceDate || ''
+        sourceDate:  dl.sourceDate || '',
         rank:        HOST_RANK[hostLabel] ?? 99,
         season:      dl.season,
         episode:     dl.episode,
@@ -455,8 +455,10 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       ? `<span class="dl-row-se">${row.season?'S'+String(row.season).padStart(2,'0'):''}${row.episode?'E'+String(row.episode).padStart(2,'0'):''}</span>`
       : '';
 
-    const langBadge = row.lang
-      ? `<span class="dl-row-lang">${row.languageType === 'Multi' ? 'MULTI' : row.languageType === 'Dual' ? 'DUAL' : row.lang}</span>`
+    const langText = row.languageType && row.lang && row.lang !== row.languageType
+      ? `${row.languageType.toUpperCase()} · ${row.lang}` : row.lang;
+    const langBadge = langText
+      ? `<span class="dl-row-lang">${langText}</span>`
       : '';
     const repackBadge = row.isRepack
       ? '<span class="dl-row-lang" title="Repack release">REPACK</span>'
