@@ -1062,9 +1062,17 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     if (fc && !fsz) {
       const fnLineIdx = lines.lastIndexOf(fc, i - 1);
       if (fnLineIdx >= 0) {
-        for (let scan=fnLineIdx + 1; scan < i; scan++) {
+        // Some channels place the size label just before the filename.
+        for (let scan=fnLineIdx - 1; scan >= Math.max(0, fnLineIdx - 3); scan--) {
           if (isSizeLine(lines[scan])) { fsz = extractSizeFromMeta(lines[scan]); if (fsz) break; }
-          if (isUrl(lines[scan])) break;
+          if (!isMetadataLine(lines[scan])) break;
+        }
+        // Other channels place it after the filename and before the URL.
+        if (!fsz) {
+          for (let scan=fnLineIdx + 1; scan < i; scan++) {
+            if (isSizeLine(lines[scan])) { fsz = extractSizeFromMeta(lines[scan]); if (fsz) break; }
+            if (isUrl(lines[scan])) break;
+          }
         }
       }
     }
