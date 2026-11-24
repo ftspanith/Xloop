@@ -297,6 +297,10 @@ function levenshtein(a, b) {
   for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
   return dp[m][n];
 }
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^$()|[\]\\{}]/g, '\\function stringSimilarity(a, b) {');
+}
+
 function stringSimilarity(a, b) {
   a = (a||'').toLowerCase().trim(); b = (b||'').toLowerCase().trim();
   if (a === b) return 1;
@@ -557,7 +561,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       searchTitle = cleanTitle;
     }
 
-    const esc = (cleanTitle || '').replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+    const esc = escapeRegex(cleanTitle || '');
     const expectedTypes = isSer ? { $in: ['series', 'anime'] } : 'movie';
     const titleQuery = cleanTitle ? { title: { $regex: `^${esc}$`, $options: 'i' }, type: expectedTypes } : null;
     let existing = null;
@@ -580,7 +584,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       totalSeasons: existing.totalSeasons || 0,
       description: existing.description || '', poster: existing.poster || '',
       posterFallback: existing.posterFallback || '', backdrop: existing.backdrop || '',
-      rating: existing.rating || 0, year: existing.year || rep.messageYear || rep.year || null,
+      rating: existing.rating || 0, year: existing.year || rep.messageYear || (isSer ? null : rep.year) || null,
       releaseDate: existing.releaseDate || '',
       genre: existing.genre || [], duration: existing.duration || '',
       runtimeMinutes: existing.runtimeMinutes ?? rep.runtimeMinutes ?? null,
@@ -626,7 +630,8 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         const candidate = tmdbSearchCandidates[candidateIndex];
         tmdb = await searchTMDB(
           candidate, isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year), isSer, rep.season, group.msgDate,
-          rep.imdbId || null, rep.tmdbIdHint || null, yearHints
+          rep.imdbId || null, rep.tmdbIdHint || null, yearHints,
+          group.items.map(file => file.fileYear || extractYear([file.filename])).filter(Boolean)
         );
         if (tmdb) {
           if (candidateIndex > 0) {
@@ -650,7 +655,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       // candidates so a slightly noisy Telegram heading doesn't block lookup.
       let omdb = null;
       for (const candidate of tmdbSearchCandidates.slice(0, 4)) {
-        omdb = await searchOMDB(candidate, rep.messageYear || rep.year, isSer, yearHints);
+        omdb = await searchOMDB(candidate, isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year), isSer, yearHints);
         if (omdb) break;
       }
       if (omdb) {
@@ -851,6 +856,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         }
         const metaSet = {};
         if (!dbRec.backdrop       && meta.backdrop)       metaSet.backdrop       = meta.backdrop;
+        if (!dbRec.releaseDate    && meta.releaseDate)    metaSet.releaseDate    = meta.releaseDate;
         if (!dbRec.poster         && meta.poster)         metaSet.poster         = meta.poster;
         if (!dbRec.posterFallback && meta.posterFallback) metaSet.posterFallback = meta.posterFallback;
         if (!dbRec.tmdbId         && meta.tmdbId)         metaSet.tmdbId         = meta.tmdbId;
@@ -973,7 +979,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           seasonYears: Object.fromEntries(group.items
             .filter(file => file.season && file.fileYear)
             .map(file => [`s${file.season}`, Number(file.fileYear)])),
-          rating: meta.rating || 0, year: meta.year || rep.messageYear || (isSer ? null : rep.year || item.year) || new Date().getFullYear(),
+          rating: meta.rating || 0, year: meta.year || rep.messageYear || (isSer ? null : (rep.year || item.year || new Date().getFullYear())),
           genre: meta.genre || [], duration: meta.duration || item.duration || rep.duration || '',
           runtimeMinutes: meta.runtimeMinutes || item.runtimeMinutes || rep.runtimeMinutes || null,
           certification: meta.certification || item.certification || rep.certification || '',
@@ -1376,10 +1382,10 @@ module.exports = { runPipeline: main, searchTMDB, searchOMDB, searchGoogleImage,
 // Shared 14-algorithm metadata engine. Includes TMDB/IMDb ID fast paths,
 // confidence scoring, relaxed title candidates, and season poster lookup.
 // ─────────────────────────────────────────────────────────────────────────
-async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbIdHint, yearHints = []) {
+async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbIdHint, yearHints = [], seasonYearHints = []) {
   if (!TMDB_KEY) return null;
   return sharedMetadataSearch.searchTMDB(
     title, year, isSeries, season, msgDate, imdbId, tmdbIdHint,
-    { tmdbKey: TMDB_KEY, emitter: _emitter, yearHints, messageYear: year }
+    { tmdbKey: TMDB_KEY, emitter: _emitter, yearHints, seasonYearHints, messageYear: year }
   );
 }
