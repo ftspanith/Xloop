@@ -103,3 +103,9 @@ assert.equal(detectAudioChannels('Film.Stereo.AAC.mkv'), '2.0');
 assert.equal(normalizeGdflixUrl('https://new5.gdflix.io/file/abc'), 'https://gdflix.io/file/abc');
 assert.equal(normalizeGdflixUrl('https://www.hubcloud.foo/file/abc'), 'https://hubcloud.foo/file/abc');
 assert.equal(normalizeGdflixUrl('https://www.tmbcloud.dev/file/abc'), 'https://tmbcloud.dev/file/abc');
+
+
+const dvd9Manual = parseManualInput('Sample.Movie.2024.DVD9.Dolby.Digital.Plus.5.1.mkv');
+assert.equal(dvd9Manual.source, 'DVD9');
+assert.equal(dvd9Manual.audio, 'EAC3');
+assert.equal(dvd9Manual.audioChannels, '5.1');
