@@ -176,7 +176,7 @@ function detectHost(url) {
 // Returns true for lines that are channel/format headers, NOT real title/filename lines
 function isMetadataLine(line) {
   const metadataText = String(line || '').trim();
-  if (/^Format\s*[:=]/i.test(metadataText)) return true;
+  if (/^(?:IMAX|Format\s*[:=])/i.test(metadataText)) return true;
   const s = (line || '').trim();
   if (!s) return false;
   // Pure hashtag-only lines: '#NF_WEBDL #MULTI_AUDIO'
@@ -1136,7 +1136,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     .replace(/\bS\d{1,2}\s*[-–]\s*S\d{1,2}\b/gi,'')    // Strip pack ranges: "S01-S04"
     .replace(/\bEpisode\s*\d+\b/gi,'').replace(/\bEp\s*\d+\b/gi,'')
     .replace(/\b(\d{1,2})x\d{2,3}\b/gi,'')
-    .replace(/\b(4320p|2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4[Kk]|UHD|WEB[-.]?DL|HDRip|BluRay|BDRip|WEBRip|HEVC|x265|x264|VP9|VP8|MPEG[ ._-]?[24]|Xvid|DivX|ProRes|Theora|VC[ ._-]?1|AVC|AV1|VP9|VP8|HDR|HDR10P|REMUX|REPACK|PROPER|SDR|HLG|DV)\b/gi,'')
+    .replace(/\b(4320p|2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4[Kk]|UHD|WEB[-.]?DL|HDRip|BluRay|BDRip|WEBRip|HEVC|x265|x264|VP9|VP8|MPEG[ ._-]?[24]|Xvid|DivX|ProRes|Theora|VC[ ._-]?1|AVC|AV1|VP9|VP8|HDR|HDR10P|REMUX|REPACK|RE[ ._-]?RIP|RERIP|PROPER|SDR|HLG|DV)\b/gi,'')
     .replace(/\bH\s+26[45]\b/gi,'')
     .replace(/\b(IMAX|Remastered|Anniversary|Director.?s?\s*Cut|Extended\s*Cut|Special\s*Edition|Theatrical\s*Cut|Uncut|Unrated|Open\s*Matte|Hybrid|Fan\s*Edit|Edition)\b/gi,'')
     .replace(/\b(AMZN|NF|DSNP|ZEE5|SUN\s*NXT|SUNNXT|JIOHS|ETVWIN|AHA|ARTL|HMAX|SONY|HOTSTAR|APPLE|TVNZ|CRKL|PCOK|DPLS)\b/gi,'')
