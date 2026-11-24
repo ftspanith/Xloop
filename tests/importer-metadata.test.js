@@ -11,6 +11,7 @@ const {
   detectAudioChannels,
 } = require('../utils/parser');
 const { buildTitleCandidates } = require('../utils/tmdbSearch');
+const { recomputeAggregates } = require('../pipeline_full');
 
 const pipelineSource = fs.readFileSync(path.join(__dirname, '..', 'pipeline_full.js'), 'utf8');
 const sharedSearchSource = fs.readFileSync(path.join(__dirname, '..', 'utils', 'tmdbSearch.js'), 'utf8');
@@ -112,4 +113,23 @@ test('TMDB main poster and season poster are returned and saved separately', () 
   assert.match(sharedSearchSource, /seasonPoster:\s+extra\.seasonPoster/);
   assert.match(pipelineSource, /seasonPosters\.s\$\{rep\.season\}/);
   assert.match(pipelineSource, /seasonPosters: rep\.season && meta\.seasonPoster/);
+});
+
+test('catalogue importer applies cross-account ranking without breaking quality-first order', () => {
+  const doc = {
+    title: 'Example Film',
+    year: 2020,
+    downloads: [
+      { quality: '1080p', source: 'WEB-DL', codec: 'H.264', audio: 'AAC 2.0', size: '6.7 GB', language: 'Telugu', links: [{ url: 'https://acc2/large' }] },
+      { quality: '1080p', source: 'BluRay', codec: 'H.264', audio: 'AAC 2.0', size: '6.3 GB', language: 'Telugu', links: [{ url: 'https://acc1/better' }] },
+      { quality: '720p', source: 'WEB-DL', codec: 'H.264', audio: 'AAC 2.0', size: '9 GB', language: 'Telugu', links: [{ url: 'https://acc1/720p' }] },
+    ],
+  };
+
+  recomputeAggregates(doc);
+  assert.deepEqual(doc.downloads.map(item => item.quality), ['1080p', '1080p', '720p']);
+  assert.equal(doc.downloads[0].source, 'BluRay', 'stronger source wins inside the close-size 1080p cluster');
+  assert.equal(doc.downloads[1].source, 'WEB-DL');
+  assert.equal(doc.downloads[2].links[0].url, 'https://acc1/720p', 'quality-first order is retained');
+  assert.equal(doc.downloads.length, 3, 'ranking keeps every variant');
 });
