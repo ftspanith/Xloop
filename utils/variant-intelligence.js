@@ -82,7 +82,11 @@ function completenessScore(item) {
   return score;
 }
 
-function isRepackVariant(item) {\n  return !!item?.isRepack || /repack|rerip/i.test(String(item?.releaseType || '') + ' ' + String(item?.filename || ''));\n}\n\nfunction scoreVariant(item) {
+function isRepackVariant(item) {
+  return !!item?.isRepack || /repack|rerip/i.test(String(item?.releaseType || '') + ' ' + String(item?.filename || ''));
+}
+
+function scoreVariant(item) {
   const reasons = [];
   const add = (label, value) => { if (value > 0) reasons.push(label); return value; };
   const source = add('source quality', sourceScore(item.source || item.filename));
