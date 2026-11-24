@@ -264,6 +264,17 @@ const LANG_MAP = { en:'English',te:'Telugu',ta:'Tamil',hi:'Hindi',ml:'Malayalam'
 async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbIdHint, options = {}) {
   const { tmdbKey, emitter } = options;
   if (!tmdbKey) return null;
+  const validYear = value => {
+    const n = Number(value);
+    return Number.isInteger(n) && n >= 1900 && n <= 2099 ? n : null;
+  };
+  const yearHints = [...new Set([year, ...(Array.isArray(options.yearHints) ? options.yearHints : [])]
+    .map(validYear).filter(Boolean))];
+  // For TV, the message/title year describes the show's first air date.
+  // A filename year usually describes a later season and must not be scored
+  // against the show's first_air_date.
+  const titleYear = validYear(options.messageYear) || validYear(year) || null;
+  const hintYear = isSeries ? titleYear : (titleYear || yearHints[0] || null);
 
   const log = (msg) => { if (emitter) emitter(msg); };
 
@@ -312,9 +323,12 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     const sr = await fetchWithRetry(() =>
       tmdbGet(`${BASE}/tv/${tmdbId}/season/${sn}`, {}, { timeout: 8000 })
     );
+    const seasonAirDate = sr?.data?.air_date || '';
     return {
       seasonPoster:   sr?.data?.poster_path ? `https://image.tmdb.org/t/p/w500${sr.data.poster_path}` : '',
       seasonOverview: sr?.data?.overview || '',
+      seasonAirDate,
+      seasonYear: seasonAirDate ? parseInt(seasonAirDate.slice(0, 4), 10) || null : null,
     };
   }
 
@@ -328,8 +342,12 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       description:      d.overview || extra.seasonOverview || '',
       poster:           d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : '',
       seasonPoster:     extra.seasonPoster || '',
+      seasonAirDate:    extra.seasonAirDate || '',
+      seasonYear:       extra.seasonYear || null,
       backdrop:         d.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : '',
       rating:           Math.round((d.vote_average || 0) * 10) / 10,
+      // A series card keeps the show's first-air year; each season's own year
+      // is returned separately as seasonYear instead of replacing the parent.
       year:             d.release_date ? parseInt(d.release_date, 10) : d.first_air_date ? parseInt(d.first_air_date, 10) : hintYear,
       releaseDate:      d.release_date || d.first_air_date || '',
       genre:            (d.genres || []).map(g => g.name),
@@ -449,6 +467,12 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     const label = `A${i + 1}`;
     const strats = [];
     if (hintYear) strats.push({ ep: typeEp,  params: { query: q, year: hintYear, _algo: label } });
+    // A distinct filename year is a fallback search hint, but for a TV series
+    // it is not treated as the show's premiere year by the scorer.
+    const alternateSearchYear = !isSeries
+      ? yearHints.find(candidate => candidate !== hintYear)
+      : (!options.messageYear && hintYear ? null : yearHints.find(candidate => candidate !== hintYear));
+    if (alternateSearchYear) strats.push({ ep: typeEp, params: { query: q, year: alternateSearchYear, _algo: label } });
     strats.push(          { ep: typeEp,  params: { query: q, _algo: label } });
     strats.push(          { ep: 'multi', params: { query: q, _algo: label } });
     if (hintYear) strats.push({ ep: otherEp, params: { query: q, year: hintYear, _algo: label } });
@@ -469,6 +493,9 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     const label = `R${i + 1}`;
     const strats = [
       { ep: typeEp,  params: { query: q, ...(hintYear ? { year: hintYear } : {}), _algo: label } },
+      ...(!isSeries && yearHints.some(candidate => candidate !== hintYear)
+        ? [{ ep: typeEp, params: { query: q, year: yearHints.find(candidate => candidate !== hintYear), _algo: label } }]
+        : []),
       { ep: typeEp,  params: { query: q, _algo: label } },
       { ep: 'multi', params: { query: q, _algo: label } },
       { ep: otherEp, params: { query: q, ...(hintYear ? { year: hintYear } : {}), _algo: label } },
@@ -489,27 +516,39 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
 // ─────────────────────────────────────────────────────────────────────────────
 // searchOMDB — OMDB/IMDB fallback
 // ─────────────────────────────────────────────────────────────────────────────
-async function searchOMDB(title, year, isSeries, omdbKey) {
+async function searchOMDB(title, year, isSeries, omdbKey, options = {}) {
   if (!omdbKey) return null;
   const cleanTitle = cleanTitleForApi(title);
   if (!cleanTitle || cleanTitle.length < 2) return null;
+  const validYear = value => {
+    const n = Number(value);
+    return Number.isInteger(n) && n >= 1900 && n <= 2099 ? n : null;
+  };
+  const yearHints = [...new Set([year, ...(Array.isArray(options.yearHints) ? options.yearHints : [])]
+    .map(validYear).filter(Boolean))];
 
-  async function omdbFetch(t, y) {
+  async function omdbFetch(t, queryYear) {
     return fetchWithRetry(async () => {
       const params = { t, apikey: omdbKey, type: isSeries ? 'series' : 'movie', plot: 'short' };
-      if (y) params.y = y;
+      if (queryYear) params.y = queryYear;
       const res = await axios.get('https://www.omdbapi.com/', { params, timeout: 10000 });
-      const d   = res.data;
+      const d = res.data;
       if (!d || d.Response === 'False') return null;
-      const omdbYear = d.Year ? parseInt(d.Year) : year;
-      if (year && omdbYear && Math.abs(year - omdbYear) > 3) return null;
+      const yearText = String(d.Year || '');
+      const omdbYear = parseInt(yearText, 10) || null;
+      const yearDiff = omdbYear && yearHints.length
+        ? Math.min(...yearHints.map(hint => Math.abs(hint - omdbYear)))
+        : null;
+      // OMDb series Year values can be ranges (e.g. 2019–2024); parseInt gives
+      // the first-air year, while a later season's filename year is also valid.
+      if (yearDiff != null && yearDiff > (isSeries ? 5 : 3)) return null;
       return {
         imdbId:      d.imdbID || '',
-        title:       d.Title  || title,
+        title:       d.Title || title,
         description: d.Plot && d.Plot !== 'N/A' ? d.Plot : '',
         poster:      d.Poster && d.Poster !== 'N/A' ? d.Poster : '',
         rating:      d.imdbRating && d.imdbRating !== 'N/A' ? parseFloat(d.imdbRating) : 0,
-        year:        omdbYear,
+        year:        omdbYear || yearHints[0] || null,
         genre:       d.Genre && d.Genre !== 'N/A' ? d.Genre.split(', ') : [],
         duration:    d.Runtime && d.Runtime !== 'N/A'
           ? (() => { const m = parseInt(d.Runtime); return `${Math.floor(m/60)}h ${m%60}m`; })()
@@ -520,9 +559,15 @@ async function searchOMDB(title, year, isSeries, omdbKey) {
     });
   }
 
-  return (await omdbFetch(cleanTitle, year))
-    || (year ? await omdbFetch(cleanTitle, null) : null)
-    || await omdbFetch(title, year);
+  const candidates = [cleanTitle, title].filter((value, index, all) => value && all.indexOf(value) === index);
+  const queryYears = yearHints.length ? yearHints : [null];
+  for (const candidate of candidates) {
+    for (const queryYear of [...queryYears, null]) {
+      const result = await omdbFetch(candidate, queryYear);
+      if (result) return result;
+    }
+  }
+  return null;
 }
 
 module.exports = { buildTitleCandidates, searchTMDB, searchOMDB, stringSimilarity };
