@@ -707,7 +707,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           const metadataFields = [
             'filename', 'language', 'languageType', 'source', 'container',
             'bitDepth', 'audioChannels', 'codec', 'hdr', 'audio',
-            'aspectRatio', 'runtimeMinutes', 'certification', 'isIMAX',
+            'aspectRatio', 'runtimeMinutes', 'certification', 'isIMAX', 'uploadDate',
           ];
           for (const field of metadataFields) {
             const value = newDl[field];
