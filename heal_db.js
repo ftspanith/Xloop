@@ -153,7 +153,7 @@ async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = 
                     try {
                       const params = { apikey: OMDB_KEY, t: canonicalTitle, type };
                       if (y) params.y = y;
-                      const omdbR = await axios.get('http://www.omdbapi.com/', { params, timeout: 6000 });
+                      const omdbR = await axios.get('https://www.omdbapi.com/', { params, timeout: 6000 });
                       const od = omdbR.data;
                       if (od && od.Response !== 'False') {
                         if (!result.poster && od.Poster && od.Poster !== 'N/A') {
@@ -354,7 +354,14 @@ async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = 
 
 
 // ── OMDB fallback (http:// required for free tier) ───────────────────────────
-async function fetchOMDB(rawTitle, year) {
+async function fetchOMDB(rawTitle, year, isSeries = false) {
+  // Prefer the shared OMDb/IMDb lookup used by imports; retain the legacy multi-type fallback below.
+  try {
+    const shared = await sharedMetadataSearch.searchOMDB(rawTitle, year, !!isSeries, OMDB_KEY);
+    if (shared) return { ...shared, tmdbId: null, tmdbTitle: shared.title || '' };
+  } catch (error) {
+    console.log(`[HEAL] [WARN] Shared OMDb lookup failed; using legacy fallback: ${error.message}`);
+  }
   if (!OMDB_KEY) return null;
   const clean = deepCleanStoredTitle(rawTitle);
   if (!clean || clean.length < 2) return null;
@@ -481,7 +488,7 @@ async function healDatabase() {
       );
 
       // Always try OMDB as supplement — fills gaps TMDB leaves empty (e.g. small regional films)
-      const omdbMeta = await fetchOMDB(searchTitle, movie.year);
+      const omdbMeta = await fetchOMDB(searchTitle, movie.year, isSeries);
       if (omdbMeta) {
         if (!meta) {
           meta = omdbMeta;
