@@ -42,6 +42,7 @@ const {
 } = require('./utils/parser');
 const sharedMetadataSearch = require('./utils/tmdbSearch');
 const { analyzeVariantSet, rankVariantsForDisplay } = require('./utils/variant-intelligence');
+const { filterEntriesByScope } = require('./utils/pipelineScope');
 
 // ─── CLI args (only used when run directly, not when require()'d) ─────────────
 const IS_MAIN = require.main === module;
@@ -1023,6 +1024,10 @@ async function main(opts = {}) {
   // Support both CLI and require() usage
   // opts.noWipe, opts.noHeal, opts.noBypass, opts.resume, opts.concurrency, opts.importSrc, opts.emitter
   if (opts.emitter) _emitter = opts.emitter;
+  const scope = String(opts.scope || (_argv.find(a => a.startsWith('--scope=')) || '').replace('--scope=', '') || 'all').trim().toLowerCase();
+  const titleFilter = String(opts.titleFilter || (_argv.find(a => a.startsWith('--title-filter=')) || '').replace('--title-filter=', '') || '').trim().slice(0, 200);
+  if (!['all', 'daily', 'title'].includes(scope)) throw new Error('Invalid scope. Use all, daily, or title.');
+  if (scope === 'title' && titleFilter.length < 3) throw new Error('Title scope requires a title filter of at least 3 characters.');
 
   const FROM_MONGODB = opts.fromMongoDB !== undefined ? !!opts.fromMongoDB : _argv.includes('--from-mongodb');
   // MongoDB stays the source of truth. By default this importer preserves the
@@ -1030,10 +1035,12 @@ async function main(opts = {}) {
   // rebuilding them, while never deleting the ExtractedLink source collection.
   const CLEAN_CATALOGUE = FROM_MONGODB &&
     (opts.cleanCatalogue !== undefined ? !!opts.cleanCatalogue : _argv.includes('--clean-catalogue'));
-  const NO_WIPE     = FROM_MONGODB ? !CLEAN_CATALOGUE : (opts.noWipe !== undefined ? opts.noWipe : _argv.includes('--no-wipe'));
+  const RESUME      = opts.resume !== undefined ? !!opts.resume : _argv.includes('--resume');
+  const requestedNoWipe = FROM_MONGODB ? !CLEAN_CATALOGUE : (opts.noWipe !== undefined ? !!opts.noWipe : _argv.includes('--no-wipe'));
+  // Scoped imports and resume runs must never delete the existing catalogue.
+  const NO_WIPE = requestedNoWipe || scope !== 'all' || RESUME;
   const NO_HEAL     = FROM_MONGODB ? true : (opts.noHeal !== undefined ? opts.noHeal : _argv.includes('--no-heal'));
   const NO_BYPASS   = FROM_MONGODB ? true : (opts.noBypass !== undefined ? opts.noBypass : _argv.includes('--no-bypass'));
-  const RESUME      = opts.resume     !== undefined ? opts.resume     : _argv.includes('--resume');
   const CONCURRENCY = opts.concurrency || parseInt((_argv.find(a => a.startsWith('--concurrency=')) || '').replace('--concurrency=', '') || '3', 10);
   const IMPORT_SRC  = opts.importSrc  || (_argv.find(a => a.startsWith('--import-source=')) || '').replace('--import-source=', '') || null;
   const IS_STOP_REQUESTED = opts.isStopRequested || (() => false);
@@ -1104,23 +1111,11 @@ async function main(opts = {}) {
     ok(`Preflight passed — ${approvedSourceCount} approved source links available; safe to rebuild catalogue.`);
   }
 
-  // STEP 0: Wipe
+  // STEP 0: Destructive catalogue reset is deferred until the source has been
+  // loaded, scoped, bypassed and verified to contain usable provider links.
   sep();
-  if (!NO_WIPE) {
-    if (FROM_MONGODB) {
-      log('STEP 0 — Cleaning Movie catalogue; MongoDB ExtractedLink source will be preserved...');
-    } else {
-      log('STEP 0 — Wiping database...');
-    }
-    // Only the Movie catalogue is cleared. ExtractedLink is the input source
-    // for --from-mongodb and must remain untouched for the rebuild.
-    const r = await Movie.deleteMany({});
-    ok(FROM_MONGODB
-      ? `Movie catalogue cleared — removed ${r.deletedCount} entries; ExtractedLink source preserved`
-      : `Database wiped — removed ${r.deletedCount} entries`);
-  } else {
-    warn('STEP 0 — Skipping wipe (--no-wipe)');
-  }
+  if (NO_WIPE) warn('STEP 0 — Preserving existing catalogue (no-wipe, scoped update, or resume).');
+  else log('STEP 0 — Catalogue reset deferred until source preflight succeeds.');
 
   // STEP 1: Extract / load existing source
   sep();
@@ -1268,6 +1263,15 @@ async function main(opts = {}) {
     }
   }
 
+  // Apply scoped selection before bypass/import. A zero-result scope aborts safely.
+  const scopeResult = filterEntriesByScope(allEntries, { scope, titleFilter, timezone: 'Asia/Kolkata' });
+  allEntries = scopeResult.entries;
+  log(`[SCOPE] ${scope}: ${scopeResult.matched}/${scopeResult.total} entries selected` +
+    (scopeResult.missingDate ? `; ${scopeResult.missingDate} entries skipped because Telegram message date was missing` : ''));
+  if (!allEntries.length) {
+    throw new Error(`No entries matched scope "${scope}". Existing catalogue was not changed.`);
+  }
+
   const existingBypassed = !FROM_MONGODB && fs.existsSync(BYPASSED_FILE) ? JSON.parse(fs.readFileSync(BYPASSED_FILE, 'utf8')) : [];
 
   log(`Total entries: ${allEntries.length} | Direct: ${allEntries.filter(e => e.host !== 'Shortlink').length} | Shortlinks: ${allEntries.filter(e => e.host === 'Shortlink').length} | Prev bypassed: ${existingBypassed.length}`);
@@ -1285,13 +1289,30 @@ async function main(opts = {}) {
     for (const e of allEntries) { if (!e.bypassedUrl && bmap.has(e.url)) e.bypassedUrl = bmap.get(e.url); }
   }
 
+  // Drop unresolved shortlinks and unsupported destinations before any destructive action.
+  const { isAllowedTelegramDownloadUrl } = require('./utils/telegram-ingestion');
+  const beforeProviderFilter = allEntries.length;
+  allEntries = allEntries.filter(entry => isAllowedTelegramDownloadUrl(entry?.bypassedUrl || entry?.url));
+  if (!allEntries.length) {
+    throw new Error('No usable GDFlix, HubCloud or TMBCloud links remain after bypass/validation. Existing catalogue was not changed.');
+  }
+  if (allEntries.length < beforeProviderFilter) {
+    warn(`[PREFLIGHT] Excluded ${beforeProviderFilter - allEntries.length} unresolved or unsupported links.`);
+  }
+  if (IS_STOP_REQUESTED()) throw new Error('Pipeline stopped before catalogue import; existing catalogue was not changed.');
+
   // STEP 3: Legacy DB Connection Step (Moved to top)
   sep();
   log('STEP 3 — MongoDB connection verified.');
 
   // STEP 4: Import
   sep();
-  log('STEP 4 — Importing all entries → MongoDB...');
+  if (!NO_WIPE) {
+    log('STEP 0 — Source preflight passed. Replacing the Movie catalogue now...');
+    const r = await Movie.deleteMany({});
+    ok(`Catalogue reset complete — removed ${r.deletedCount} Movie records; ExtractedLink source preserved.`);
+  }
+  log(`STEP 4 — Importing ${allEntries.length} approved entries → MongoDB...`);
 
   // Save metadata to PipelineCache so Skip Scraper knows data is available.
   // NOTE: do NOT save data:allEntries — 47k+ entries would exceed MongoDB's 16MB doc limit.

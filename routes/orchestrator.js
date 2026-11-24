@@ -201,6 +201,15 @@ async function setPipelineRunningFlag(running, progressData = null) {
 
 // ── Start pipeline (auth via ?token= since EventSource cannot send headers) ──
 router.get('/start', auth, async (req, res) => {
+  const scope = String(req.query.scope || 'all').trim().toLowerCase();
+  const titleFilter = String(req.query.titleFilter || '').trim().slice(0, 200);
+  if (!['all', 'daily', 'title'].includes(scope)) {
+    return res.status(400).json({ error: 'Invalid scope. Use all, daily, or title.' });
+  }
+  if (scope === 'title' && titleFilter.length < 3) {
+    return res.status(400).json({ error: 'titleFilter must contain at least 3 characters for title scope.' });
+  }
+
   // Check MongoDB flag first — catches stale flags from crashed/timed-out runs
   try {
     const PipelineCache = require('../models/PipelineCache');
@@ -228,8 +237,7 @@ router.get('/start', auth, async (req, res) => {
 
   const skipScraper = req.query.skipScraper === 'true';
   const resume = req.query.resume === 'true';
-  const scope       = req.query.scope || 'all';          // 'all' | 'daily' | 'title'
-  const titleFilter = (req.query.titleFilter || '').trim();
+  // Scope and titleFilter were validated before pipeline state changes.
   // If skipBypass is explicitly passed, parse it. Otherwise default to skipScraper.
   const skipBypass = req.query.skipBypass ? req.query.skipBypass === 'true' : skipScraper;
   const scopeLabel  = scope === 'daily' ? ' [Today\'s New]' : scope === 'title' && titleFilter ? ` [Title: ${titleFilter}]` : '';
@@ -294,7 +302,8 @@ router.get('/start', auth, async (req, res) => {
       await runPipeline({
         // skipBypass is always defined here (line 156), so just use it directly
         noBypass: !!skipBypass,
-        noWipe: !!skipScraper,
+        // Daily/title imports and resumes must never wipe the catalogue.
+        noWipe: !!skipScraper || scope !== 'all' || !!resume,
         fromMongoDB: !!skipScraper,
         resume: !!resume,
         importSrc,
@@ -325,6 +334,16 @@ router.get('/start', auth, async (req, res) => {
 // dashboard.html uses POST; orchestrator.html uses GET EventSource.
 // This POST version just kicks off via the shared broadcast channel.
 router.post('/start', auth, async (req, res) => {
+  const body = req.body || {};
+  const scope = String(body.scope || 'all').trim().toLowerCase();
+  const titleFilter = String(body.titleFilter || '').trim().slice(0, 200);
+  if (!['all', 'daily', 'title'].includes(scope)) {
+    return res.status(400).json({ error: 'Invalid scope. Use all, daily, or title.' });
+  }
+  if (scope === 'title' && titleFilter.length < 3) {
+    return res.status(400).json({ error: 'titleFilter must contain at least 3 characters for title scope.' });
+  }
+
   // Check MongoDB flag first — catches stale flags from crashed/timed-out runs on ANY instance
   try {
     const PipelineCache = require('../models/PipelineCache');
@@ -351,7 +370,7 @@ router.post('/start', auth, async (req, res) => {
     return res.status(400).json({ error: 'Pipeline is already running' });
   }
 
-  const { skipScraper, resume, skipBypass, scope = 'all', titleFilter = '' } = req.body || {};
+  const { skipScraper, resume, skipBypass } = body;
   const scopeLabel = scope === 'daily' ? ' [Today\'s New]' : (scope === 'title' && titleFilter ? ` [Title: ${titleFilter}]` : '');
   const label = (skipScraper ? 'Skip Scraper (import-only)' : 'Full Pipeline') + scopeLabel;
 
@@ -375,7 +394,8 @@ router.post('/start', auth, async (req, res) => {
         // If skipBypass not explicitly set, default to skipScraper
         // (Skip Scraper = import-only = no bypass needed)
         noBypass: skipBypass !== undefined ? !!skipBypass : !!skipScraper,
-        noWipe: !!skipScraper,
+        // Daily/title imports and resumes must never wipe the catalogue.
+        noWipe: !!skipScraper || scope !== 'all' || !!resume,
         fromMongoDB: !!skipScraper,
         resume: !!resume,
         scope,
@@ -811,7 +831,7 @@ router.get('/logs', auth, async (req, res) => {
 
 
 module.exports = router;
-router.get('/start-local', async (req, res) => {
+router.get('/start-local', auth, async (req, res) => {
   if (pipelineRunning) return res.status(400).json({ error: 'Pipeline is already running' });
 
   const skipScraper = req.query.skipScraper === 'true';
