@@ -442,25 +442,26 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
         }
 
         let aliasSim = 0;
+        let aliasTitles = [];
         if (hintYear && rYear && Math.abs(hintYear - rYear) <= 1 && simMain < 0.999) {
-          const aliases = await fetchAlternativeTitles(candidateMediaType, r.id);
+          aliasTitles = await fetchAlternativeTitles(candidateMediaType, r.id);
           if (ultraShortTitle) {
-            aliasSim = aliases.some(value => normalizeMatchTitle(value) === normalizedQuery) ? 1 : 0;
+            aliasSim = aliasTitles.some(value => normalizeMatchTitle(value) === normalizedQuery) ? 1 : 0;
           } else {
-            aliasSim = aliases.reduce((best, value) => Math.max(best, stringSimilarity(value, queryTitle)), 0);
+            aliasSim = aliasTitles.reduce((best, value) => Math.max(best, stringSimilarity(value, queryTitle)), 0);
             const aliasThreshold = normalizedQuery.split(' ').length === 1 ? 0.90 : 0.82;
             if (aliasSim < aliasThreshold) aliasSim = 0;
           }
         }
-        const effectiveSimilarity = Math.max(simMain, aliasSim);
 
         const queryNumbers = normalizedQuery.match(/\b\d+\b/g) || [];
-        const resultNumbers = normalizeMatchTitle(rTitle + ' ' + rOrig).match(/\b\d+\b/g) || [];
-        // Keep sequels distinct: a candidate containing a sequel number should
-        // not confidently resolve to the original title with that number absent.
+        const resultNumbers = normalizeMatchTitle([rTitle, rOrig, ...aliasTitles].join(' ')).match(/\b\d+\b/g) || [];
+        // Keep sequels distinct across both canonical and localized titles.
         if (queryNumbers.length && !queryNumbers.some(number => resultNumbers.includes(number))) {
           simMain *= 0.72;
+          aliasSim *= 0.72;
         }
+        const effectiveSimilarity = Math.max(simMain, aliasSim);
         let score = effectiveSimilarity * 70;
         if (hintYear && rYear) {
           const yearDifference = Math.abs(hintYear - rYear);
