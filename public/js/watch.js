@@ -59,6 +59,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const descText  = data.description || '';
     const descShort = descText.length > 240 ? descText.slice(0, 240).trimEnd() + '…' : descText;
+    const runtimeLabel = data.duration || (data.runtimeMinutes
+      ? (Math.floor(data.runtimeMinutes / 60)
+        ? Math.floor(data.runtimeMinutes / 60) + 'h' + (data.runtimeMinutes % 60 ? ' ' + (data.runtimeMinutes % 60) + 'm' : '')
+        : data.runtimeMinutes + ' min')
+      : '');
+    const certificationLabel = data.certification || data.cbfcRating || '';
 
     const cardHtml = `
       <div class="wp-cinema">
@@ -80,7 +86,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             <div class="wp-meta-inline">
               ${data.year     ? `<span class="wp-mi">${data.year}</span>` : ''}
-              ${data.duration ? `<span class="wp-mi">${data.duration}</span>` : ''}
+              ${runtimeLabel ? `<span class="wp-mi">${runtimeLabel}</span>` : ''}
+              ${certificationLabel ? `<span class="wp-mi wp-mi-badge">CBFC ${certificationLabel}</span>` : ''}
               ${starRating    ? `<span class="wp-mi wp-mi-star">${starRating}</span>` : ''}
               ${displayQuality? `<span class="wp-mi wp-mi-badge">${displayQuality}</span>` : ''}
             </div>
@@ -93,11 +100,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         <!-- ── Right: floating info panel ── -->
         <div class="wp-side-panel">
-          ${[data.duration ? `<div class="wp-side-row"><span class="wp-side-label">Runtime</span><span class="wp-side-val">${data.duration}</span></div>` : '',
-             data.language ? `<div class="wp-side-row"><span class="wp-side-label">Language</span><span class="wp-side-val">${data.language.split(',')[0].trim()}</span></div>` : '',
+          ${[runtimeLabel ? `<div class="wp-side-row"><span class="wp-side-label">Runtime</span><span class="wp-side-val">${runtimeLabel}</span></div>` : '',
+             data.language ? `<div class="wp-side-row"><span class="wp-side-label">Language</span><span class="wp-side-val">${data.language.split(',').map(part => part.trim()).join(' + ')}${data.languageType ? ' (' + data.languageType + ')' : ''}</span></div>` : '',
              data.year ? `<div class="wp-side-row"><span class="wp-side-label">Release Year</span><span class="wp-side-val">${data.year}</span></div>` : '',
              displayQuality ? `<div class="wp-side-row"><span class="wp-side-label">Quality</span><span class="wp-side-val">${displayQuality}</span></div>` : '',
              data.rating ? `<div class="wp-side-row"><span class="wp-side-label">Rating</span><span class="wp-side-val">${data.rating} / 10</span></div>` : ''
+              data.isIMAX ? `<div class="wp-side-row"><span class="wp-side-label">Format</span><span class="wp-side-val">IMAX</span></div>` : '',
+              data.aspectRatio ? `<div class="wp-side-row"><span class="wp-side-label">Screen Ratio</span><span class="wp-side-val">${data.aspectRatio}</span></div>` : '',
+              certificationLabel ? `<div class="wp-side-row"><span class="wp-side-label">CBFC</span><span class="wp-side-val">${certificationLabel}</span></div>` : ''
           ].filter(Boolean).join('')}
         </div>
       </div>
