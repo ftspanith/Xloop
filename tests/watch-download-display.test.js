@@ -62,6 +62,20 @@ test('one stored track does not imply multi-audio; the normal single audio label
   );
 });
 
+test('audio display normalizes newer codec variants without losing their subtype', () => {
+  assert.equal(helpers.normalizeAudioDisplayLabel('EAC3 JOC'), 'DDP JOC');
+  assert.equal(helpers.normalizeAudioDisplayLabel('DTS-ES'), 'DTS-ES');
+  assert.equal(helpers.normalizeAudioDisplayLabel('HE-AAC'), 'HE-AAC');
+  assert.equal(helpers.normalizeAudioDisplayLabel('AAC-LC'), 'AAC-LC');
+  assert.equal(helpers.normalizeAudioDisplayLabel('WMA Lossless'), 'WMA Lossless');
+});
+
+test('available language labels spell Multi as MULTi consistently', () => {
+  assert.ok(watchSource.includes("labels.add('MULTi')"));
+  assert.ok(watchSource.includes("languageType === 'Multi' ? 'MULTi'"));
+  assert.equal(watchSource.includes("labels.add('MULTI')"), false);
+});
+
 test('video metadata remains visible without audio metadata', () => {
   assert.equal(
     helpers.buildTechnicalMetadataTags(
