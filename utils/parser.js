@@ -1304,6 +1304,8 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   }
 
   const firstFn=pairs[0]?.rawFilename||'';
+  // Preserve a real Telegram heading before a season-tagged filename can replace it.
+  const explicitMessageTitle = masterTitle && !isFileDesc(masterTitle) ? masterTitle : '';
   if (!masterTitle||isJunkTitle(masterTitle)||TECH_ONLY_RE.test(masterTitle)) {
     masterTitle=firstFn;
   } else if (firstFn) {
@@ -1324,8 +1326,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   const fullText=lines.join(' ');
   // Keep the title/message year (usually the show's first-air year) separate
   // from each filename year (often the year a later season was released).
-  const titleIsFilename = String(masterTitle || '').trim() === String(firstFn || '').trim() || isFileDesc(masterTitle);
-  const messageYear = titleIsFilename ? null : extractYear([masterTitle]);
+  const messageYear = explicitMessageTitle ? extractYear([explicitMessageTitle]) : null;
   const fileYearCandidates = extractYearCandidates(pairs.map(pair => pair.rawFilename));
   const filenameYear = fileYearCandidates[0] || extractYear([firstFn]);
   const yearCandidates = [...new Set([messageYear, ...fileYearCandidates].filter(Boolean))];
