@@ -8,13 +8,13 @@ const vm = require('node:vm');
 
 const root = path.join(__dirname, '..');
 const watchSource = fs.readFileSync(path.join(root, 'public/js/watch.js'), 'utf8');
-const helperStart = watchSource.indexOf('function normalizeAudioDisplayLabel(');
+const helperStart = watchSource.indexOf('function formatDownloadLanguageLabel(');
 const helperEnd = watchSource.indexOf('// ── Flat-list download section', helperStart);
 assert.ok(helperStart >= 0 && helperEnd > helperStart, 'download metadata helpers should exist');
 
 const helpers = vm.runInNewContext(
   watchSource.slice(helperStart, helperEnd) +
-  '\n({ normalizeAudioDisplayLabel, detectAudioChannelsForDisplay, buildAudioDisplayTag, buildTechnicalMetadataTags });'
+  '\n({ formatDownloadLanguageLabel, normalizeAudioDisplayLabel, detectAudioChannelsForDisplay, buildAudioDisplayTag, buildTechnicalMetadataTags });'
 );
 
 test('EAC3 and Dolby Digital Plus display as DDP; AC3 and Dolby Digital display as DD', () => {
@@ -74,6 +74,14 @@ test('available language labels spell Multi as MULTi consistently', () => {
   assert.ok(watchSource.includes("labels.add('MULTi')"));
   assert.ok(watchSource.includes("languageType === 'Multi' ? 'MULTi'"));
   assert.equal(watchSource.includes("labels.add('MULTI')"), false);
+});
+
+test('Multi download badge displays the exact MULTi label once', () => {
+  assert.equal(helpers.formatDownloadLanguageLabel('Multi', 'MULTi'), 'MULTi');
+  assert.equal(helpers.formatDownloadLanguageLabel('Multi', 'MULTI'), 'MULTi');
+  assert.equal(helpers.formatDownloadLanguageLabel('Multi', ''), 'MULTi');
+  assert.equal(helpers.formatDownloadLanguageLabel('Dual', 'DUAL'), 'DUAL');
+  assert.equal(helpers.formatDownloadLanguageLabel('Single', 'Telugu'), 'Telugu');
 });
 
 test('video metadata remains visible without audio metadata', () => {
