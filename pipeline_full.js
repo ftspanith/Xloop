@@ -36,7 +36,7 @@ const {
   normalizeQuality, extractSize, detectAllLanguages, extractSeasonEpisode,
 } = require('./utils/parser');
 const sharedMetadataSearch = require('./utils/tmdbSearch');
-const { analyzeVariantSet } = require('./utils/variant-intelligence');
+const { analyzeVariantSet, rankVariantsForDisplay } = require('./utils/variant-intelligence');
 
 // ─── CLI args (only used when run directly, not when require()'d) ─────────────
 const IS_MAIN = require.main === module;
@@ -383,17 +383,30 @@ async function validatePoster(url) {
 
 function recomputeAggregates(doc) {
   const dls = doc.downloads || [];
-
-  // Sort downloads: quality order first, then size descending within each quality
   const QUALITY_ORDER = ['8K', '4K', '1440p', '1080p', '720p', '576p', '540p', '480p', '360p', '240p', 'SD', 'HD'];
-  dls.sort((a, b) => {
-    const qa = QUALITY_ORDER.indexOf(a.quality); 
-    const qb = QUALITY_ORDER.indexOf(b.quality);
-    const qi = (qa < 0 ? 99 : qa) - (qb < 0 ? 99 : qb);
-    if (qi !== 0) return qi;
-    // Within same quality: sort by size descending (largest first)
-    return toMB(b.size) - toMB(a.size);
-  });
+
+  // Preserve the catalogue's quality-first order. Inside each quality group,
+  // use cross-account variant intelligence to rank close-size encodes by
+  // source, codec, HDR, audio and metadata completeness. No link is removed.
+  const qualityKeys = [...new Set(dls.map(download => download.quality || ''))]
+    .sort((a, b) => {
+      const ai = QUALITY_ORDER.indexOf(a);
+      const bi = QUALITY_ORDER.indexOf(b);
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    });
+  const sortedDownloads = [];
+  for (const quality of qualityKeys) {
+    const group = dls.filter(download => (download.quality || '') === quality);
+    const ranked = rankVariantsForDisplay(group.map((download, index) => ({
+      ...(typeof download.toObject === 'function' ? download.toObject() : download),
+      title: doc.title || '',
+      year: doc.year || null,
+      _rankIndex: index,
+    })), { sizeTolerance: 0.08 });
+    sortedDownloads.push(...ranked.map(item => group[item._rankIndex]).filter(Boolean));
+  }
+  // Keep original Mongoose subdocuments; only change their display order.
+  dls.splice(0, dls.length, ...sortedDownloads);
 
   doc.formats = [...new Set(dls.map(d => d.quality))].filter(Boolean);
   doc.codecs  = [...new Set(dls.map(d => d.codec || detectCodecLocal(d.filename)))].filter(c => c && c !== 'Other');
