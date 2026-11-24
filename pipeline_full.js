@@ -34,6 +34,7 @@ const {
   cleanTitleForApi, detectHost, detectCodec, detectHDR, extractAudio,
   detectBitDepth, detectAudioChannels, detectSource, detectContainer,
   normalizeQuality, extractSize, detectAllLanguages, extractSeasonEpisode,
+  classifyLanguages, extractMediaMetadata,
 } = require('./utils/parser');
 const sharedMetadataSearch = require('./utils/tmdbSearch');
 const { analyzeVariantSet, rankVariantsForDisplay } = require('./utils/variant-intelligence');
@@ -536,6 +537,11 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       posterFallback: existing.posterFallback || '', backdrop: existing.backdrop || '',
       rating: existing.rating || 0, year: existing.year || rep.year || null,
       genre: existing.genre || [], duration: existing.duration || '',
+      runtimeMinutes: existing.runtimeMinutes ?? rep.runtimeMinutes ?? null,
+      certification: existing.certification || rep.certification || '',
+      isIMAX: !!existing.isIMAX || !!rep.isIMAX,
+      aspectRatio: existing.aspectRatio || rep.aspectRatio || '',
+      languageType: existing.languageType || rep.languageType || '',
       seasonPosters: existing.seasonPosters || {},
       seasonPoster: rep.season && existing.seasonPosters?.[`s${rep.season}`]
         ? existing.seasonPosters[`s${rep.season}`] : '',
@@ -605,6 +611,14 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       _emitter(`[WARN]  No TMDB — raw title: "${meta.title}"`);
     }
 
+    // Carry Telegram-extracted CBFC/runtime/IMAX data even when TMDB/OMDb omit it.
+    if (!meta.certification && rep.certification) meta.certification = rep.certification;
+    if (!meta.runtimeMinutes && rep.runtimeMinutes) meta.runtimeMinutes = rep.runtimeMinutes;
+    if (!meta.duration && rep.duration) meta.duration = rep.duration;
+    if (!meta.aspectRatio && rep.aspectRatio) meta.aspectRatio = rep.aspectRatio;
+    if (!meta.isIMAX && rep.isIMAX) meta.isIMAX = true;
+    if (!meta.languageType && rep.languageType) meta.languageType = rep.languageType;
+
     // Preserve an IMDb ID explicitly parsed from Telegram even when OMDb is not configured.
     if (!meta.imdbId && rep.imdbId) meta.imdbId = rep.imdbId;
 
@@ -644,6 +658,14 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       const container = item.container || detectContainer(filename) || null;
       const bitDepth = item.bitDepth || detectBitDepth(filename) || null;
       const audioChannels = item.audioChannels || detectAudioChannels(filename) || null;
+      const parsedFileMetadata = extractMediaMetadata([filename, item.rawTitle || ''].filter(Boolean).join(' '));
+      const isRepack = !!item.isRepack || parsedFileMetadata.isRepack;
+      const releaseType = isRepack ? 'Repack' : (item.releaseType || parsedFileMetadata.releaseType || 'Original');
+      const isIMAX = !!item.isIMAX || parsedFileMetadata.isIMAX;
+      const aspectRatio = item.aspectRatio || parsedFileMetadata.aspectRatio || rep.aspectRatio || '';
+      const languageInfo = classifyLanguages(item.language || detectAllLanguages(filename), filename);
+      const languageType = item.languageType || languageInfo.languageType;
+      const languageCount = item.languageCount ?? languageInfo.languageCount;
       const correctSeason = seasonFromFilename(filename) ?? item.season ?? fileTags.season ?? null;
       const correctEpisode = item.episode ?? fileTags.episode ?? null;
 
@@ -656,6 +678,8 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
 
       const newDl = {
         quality, size, filename, language, codec, hdr, audio, source, container, bitDepth, audioChannels,
+        isRepack, releaseType, isIMAX, aspectRatio, languageType, languageCount,
+        sourceDate: item.date || '',
         season: correctSeason, episode: correctEpisode,
         links: [{ host, url: finalUrl, isFast: /gdflix|hubcloud|gdlink|tmbcloud/i.test(finalUrl) }],
       };
@@ -672,6 +696,10 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
             ? (ex.season == correctSeason && ex.episode == correctEpisode)
             : true;
           if (!seasOk) continue;
+
+          // Never merge a repack with its older main/original release. They remain
+          // separate download rows, and the display ranking puts repacks first.
+          if (!!ex.isRepack !== !!newDl.isRepack) continue;
 
           // TIER 1 — Filename match: same .mkv/.mp4 name = definitely same file
           const exFn  = (ex.filename  || '').trim().toLowerCase();
@@ -737,7 +765,12 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         if (!dbRec.rating         && meta.rating)         metaSet.rating         = meta.rating;
         if (!dbRec.description    && meta.description)    metaSet.description    = meta.description;
         if (!dbRec.year && meta.year) metaSet.year = meta.year;
-        if (!dbRec.duration && meta.duration) metaSet.duration = meta.duration;
+        if (!dbRec.duration && (meta.duration || item.duration || rep.duration)) metaSet.duration = meta.duration || item.duration || rep.duration;
+        if (!dbRec.runtimeMinutes && (meta.runtimeMinutes || item.runtimeMinutes || rep.runtimeMinutes)) metaSet.runtimeMinutes = meta.runtimeMinutes || item.runtimeMinutes || rep.runtimeMinutes;
+        if (!dbRec.certification && (meta.certification || item.certification || rep.certification)) metaSet.certification = meta.certification || item.certification || rep.certification;
+        if (!dbRec.isIMAX && (meta.isIMAX || item.isIMAX)) metaSet.isIMAX = true;
+        if (!dbRec.aspectRatio && (meta.aspectRatio || item.aspectRatio || rep.aspectRatio)) metaSet.aspectRatio = meta.aspectRatio || item.aspectRatio || rep.aspectRatio;
+        if (!dbRec.languageType && (meta.languageType || item.languageType || rep.languageType)) metaSet.languageType = meta.languageType || item.languageType || rep.languageType;
         if (!dbRec.totalSeasons && meta.totalSeasons) metaSet.totalSeasons = meta.totalSeasons;
         if ((!dbRec.genre || !dbRec.genre.length) && meta.genre?.length) metaSet.genre = meta.genre;
         if (dbRec.type !== finalType) metaSet.type = finalType;
@@ -747,7 +780,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
 
         if (matchedIdx >= 0) {
           const matchedDownload = dbRec.downloads[matchedIdx] || {};
-          for (const field of ['source', 'container', 'bitDepth', 'audioChannels', 'codec', 'hdr', 'audio', 'filename']) {
+          for (const field of ['source', 'container', 'bitDepth', 'audioChannels', 'codec', 'hdr', 'audio', 'filename', 'isIMAX', 'aspectRatio', 'languageType', 'languageCount', 'releaseType', 'sourceDate']) {
             if (!matchedDownload[field] && newDl[field]) {
               metaSet[`downloads.${matchedIdx}.${field}`] = newDl[field];
             }
@@ -786,7 +819,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
               $set: {
                 downloads: res.downloads,
                 formats: res.formats, quality: res.quality,
-                languages: res.languages, codecs: res.codecs,
+                languages: res.languages, codecs: res.codecs, languageType: res.languageType,
               }
             }, { new: true });
             _emitter(`[MERGED] ${dbRec.title} | ${quality} -> ${host}`);
@@ -834,7 +867,12 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           seasonPosters: rep.season && meta.seasonPoster
             ? { [`s${rep.season}`]: meta.seasonPoster } : {},
           rating: meta.rating || 0, year: meta.year || item.year || new Date().getFullYear(),
-          genre: meta.genre || [], duration: meta.duration || '', quality, language: displayLang,
+          genre: meta.genre || [], duration: meta.duration || item.duration || rep.duration || '',
+          runtimeMinutes: meta.runtimeMinutes || item.runtimeMinutes || rep.runtimeMinutes || null,
+          certification: meta.certification || item.certification || rep.certification || '',
+          isIMAX: !!(meta.isIMAX || item.isIMAX), aspectRatio: meta.aspectRatio || item.aspectRatio || rep.aspectRatio || '',
+          languageType: languageType || meta.languageType || '',
+          quality, language: displayLang,
           formats: [quality].filter(Boolean), codecs: [codec].filter(c => c !== 'Other'),
           languages: allLangsSet,
           telegramMessageIds: item.messageId ? [item.messageId] : [],
