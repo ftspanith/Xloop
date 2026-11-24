@@ -486,8 +486,21 @@
 
     async function runSearch(q, page = 1) {
       clearTimeout(debounceTimer);
+      clearTimeout(suggestTimer);
       currentQuery = q;
       currentPage = page;
+
+      if (q && q.length < 2) {
+        if (searchAbortController) searchAbortController.abort();
+        searchAbortController = null;
+        searchRequestId++;
+        resultsGrid.classList.remove('loading');
+        resultsGrid.setAttribute('aria-busy', 'false');
+        paginationEl.innerHTML = '';
+        renderSearchGrid('<div class="search-empty"><h3>Keep typing…</h3><p>Enter at least 2 characters to search.</p></div>');
+        setStatus('Enter at least 2 characters to search');
+        return;
+      }
 
       if (searchAbortController) searchAbortController.abort();
       const controller = new AbortController();
