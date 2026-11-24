@@ -13,6 +13,10 @@ on:
       - 'scrape_api.js'
       - 'scrape-and-upload.js'
       - 'tests/scraper-intelligence.test.js'
+      - 'tests/importer-metadata.test.js'
+      - 'tests/telegram-ingestion-metadata.test.js'
+      - 'utils/telegram-ingestion.js'
+      - 'pipeline_full.js'
       - 'test/variant-intelligence.test.js'
       - 'package.json'
       - '.github/workflows/scraper-intelligence.yml'
@@ -41,3 +45,4 @@ jobs:
       - run: npm run test:scraper-intelligence
       - run: npm run test:video-formats
       - run: npm run test:importer-metadata
+      - run: npm run test:telegram-ingestion
