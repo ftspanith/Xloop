@@ -330,3 +330,25 @@ test('pipeline retries TMDB and OMDb with per-file release title candidates', ()
   assert.ok(pipelineSource.includes('[TMDB] Filename/title fallback matched:'));
   assert.match(pipelineSource, /for \(const candidate of tmdbSearchCandidates\.slice\(0, 4\)\)/);
 });
+
+
+test('catalogue schema and import paths persist original language separately from downloads', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const schema = fs.readFileSync(path.join(root, 'models', 'Movie.js'), 'utf8');
+  const pipeline = fs.readFileSync(path.join(root, 'pipeline_full.js'), 'utf8');
+  const importer = fs.readFileSync(path.join(root, 'routes', 'import.js'), 'utf8');
+  assert.match(schema, /originalLanguage:\s*\{\s*type:\s*String/);
+  assert.match(pipeline, /originalLanguage:\s*meta\.originalLanguage\s*\|\|\s*''/);
+  assert.match(importer, /originalLanguage:\s*meta\.originalLanguage\s*\|\|\s*''/);
+  assert.doesNotMatch(importer, /language:\s*result\.originalLanguage/);
+  assert.doesNotMatch(importer, /language:\s*meta\.originalLanguage\s*\|\|\s*'Telugu'/);
+});
+
+test('missing release years remain unknown instead of being replaced by the current year', () => {
+  const pipeline = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'pipeline_full.js'), 'utf8');
+  const importer = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'routes', 'import.js'), 'utf8');
+  assert.doesNotMatch(pipeline, /year:\s*meta\.year[^\n]*new Date\(\)\.getFullYear\(\)/);
+  assert.doesNotMatch(importer, /year:\s*meta\.year[^\n]*new Date\(\)\.getFullYear\(\)/);
+});
