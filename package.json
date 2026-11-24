@@ -38,8 +38,9 @@
     "test:repack-metadata": "node --test tests/repack-media-metadata.test.js",
     "test:media-ui": "node --test tests/audio-codec-detection.test.js tests/telegram-ingestion-metadata.test.js tests/watch-download-display.test.js tests/responsive-viewport.test.js",
     "test:pipeline-safety": "node --test tests/pipeline-scope.test.js tests/orchestrator-safety.test.js",
-    "test:all": "npm run test:pipeline-safety && npm run test:scraper-intelligence && npm run test:video-formats && npm run test:importer-metadata && npm run test:telegram-ingestion && npm run test:metadata-search && npm run test:media-ui && npm run test:search-ui && npm run test:quickpaste && npm run test:telegram-sync",
-    "test:series-grouping": "node --test tests/series-year-grouping.test.js"
+    "test:all": "npm run test:pipeline-safety && npm run test:scraper-intelligence && npm run test:video-formats && npm run test:importer-metadata && npm run test:telegram-ingestion && npm run test:metadata-search && npm run test:media-ui && npm run test:search-ui && npm run test:quickpaste && npm run test:telegram-sync && npm run test:extracted-link-merge",
+    "test:series-grouping": "node --test tests/series-year-grouping.test.js",
+    "test:extracted-link-merge": "node --test tests/extracted-link-merge.test.js"
   },
   "dependencies": {
     "axios": "^1.19.0",
