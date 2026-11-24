@@ -21,8 +21,16 @@ const { cleanTitleForApi } = require('./parser');
 
 // ─── Levenshtein string similarity (0–1) ─────────────────────────────────────
 function stringSimilarity(a, b) {
-  a = (a || '').toLowerCase().trim();
-  b = (b || '').toLowerCase().trim();
+  const normalize = value => String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[’']/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  a = normalize(a);
+  b = normalize(b);
   if (a === b) return 1;
   const longer  = a.length > b.length ? a : b;
   const shorter = a.length > b.length ? b : a;
@@ -175,6 +183,20 @@ function buildTitleCandidates(rawTitle, cleanedTitle, year) {
   // Algorithm 12b: Raw unclean title (when cleanTitleForApi over-strips)
   const rawC = (rawTitle || '').replace(/\s+/g, ' ').trim();
   if (rawC && rawC.toLowerCase() !== cleanedTitle.toLowerCase()) add(rawC);
+
+  // Algorithm 13: Accent and punctuation variants (e.g. "Amélie" → "Amelie").
+  const accentFolded = cleanedTitle.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+  if (accentFolded !== cleanedTitle) add(accentFolded);
+  const punctuationFolded = accentFolded
+    .replace(/[’']/g, '')
+    .replace(/[,:;!?()[\]{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (punctuationFolded.toLowerCase() !== accentFolded.toLowerCase()) add(punctuationFolded);
+
+  // Some posters include or omit a leading article; try its neutral form too.
+  const noLeadingArticle = cleanedTitle.replace(/^(?:the|a|an)\s+/i, '').trim();
+  if (noLeadingArticle !== cleanedTitle && noLeadingArticle.length >= 2) add(noLeadingArticle);
 
   return result;
 }
