@@ -352,7 +352,8 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
         releaseType: dl.releaseType || '',
         isIMAX:      !!dl.isIMAX,
         aspectRatio: dl.aspectRatio || '',
-        sourceDate:  dl.sourceDate || '',
+        sourceDate:  dl.sourceDate || dl.date || '',
+        postedDate:  formatTelegramDate(dl.sourceDate || dl.date),
         rank:        HOST_RANK[hostLabel] ?? 99,
         season:      dl.season,
         episode:     dl.episode,
@@ -378,6 +379,22 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
 
   // Convert every supported file-size unit to bytes before comparing.
   // Unsuffixed legacy values and numeric values retain the old MB interpretation.
+  function telegramDateToMs(value) {
+    if (!value) return 0;
+    const raw = String(value).trim();
+    if (/^\\d{10,13}$/.test(raw)) {
+      const numeric = Number(raw);
+      return numeric < 1e12 ? numeric * 1000 : numeric;
+    }
+    const parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function formatTelegramDate(value) {
+    const timestamp = telegramDateToMs(value);
+    return timestamp ? new Date(timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+  }
+
   function sizeToBytes(value) {
     if (value == null || value === '') return 0;
     if (typeof value === 'number') {
@@ -410,6 +427,11 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     if (qa !== qb) return qa - qb;
     // 3. Keep a same-resolution repack ahead of its older main/original release.
     if (a.isRepack !== b.isRepack) return a.isRepack ? -1 : 1;
+    // Within repacks of this resolution, prefer the newest Telegram upload.
+    if (a.isRepack && b.isRepack) {
+      const dateDiff = telegramDateToMs(b.sourceDate) - telegramDateToMs(a.sourceDate);
+      if (dateDiff) return dateDiff;
+    }
     // 4. Compare actual byte counts first within a release class.
     const sa = sizeToBytes(a.size), sb = sizeToBytes(b.size);
     if (sb !== sa) return sb - sa;
@@ -462,6 +484,9 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     const repackBadge = row.isRepack
       ? '<span class="dl-row-lang" title="Repack release">REPACK</span>'
       : '';
+    const postedBadge = row.postedDate
+      ? `<span class="dl-row-lang" title="Telegram message date">Posted ${row.postedDate}</span>`
+      : '';
 
     return `
       <div class="dl-row" data-quality="${row.quality}">
@@ -474,6 +499,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
             ${row.size ? `<span class="dl-dot">·</span><span class="dl-row-size">${row.size}</span>` : ''}
             ${hdrBadge}
             ${repackBadge}
+            ${postedBadge}
             ${langBadge}
           </div>
           ${row.techTags ? `<div class="dl-row-tags">${row.techTags}</div>` : ''}
