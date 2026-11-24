@@ -36,6 +36,7 @@ const {
   normalizeQuality, extractSize, detectAllLanguages, extractSeasonEpisode,
 } = require('./utils/parser');
 const sharedMetadataSearch = require('./utils/tmdbSearch');
+const { analyzeVariantSet } = require('./utils/variant-intelligence');
 
 // ─── CLI args (only used when run directly, not when require()'d) ─────────────
 const IS_MAIN = require.main === module;
@@ -495,6 +496,13 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
   async function processGroup([, group]) {
     const rep   = group.items[0];
     const isSer = rep.isSeries || rep.contentType === 'series' || rep.contentType === 'anime';
+
+    // Advisory cross-account variant analysis: reports close-size/metadata
+    // candidates but never drops a link or treats size as proof of identity.
+    const variantAnalysis = analyzeVariantSet(group.items, { sizeTolerance: 0.01 });
+    if (variantAnalysis.nearDuplicates.length) {
+      _emitter(`[VARIANT] "${rep.title}": ${variantAnalysis.nearDuplicates.length} possible near-duplicate group(s) flagged for review; no variants removed.`);
+    }
 
     let cleanTitle = cleanTitleForApi(rep.title || '', rep.year);
 
