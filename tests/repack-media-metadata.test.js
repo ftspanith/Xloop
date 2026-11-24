@@ -159,7 +159,7 @@ test('import matching keeps repack and main releases in separate download groups
   assert.match(movieSchema, /isRepack: \{ type: Boolean/);
   assert.match(movieSchema, /certification: \{ type: String/);
   assert.match(extractedSchema, /isRepack:\s+\{ type: Boolean/);
-  assert.match(extractedSchema, /runtimeMinutes:\s+\{ type: Number/);
+  assert.match(extractedSchema, /runtimeMinutes:\s*\{ type: Number/);
   assert.match(pipeline, /isRepack: !!dl\.isRepack/);
   assert.match(watch, /title="Repack release">REPACK/);
   assert.match(watch, /Available Languages/);
