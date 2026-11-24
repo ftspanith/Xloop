@@ -43,7 +43,7 @@ test('recovers a title from the file name when the Telegram heading is not searc
     'Quality: 1080p HDR',
     'GDFlix',
     'https://mirror.gdflix.xyz/file/title-size-test',
-  ].join('\\n');
+  ].join('\n');
 
   const parsed = parseMessageBlock(text, 303, '2024-06-01');
   assert.ok(parsed, 'the valid download should survive a poor heading');
