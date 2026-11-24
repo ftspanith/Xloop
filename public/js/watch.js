@@ -97,7 +97,12 @@ document.addEventListener('DOMContentLoaded', async () => {
              data.language ? `<div class="wp-side-row"><span class="wp-side-label">Language</span><span class="wp-side-val">${data.language.split(',')[0].trim()}</span></div>` : '',
              data.year ? `<div class="wp-side-row"><span class="wp-side-label">Release Year</span><span class="wp-side-val">${data.year}</span></div>` : '',
              displayQuality ? `<div class="wp-side-row"><span class="wp-side-label">Quality</span><span class="wp-side-val">${displayQuality}</span></div>` : '',
-             data.rating ? `<div class="wp-side-row"><span class="wp-side-label">Rating</span><span class="wp-side-val">${data.rating} / 10</span></div>` : ''
+             data.rating ? `<div class="wp-side-row"><span class="wp-side-label">Rating</span><span class="wp-side-val">${data.rating} / 10</span></div>` : '',
+             data.languageType ? `<div class="wp-side-row"><span class="wp-side-label">Audio</span><span class="wp-side-val">${data.languageType}</span></div>` : '',
+             data.certification ? `<div class="wp-side-row"><span class="wp-side-label">CBFC</span><span class="wp-side-val">${data.certification}</span></div>` : '',
+             data.isIMAX ? `<div class="wp-side-row"><span class="wp-side-label">Format</span><span class="wp-side-val">IMAX</span></div>` : '',
+             data.aspectRatio ? `<div class="wp-side-row"><span class="wp-side-label">Aspect Ratio</span><span class="wp-side-val">${data.aspectRatio}</span></div>` : '',
+             data.runtimeMinutes ? `<div class="wp-side-row"><span class="wp-side-label">Runtime</span><span class="wp-side-val">${data.runtimeMinutes} min</span></div>` : ''
           ].filter(Boolean).join('')}
         </div>
       </div>
@@ -176,18 +181,21 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       { re: /मराठी/,              label: 'Marathi' },
       { re: /\bmulti\b/i,         label: 'Multi' },
     ];
-    let detectedLangs = [];
+    const languageText = [fn, tags, dl.language || '', fallbackLang || ''].join(' ');
+    const detectedLangs = [];
     for (const { re, label } of LANG_MAP) {
-      if (re.test(fn) || re.test(tags)) {
-        if (!detectedLangs.includes(label)) detectedLangs.push(label);
-      }
+      if (label === 'Multi') continue; // language-count classification is handled below
+      if (re.test(languageText) && !detectedLangs.includes(label)) detectedLangs.push(label);
     }
-    if (detectedLangs.length === 0 && dl.language && dl.language !== 'Unknown') detectedLangs.push(dl.language);
-    else if (detectedLangs.length === 0 && fallbackLang) detectedLangs.push(fallbackLang);
-
-    const specificLangs = detectedLangs.filter(l => l !== 'Multi');
-    const isMulti  = detectedLangs.includes('Multi') || specificLangs.length > 1;
-    const langLabel = isMulti ? 'Multi' : (detectedLangs[0] || '');
+    const specificLangs = detectedLangs;
+    const explicitMulti = /\\b(?:multi(?:[- ._]?audio)?|tri[- ._]?audio|[4-9][- ]in[- ]1)\\b/i.test(languageText);
+    const explicitDual = /\\b(?:dual(?:[- ._]?audio)?|bilingual)\\b/i.test(languageText);
+    const languageType = dl.languageType || (specificLangs.length >= 3 ? 'Multi'
+      : specificLangs.length === 2 ? 'Dual'
+      : specificLangs.length === 1 ? 'Single'
+      : explicitMulti ? 'Multi' : explicitDual ? 'Dual' : '');
+    const isMulti = languageType === 'Multi';
+    const langLabel = specificLangs.join(', ') || (languageType === 'Multi' ? 'Multi' : languageType === 'Dual' ? 'Dual Audio' : '');
 
     let res = dl.quality || 'HD';
     // Override from filename if filename has explicit quality token
@@ -266,8 +274,17 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     else if (codec && /avc|h\.264|x264/i.test(codec))  codec = 'AVC';
     else if (codec && /av1/i.test(codec))               codec = 'AV1';
 
-    return { lang: langLabel, res, hdr, codec, source, audio, platform, isMulti,
-             season: dl.season || null, episode: dl.episode || null };
+    return {
+      lang: langLabel, languageType, res, hdr, codec, source, audio, platform, isMulti,
+      isRepack: dl.isRepack === true || dl.releaseType === 'repack',
+      releaseType: dl.isRepack === true || dl.releaseType === 'repack' ? 'repack' : 'main',
+      repackReason: dl.repackReason || '',
+      isIMAX: dl.isIMAX === true,
+      aspectRatio: dl.aspectRatio || '',
+      runtimeMinutes: dl.runtimeMinutes || null,
+      certification: dl.certification || '',
+      season: dl.season || null, episode: dl.episode || null
+    };
   }
 
   // ─ Flatten all (dl, link) → individual rows — one row per URL ─────────────
@@ -292,6 +309,10 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     if (info.codec)    techParts.push(info.codec);
     if (info.audio)    techParts.push(info.audio);
     if (info.platform) techParts.push(info.platform);
+    if (info.isIMAX) techParts.push('IMAX');
+    if (info.aspectRatio) techParts.push(info.aspectRatio);
+    if (info.runtimeMinutes) techParts.push(info.runtimeMinutes + ' min');
+    if (info.certification) techParts.push('CBFC ' + info.certification);
     const techTags = techParts.filter(Boolean).join(' · ');
 
     // Cleaned display filename (strip inline size bracket — size shown separately)
@@ -333,6 +354,14 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
         hdr:         info.hdr,
         lang:        info.lang,
         isMulti:     info.isMulti,
+        languageType: info.languageType,
+        isRepack:    info.isRepack,
+        releaseType: info.releaseType,
+        repackReason: info.repackReason,
+        isIMAX:      info.isIMAX,
+        aspectRatio: info.aspectRatio,
+        runtimeMinutes: info.runtimeMinutes,
+        certification: info.certification,
         rank:        HOST_RANK[hostLabel] ?? 99,
         season:      dl.season,
         episode:     dl.episode,
@@ -388,13 +417,15 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     // 2. Keep resolution tiers intact: 4K > 1080p > 720p ...
     const qa = Q_ORDER[a.quality]??9, qb = Q_ORDER[b.quality]??9;
     if (qa !== qb) return qa - qb;
-    // 3. Compare actual byte counts first within a resolution, largest first.
+    // 3. Repack variants are surfaced before main/older releases within a tier.
+    if (a.isRepack !== b.isRepack) return a.isRepack ? -1 : 1;
+    // 4. Compare actual byte counts first within a resolution, largest first.
     const sa = sizeToBytes(a.size), sb = sizeToBytes(b.size);
     if (sb !== sa) return sb - sa;
-    // 4. Language is only used when file sizes tie.
+    // 5. Language is only used when file sizes tie.
     const la = langPriority(a.lang), lb = langPriority(b.lang);
     if (la !== lb) return la - lb;
-    // 5. Retain the existing provider preference as the final tie-breaker.
+    // 6. Retain the existing provider preference as the final tie-breaker.
     return a.rank - b.rank;
   });
 
@@ -433,8 +464,9 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       : '';
 
     const langBadge = row.lang
-      ? `<span class="dl-row-lang">${row.isMulti ? 'MULTI' : row.lang}</span>`
+      ? `<span class="dl-row-lang">${row.languageType ? row.languageType.toUpperCase() + ' · ' : ''}${row.lang}</span>`
       : '';
+    const releaseBadge = `<span class="dl-row-release ${row.isRepack ? 'is-repack' : 'is-main'}">${row.isRepack ? 'REPACK' : 'MAIN'}</span>`;
 
     return `
       <div class="dl-row" data-quality="${row.quality}">
@@ -447,6 +479,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
             ${row.size ? `<span class="dl-dot">·</span><span class="dl-row-size">${row.size}</span>` : ''}
             ${hdrBadge}
             ${langBadge}
+            ${releaseBadge}
           </div>
           ${row.techTags ? `<div class="dl-row-tags">${row.techTags}</div>` : ''}
         </div>
