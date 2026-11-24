@@ -63,10 +63,12 @@ app.use('/api/', (req, res, next) => {
 });
 
 // ── HTTP caching headers for public API routes ────────────────────────────────
-// Only caches successful 2xx responses — errors are always no-store
-// This prevents a cached 503 from blocking the movies page after a cold start
+// Authenticated/admin reads must always reflect the live database. Only public
+// GET responses may use the short CDN/browser cache below.
 app.use('/api/', (req, res, next) => {
+  const isAuthenticated = Boolean(req.headers.authorization);
   const noCache = req.method !== 'GET'
+    || isAuthenticated
     || req.path.startsWith('/auth')
     || req.path.startsWith('/import')
     || req.path.startsWith('/orchestrator')
@@ -78,15 +80,17 @@ app.use('/api/', (req, res, next) => {
     return next();
   }
 
-  // Intercept res.json to check status before setting cache headers
+  // Cache only public responses, and never override a route's explicit no-store.
   const origJson = res.json.bind(res);
   res.json = function (body) {
     const status = res.statusCode;
-    if (status >= 200 && status < 300) {
-      // Success: cache in browser 60s, CDN 30s, serve stale while revalidating
+    const existingCacheControl = String(res.getHeader('Cache-Control') || '');
+    const explicitlyNoStore = existingCacheControl.toLowerCase().includes('no-store');
+
+    if (status >= 200 && status < 300 && !explicitlyNoStore) {
       res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=30, stale-while-revalidate=120');
-    } else {
-      // Error responses are NEVER cached
+    } else if (!explicitlyNoStore) {
+      // Error responses are NEVER cached.
       res.setHeader('Cache-Control', 'no-store');
     }
     return origJson(body);
