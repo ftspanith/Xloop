@@ -664,7 +664,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       const bitDepth = item.bitDepth || detectBitDepth(filename) || null;
       const audioChannels = item.audioChannels || detectAudioChannels(filename) || null;
       const parsedFileMetadata = extractMediaMetadata([filename, item.rawTitle || ''].filter(Boolean).join(' '));
-      const isRepack = !!item.isRepack || parsedFileMetadata.isRepack;
+      const isRepack = !!item.isRepack || /repack|rerip/i.test(String(item.releaseType || '')) || parsedFileMetadata.isRepack;
       const releaseType = isRepack ? 'Repack' : (item.releaseType || parsedFileMetadata.releaseType || 'Original');
       const isIMAX = !!item.isIMAX || parsedFileMetadata.isIMAX;
       const aspectRatio = item.aspectRatio || parsedFileMetadata.aspectRatio || rep.aspectRatio || '';
