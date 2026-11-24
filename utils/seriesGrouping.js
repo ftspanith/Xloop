@@ -32,6 +32,7 @@ function plain(value) {
 function metadataCompleteness(doc) {
   let score = 0;
   if (doc.tmdbId) score += 16;
+  if (doc.releaseDate) score += 5;
   if (doc.imdbId) score += 8;
   if (doc.poster) score += 8;
   if (doc.backdrop) score += 4;
@@ -96,7 +97,7 @@ function mergeSeriesDocuments(input) {
   const primary = { ...sorted[0] };
   const fillFields = [
     'tmdbId', 'imdbId', 'description', 'poster', 'posterFallback',
-    'backdrop', 'year', 'rating', 'duration', 'runtimeMinutes',
+    'backdrop', 'releaseDate', 'year', 'rating', 'duration', 'runtimeMinutes',
     'certification', 'totalSeasons',
   ];
   for (const doc of sorted.slice(1)) {
@@ -112,6 +113,10 @@ function mergeSeriesDocuments(input) {
   }
 
   if (sorted.some(doc => doc.type === 'anime')) primary.type = 'anime';
+  if (primary.releaseDate) {
+    const canonicalYear = parseInt(String(primary.releaseDate).slice(0, 4), 10);
+    if (canonicalYear >= 1900 && canonicalYear <= 2099) primary.year = canonicalYear;
+  }
   primary.seasonPosters = Object.assign({}, ...sorted.slice().reverse().map(doc => doc.seasonPosters || {}));
   primary.seasonYears = Object.assign({}, ...sorted.slice().reverse().map(doc => doc.seasonYears || {}));
   primary.downloads = mergeDownloads(sorted);
