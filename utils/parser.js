@@ -41,21 +41,21 @@ function normalizeQuality(str) {
 // ─── SIZE ────────────────────────────────────────────────────────────────────
 function extractSize(str) {
   if (str == null) return '';
-  const value = String(str).replace(/[\\u00a0]/g, ' ');
+  const value = String(str).replace(/[\u00a0]/g, ' ');
   // Decimal/binary units, comma decimals, grouped thousands, and spaced
   // thousands (some Telegram captions use "1 200 MB").
-  const match = value.match(/(?:^|[^\\d])((?:\\d{1,3}(?:[ ,]\\d{3})+|\\d+)(?:[.,]\\d+)?)\\s*(TB|GB|MB|KB|TiB|GiB|MiB|KiB)\\b/i);
+  const match = value.match(/(?:^|[^\d])((?:\d{1,3}(?:[ ,]\d{3})+|\d+)(?:[.,]\d+)?)\s*(TB|GB|MB|KB|TiB|GiB|MiB|KiB)\b/i);
   if (!match) return '';
-  let amount = match[1].replace(/\\s/g, '');
+  let amount = match[1].replace(/\s/g, '');
   if (amount.includes(',')) {
-    if (!amount.includes('.') && /,\\d{1,2}$/.test(amount)) amount = amount.replace(',', '.');
+    if (!amount.includes('.') && /,\d{1,2}$/.test(amount)) amount = amount.replace(',', '.');
     else amount = amount.replace(/,/g, '');
   }
   const unit = match[2].toUpperCase().replace(/IB$/, 'B');
   return amount + unit;
 }
 
-// ─── STREAMING URL// ─── STREAMING URL → TITLE SLUG ──────────────────────────────────────────────
+// ─── STREAMING URL// ─── STREAMING URL// ─── STREAMING URL → TITLE SLUG ──────────────────────────────────────────────
 function extractTitleFromStreamingUrl(url) {
   if (!url) return '';
   const patterns = [
@@ -992,16 +992,16 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 
   // Normalize bare URLs
   const normalized=emojiStripped
-    .replace(/^[A-Z0-9 _\\-]{1,15}:\\s*(https?:\\/\\/)/gim,'$1')
+    .replace(/^[A-Z0-9 _\-]{1,15}:\s*(https?:\/\/)/gim,'$1')
     // Telegram exports often omit schemes; provider subdomains and TLDs rotate.
     .replace(
-      /(?<![A-Z0-9/:@.-])((?:[A-Z0-9-]+\\.)*(?:gdflix|gdlink|gdtot|extralink|neolinks|gtlinks|hubcloud|drivehub|tmbcloud)\\.[A-Z]{2,}(?:\\.[A-Z]{2,})?)(?::\\d+)?(\\/[^\\s<>"']*)?/gi,
+      /(?<![A-Z0-9/:@.-])((?:[A-Z0-9-]+\.)*(?:gdflix|gdlink|gdtot|extralink|neolinks|gtlinks|hubcloud|drivehub|tmbcloud)\.[A-Z]{2,}(?:\.[A-Z]{2,})?)(?::\d+)?(\/[^\s<>"']*)?/gi,
       (match, host, path = '') => 'https://' + host + path
     )
-    .replace(/(?<![:/])\\b(dtflix\\.ink\\/\\S*)/gi,'https://$1')
-    .replace(/(?<![:/])\\b(filepress\\.in\\/\\S+)/gi,'https://$1');
+    .replace(/(?<![:/])\b(dtflix\.ink\/\S*)/gi,'https://$1')
+    .replace(/(?<![:/])\b(filepress\.in\/\S+)/gi,'https://$1');
 
-    // Expand inline markdown hyperlinks: [Label](URL) → URL (discard host-name labels)
+  // Expand inline markdown hyperlinks  // Expand inline markdown hyperlinks: [Label](URL) → URL (discard host-name labels)
   // Telegram sends hyperlinks in this format when exported/forwarded.
   // If label is a known download host (GDFlix, HubCloud…) → discard label, keep URL only.
   // If label looks like a real title/filename → keep label, then URL on next line.
@@ -1060,9 +1060,9 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   const extractSizeFromMeta = l => extractSize(l || '');
   const isSizeLine = line => {
     const value = String(line || '').trim();
-    if (/^(?:File\\s*)?Size\\s*[:=\\-]/i.test(value)) return true;
+    if (/^(?:File\s*)?Size\s*[:=\-]/i.test(value)) return true;
     if (!extractSize(value)) return false;
-    return /^[\\s\\[\\](){}|,:;=\\-]*(?:File\\s*)?(?:Size\\s*[:=\\-]?\\s*)?\\d[\\d.,\\s]*\\s*(?:TB|GB|MB|KB|TiB|GiB|MiB|KiB)[\\s\\[\\](){}|,:;=\\-]*$/i.test(value);
+    return /^[\s\[\](){}|,:;=\-]*(?:File\s*)?(?:Size\s*[:=\-]?\s*)?\d[\d.,\s]*\s*(?:TB|GB|MB|KB|TiB|GiB|MiB|KiB)[\s\[\](){}|,:;=\-]*$/i.test(value);
   };
 
   // ── Build URL+filename pairs ──────────────────────────────────────────────
