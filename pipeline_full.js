@@ -728,9 +728,15 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           const exCodec   = (ex.codec || '').toLowerCase().trim();
           const newCodec  = (codec    || '').toLowerCase().trim();
           const codecOk   = !exCodec || !newCodec || exCodec === newCodec;
+          const normalizeLanguages = value => String(value || '').split(/[,/+&|]+/)
+            .map(part => part.trim().toLowerCase()).filter(Boolean).sort().join(',');
+          const exLanguageKnown = !!ex.language && !/^(multi|unknown)$/i.test(ex.language.trim());
+          const newLanguageKnown = !!language && !/^(multi|unknown)$/i.test(language.trim());
+          const languagesCompatible = !exLanguageKnown || !newLanguageKnown ||
+            normalizeLanguages(ex.language) === normalizeLanguages(language);
 
-          // TIER 2 — Quality + size + codec: same quality, size within 5%, same codec
-          if (qualOk && sizeClose && codecOk) {
+          // TIER 2 — Quality + size + codec + compatible audio language tracks.
+          if (qualOk && sizeClose && codecOk && languagesCompatible) {
             matchedIdx = j;
             if (language && language !== 'Multi' && (!ex.language || ex.language === 'Multi')) {
               ex.language = language;
@@ -763,7 +769,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           const exHostsInGroup = (ex.links || []).map(l => detectHost(l.url));
           const hostMatch = qualOk && exHostsInGroup.includes(host);
           const sizeBracketOk = bothKnown ? sizeClose : (!size && !ex.size);
-          if (hostMatch && sizeBracketOk) {
+          if (hostMatch && sizeBracketOk && languagesCompatible) {
             matchedIdx = j; break;
           }
         }
