@@ -82,7 +82,7 @@ function completenessScore(item) {
   return score;
 }
 
-function scoreVariant(item) {
+function isRepackVariant(item) {\n  return !!item?.isRepack || /repack|rerip/i.test(String(item?.releaseType || '') + ' ' + String(item?.filename || ''));\n}\n\nfunction scoreVariant(item) {
   const reasons = [];
   const add = (label, value) => { if (value > 0) reasons.push(label); return value; };
   const source = add('source quality', sourceScore(item.source || item.filename));
@@ -91,7 +91,7 @@ function scoreVariant(item) {
   const hdr = add('HDR / Dolby Vision', hdrScore(item.hdr || item.filename));
   const audio = add('audio format', audioScore(item.audio || item.filename));
   const completeness = completenessScore(item);
-  const isRepack = !!item?.isRepack || /repack/i.test(String(item?.releaseType || ''));
+  const isRepack = isRepackVariant(item);
   const repack = isRepack ? 100 : 0;
   if (isRepack) reasons.unshift('repack priority');
   return { ...item, isRepack, qualityScore: repack + source + resolution + codec + hdr + audio + completeness, scoreBreakdown: {repack,source,resolution,codec,hdr,audio,completeness}, scoreReasons: reasons };
@@ -102,7 +102,7 @@ function nearDuplicateGroups(items, tolerance = 0.01) {
   for (const item of items) {
     const bytes = sizeToBytes(item.size || item.sizeBytes);
     if (!bytes) continue;
-    const key = [titleKey(item), item.year || '', item.quality || '', item.codec || '', item.audio || '', item.language || '', item.isRepack || /repack/i.test(String(item.releaseType || '')) ? 'repack' : 'main'].join('|');
+    const key = [titleKey(item), item.year || '', item.quality || '', item.codec || '', item.audio || '', item.language || '', isRepackVariant(item) ? 'repack' : 'main'].join('|');
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key).push({item, bytes});
   }
@@ -196,4 +196,4 @@ function rankVariantsForDisplay(items = [], options = {}) {
   return [...rankReleaseClass(repacks), ...rankReleaseClass(originals)];
 }
 
-module.exports = { sizeToBytes, titleKey, scoreVariant, analyzeVariantSet, nearDuplicateGroups, rankVariantsForDisplay };
+module.exports = { sizeToBytes, titleKey, isRepackVariant, scoreVariant, analyzeVariantSet, nearDuplicateGroups, rankVariantsForDisplay };
