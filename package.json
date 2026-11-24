@@ -36,7 +36,9 @@
     "test:search-ui": "node --test test/search-ui-regressions.test.js",
     "test:importer-metadata": "node --test tests/importer-metadata.test.js tests/repack-media-metadata.test.js",
     "test:repack-metadata": "node --test tests/repack-media-metadata.test.js",
-    "test:media-ui": "node --test tests/audio-codec-detection.test.js tests/telegram-ingestion-metadata.test.js tests/watch-download-display.test.js tests/responsive-viewport.test.js"
+    "test:media-ui": "node --test tests/audio-codec-detection.test.js tests/telegram-ingestion-metadata.test.js tests/watch-download-display.test.js tests/responsive-viewport.test.js",
+    "test:pipeline-safety": "node --test tests/pipeline-scope.test.js tests/orchestrator-safety.test.js",
+    "test:all": "npm run test:pipeline-safety && npm run test:scraper-intelligence && npm run test:video-formats && npm run test:importer-metadata && npm run test:telegram-ingestion && npm run test:metadata-search && npm run test:media-ui && npm run test:search-ui && npm run test:quickpaste && npm run test:telegram-sync"
   },
   "dependencies": {
     "axios": "^1.19.0",
