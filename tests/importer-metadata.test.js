@@ -19,6 +19,7 @@ const { buildTitleCandidates } = require('../utils/tmdbSearch');
 const { recomputeAggregates } = require('../pipeline_full');
 
 const pipelineSource = fs.readFileSync(path.join(__dirname, '..', 'pipeline_full.js'), 'utf8');
+const importSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'import.js'), 'utf8');
 const sharedSearchSource = fs.readFileSync(path.join(__dirname, '..', 'utils', 'tmdbSearch.js'), 'utf8');
 const { analyzeVariantSet } = require('../utils/variant-intelligence');
 
@@ -35,6 +36,12 @@ test('shared TMDB candidate engine produces sequel, subtitle and Roman numeral v
     2017
   );
   assert.ok(baahubali.includes('Baahubali 2 The Conclusion'));
+});
+
+test('manual metadata lookup never retries with an explicit title year removed', () => {
+  assert.doesNotMatch(importSource, /fetchTMDB\(\{\s*\.\.\.parsed,\s*year:\s*null\s*\}/);
+  assert.match(importSource, /return _sharedSearchOMDB\(/);
+  assert.match(importSource, /Only use a poster after title\/year verification/);
 });
 
 test('Telegram parser preserves IDs and all rich filename metadata for DB importer', () => {
@@ -133,7 +140,7 @@ test('recognizes additional surround channel layouts without guessing from forma
 test('MongoDB-only importer calls the shared TMDB/OMDb engine and poster fallback chain', () => {
   assert.match(pipelineSource, /sharedMetadataSearch\.searchTMDB\(/);
   assert.match(pipelineSource, /sharedMetadataSearch\.searchOMDB\(/);
-  assert.match(pipelineSource, /searchGoogleImage\(rep\.title, rep\.year, isSer\)/);
+  assert.match(pipelineSource, /searchGoogleImage\(rep\.title, isSer \? \(rep\.messageYear \|\| null\) : \(rep\.messageYear \|\| rep\.year\), isSer\)/);
   assert.match(pipelineSource, /validatePoster\(meta\.poster\)/);
   assert.match(pipelineSource, /rep\.imdbId \|\| null, rep\.tmdbIdHint \|\| null/);
   assert.match(pipelineSource, /const needsMetadata = !existing/);

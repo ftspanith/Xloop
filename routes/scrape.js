@@ -526,11 +526,14 @@ router.post('/telegram-sync/chunk', auth, express.json({ limit: '3mb' }), async 
         host: allowedString(item.host, 80) || 'Other',
         title: allowedString(item.title, 500),
         year: item.year == null ? null : Number(item.year),
+        messageYear: item.messageYear == null ? null : Number(item.messageYear),
+        yearCandidates: Array.isArray(item.yearCandidates) ? item.yearCandidates.map(Number).filter(y => Number.isInteger(y) && y >= 1900 && y <= 2099).slice(0, 12) : [],
         quality: allowedString(item.quality, 40) || 'HD',
         size: allowedString(item.size, 40),
         language: allowedString(item.language, 80),
         season: item.season == null ? null : Number(item.season),
         episode: item.episode == null ? null : Number(item.episode),
+        fileYear: item.fileYear == null ? null : Number(item.fileYear),
         type: allowedString(item.type, 30) || 'movie',
         filename: allowedString(item.filename, 1000),
         codec: allowedString(item.codec, 80),
@@ -941,7 +944,7 @@ router.get('/collection-links', auth, async (req, res) => {
 
     const regex = new RegExp('^' + title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
     const links = await ExtractedLink.find({ title: regex })
-      .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels audioTracks sourceAccount')
+      .select('title year quality size filename fileYear language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels audioTracks sourceAccount')
       .sort({ quality: -1, size: -1 })
       .maxTimeMS(8000)
       .lean();
@@ -984,7 +987,7 @@ router.get('/collection-links-fuzzy', auth, async (req, res) => {
 
     const [titleLinks, fileLinks] = await Promise.all([
       ExtractedLink.find(titleFilter)
-        .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels audioTracks sourceAccount')
+        .select('title year messageYear yearCandidates quality size filename fileYear language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels audioTracks sourceAccount')
         .lean(),
       ExtractedLink.find(fileFilter)
         .select('title year quality size filename language host url bypassedUrl isSeries season episode contentType codec hdr audio bitDepth audioChannels audioTracks sourceAccount')

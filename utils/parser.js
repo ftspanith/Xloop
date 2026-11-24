@@ -984,7 +984,7 @@ function extractYear(sources) {
   // P1: bracketed year — most reliable signal in Telegram posts like "Title (2023)"
   for (const s of sources) {
     if (!s) continue;
-    const m = s.match(/[\[({]\s*(19\d{2}|20[012]\d)\s*[\])}]/);
+    const m = s.match(/[\[({]\s*(19\d{2}|20\d{2})\s*[\])}]/);
     if (m) return parseInt(m[1], 10);
   }
   // P2a: For dot-separated filenames, collect ALL separator-bounded years and
@@ -998,7 +998,7 @@ function extractYear(sources) {
     const searchIn = qualMatch ? s.substring(0, qualMatch.index) : s;
     // Find ALL years in the pre-quality section
     const allYears = [];
-    const yearRE = /[._\-\s](19\d{2}|20[012]\d)[._\-\s]/g;
+    const yearRE = /[._\-\s](19\d{2}|20\d{2})[._\-\s]/g;
     let ym;
     while ((ym = yearRE.exec(searchIn)) !== null) {
       allYears.push(parseInt(ym[1], 10));
@@ -1012,22 +1012,31 @@ function extractYear(sources) {
   // P2b: year embedded between dots/underscores/dashes — single year case
   for (const s of sources) {
     if (!s) continue;
-    const m = s.match(/[._\-](19\d{2}|20[012]\d)[._\-\s]/);
+    const m = s.match(/[._\-](19\d{2}|20\d{2})[._\-\s]/);
     if (m) return parseInt(m[1], 10);
   }
   // P3: year at tail, just before file extension or end of string
   for (const s of sources) {
     if (!s) continue;
-    const m = s.match(/(19\d{2}|20[012]\d)\s*(?:$|\.(?:mkv|mp4|avi|mov|ts|zip|rar))/i);
+    const m = s.match(/(19\d{2}|20\d{2})\s*(?:$|\.(?:mkv|mp4|avi|mov|ts|zip|rar))/i);
     if (m) return parseInt(m[1], 10);
   }
   // P4: first year anywhere (last resort — may grab year from title name like "2001")
   for (const s of sources) {
     if (!s) continue;
-    const m = s.match(/\b(19\d{2}|20[012]\d)\b/);
+    const m = s.match(/\b(19\d{2}|20\d{2})\b/);
     if (m) return parseInt(m[1], 10);
   }
   return null;
+}
+
+function extractYearCandidates(sources) {
+  const years = [];
+  for (const source of sources || []) {
+    const year = extractYear([source]);
+    if (year && !years.includes(year)) years.push(year);
+  }
+  return years;
 }
 
 // ─── MASTER PARSER ───────────────────────────────────────────────────────────
@@ -1295,6 +1304,8 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   }
 
   const firstFn=pairs[0]?.rawFilename||'';
+  // Preserve a real Telegram heading before a season-tagged filename can replace it.
+  const explicitMessageTitle = masterTitle && !isFileDesc(masterTitle) ? masterTitle : '';
   if (!masterTitle||isJunkTitle(masterTitle)||TECH_ONLY_RE.test(masterTitle)) {
     masterTitle=firstFn;
   } else if (firstFn) {
@@ -1313,7 +1324,14 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   }
 
   const fullText=lines.join(' ');
-  const year=extractYear([masterTitle,firstFn,fullText]);
+  // Keep the title/message year (usually the show's first-air year) separate
+  // from each filename year (often the year a later season was released).
+  const messageYear = explicitMessageTitle ? extractYear([explicitMessageTitle]) : null;
+  const fileYearCandidates = extractYearCandidates(pairs.map(pair => pair.rawFilename));
+  const filenameYear = fileYearCandidates[0] || extractYear([firstFn]);
+  const yearCandidates = [...new Set([messageYear, ...fileYearCandidates].filter(Boolean))];
+  const year = messageYear || filenameYear || extractYear([fullText]);
+  if (year && !yearCandidates.includes(year)) yearCandidates.push(year);
   const {season,episode}=extractSeasonEpisode(fullText);
   const contentType=detectContentType(fullText);
   const isSeries=contentType==='series'||contentType==='anime'||season!==null;
@@ -1524,6 +1542,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const fileIsIMAX = /\bIMAX\b/i.test(fileContext);
     const {season:ds,episode:de}=extractSeasonEpisode(rawFn);
     const fs=ds??season, fe=de??episode;
+    const fileYear = extractYear([rawFn]) || null;
     const fileIdentity = stripEmojis(rawFn).toLowerCase().replace(/\s+/g, ' ').trim();
     const key=`${quality}__${size||'nosize'}__${releaseMeta.releaseType}__S${fs??''}E${fe??''}__${fileIdentity||pair.url}`;
 
@@ -1542,7 +1561,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
       languageType:effectiveLangInfo.languageType, languageCount:effectiveLangInfo.languageCount,
       isRepack:releaseMeta.isRepack, releaseType:releaseMeta.releaseType,
       isIMAX:fileIsIMAX, aspectRatio:fileAspectRatio,
-      season:fs,episode:fe,links:[]
+      season:fs,episode:fe,fileYear,links:[]
     };
     if (!fileMap[key].links.find(l=>l.url===pair.url)) {
       fileMap[key].links.push({host:detectHost(pair.url),url:normalizeGdflixUrl(pair.url),isFast:/gdflix\.dev|hubcloud|gdlink/i.test(pair.url)});
@@ -1575,7 +1594,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 
   const mediaMetadata = extractMediaMetadata(fullText);
   return {
-    title:cleanedTitle,rawTitle:masterTitle,year,language,languages:allLanguages,
+    title:cleanedTitle,rawTitle:masterTitle,year,messageYear,filenameYear,yearCandidates,language,languages:allLanguages,
     languageType:languageInfo.languageType, languageCount:languageInfo.languageCount,
     quality:bestQuality,contentType,isSeries,season,episode,downloads,messageId,
     date:msgDate||null,imdbId,tmdbIdHint,_isBatchList,
@@ -1593,6 +1612,7 @@ module.exports = {
   extractSeasonEpisode,detectCodec,detectContainer,detectHDR,detectBitDepth,detectAudioChannels,extractAudio,detectSource,isJunkTitle,isGenericTitleCandidate,isMetadataLine,
   normalizeLanguageList,classifyLanguages,detectReleaseMetadata,extractAspectRatio,extractRuntime,extractCertification,extractMediaMetadata,
   extractTitleFromStreamingUrl, normalizeGdflixUrl, isKnownProviderHost,
+  extractYear, extractYearCandidates,
   parseManualInput,
 };
 
