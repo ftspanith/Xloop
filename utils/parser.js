@@ -567,7 +567,7 @@ function detectBitDepth(fn) {
 function detectAudioChannels(fn) {
   const s = String(fn || '').toUpperCase();
   // Check immersive layouts before shorter prefixes (e.g. 5.1.2 before 5.1).
-  const m = s.match(/(?<!\d)(9\.1\.6|9\.1\.4|7\.1\.6|7\.1\.4|5\.1\.4|5\.1\.2|3\.1\.2|7\.2|5\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)(?!\d)/);
+  const m = s.match(/(?<!\d)(11\.1\.8|9\.1\.8|9\.1\.6|9\.1\.4|7\.2\.4|7\.2\.2|7\.1\.8|7\.1\.6|7\.1\.4|7\.1\.2|5\.2\.4|5\.1\.6|5\.1\.4|5\.1\.2|3\.1\.2|7\.2|5\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)(?!\d)/);
   if (m) return m[1];
   if (/\b(?:STEREO|2CH)\b/.test(s)) return '2.0';
   if (/\b(?:MONO|1CH)\b/.test(s)) return '1.0';
@@ -610,7 +610,7 @@ function extractAudio(fn) {
   const hasAtmos = /DOLBY[\s._-]*ATMOS|\bATMOS\b/.test(s);
   let codec = null;
 
-  // Prefer the most specific codec spelling before matching its family.
+  // Match the most specific names first so family labels do not hide subtypes.
   if (/TRUEHD/.test(s)) codec = 'TrueHD';
   else if (/DTS[.\s_-]?X\b/.test(s)) codec = 'DTS:X';
   else if (/DTS[.\s_-]?HD[.\s_-]?(?:MA|MASTER[.\s_-]*AUDIO)\b/.test(s)) codec = 'DTS-HD MA';
@@ -619,13 +619,14 @@ function extractAudio(fn) {
   else if (/DTS[.\s_-]?ES\b/.test(s)) codec = 'DTS-ES';
   else if (/DTS[.\s_-]?96[./\s_-]?24\b/.test(s)) codec = 'DTS 96/24';
   else if (/DTS[.\s_-]?EXPRESS\b/.test(s)) codec = 'DTS Express';
+  else if (/DOLBY[.\s_-]*DIGITAL[.\s_-]*EX|\bDD[.\s_-]*EX\b/.test(s)) codec = 'DD-EX';
   else if (/E[.\s_-]?AC[.\s_-]?3[.\s_-]*JOC\b|\bDDP[.\s_-]*JOC\b|DOLBY[.\s_-]*DIGITAL[.\s_-]*PLUS[.\s_-]*JOC/.test(s)) codec = 'EAC3 JOC';
   else if (/E[.\s_-]?AC[.\s_-]?3|\bDDP(?:\+|\d+(?:\.\d+)?)?|\bDD\+|DOLBY[.\s_-]*DIGITAL[.\s_-]*PLUS/.test(s)) codec = 'EAC3';
   else if (/\bAC[.\s_-]?3\b|\bDD(?=\d|[.\s_-]|$)|\bDOLBY[.\s_-]*DIGITAL\b/.test(s)) codec = 'DD';
   else if (/\bAC[.\s_-]?4\b/.test(s)) codec = 'AC4';
   else if (/\bMPEG[.\s_-]*H(?:\s*3D)?\b/.test(s)) codec = 'MPEG-H';
   else if (/\bAURO[.\s_-]?3D\b/.test(s)) codec = 'Auro-3D';
-  else if (/\bHE[.\s_-]?AAC\b|\bHEAAC\b/.test(s)) codec = 'HE-AAC';
+  else if (/\bHE[.\s_-]?AAC(?:[.\s_-]?V?2)?\b|\bHEAAC(?:V?2)?\b/.test(s)) codec = /V?2\b/.test(s) ? 'HE-AAC v2' : 'HE-AAC';
   else if (/\bAAC[.\s_-]?LC\b/.test(s)) codec = 'AAC-LC';
   else if (/\bAAC\b/.test(s)) codec = 'AAC';
   else if (/\bFLAC\b/.test(s)) codec = 'FLAC';
@@ -634,12 +635,17 @@ function extractAudio(fn) {
   else if (/\bLPCM\b/.test(s)) codec = 'LPCM';
   else if (/\bPCM\b/.test(s)) codec = 'PCM';
   else if (/\bVORBIS\b/.test(s)) codec = 'Vorbis';
-  else if (/\bMP3\b/.test(s)) codec = 'MP3';
-  else if (/\bMP2\b|MPEG[.\s_-]*AUDIO/.test(s)) codec = 'MP2';
+  else if (/\bMP3\b|MPEG[.\s_-]*1[.\s_-]*LAYER[.\s_-]*III|MPEG[.\s_-]*AUDIO[.\s_-]*LAYER[.\s_-]*3/.test(s)) codec = 'MP3';
+  else if (/\bMP2\b|MPEG[.\s_-]*1[.\s_-]*LAYER[.\s_-]*II|MPEG[.\s_-]*AUDIO[.\s_-]*LAYER[.\s_-]*2/.test(s)) codec = 'MP2';
   else if (/\bMLP\b/.test(s)) codec = 'MLP';
   else if (/\bWMA[.\s_-]*LOSSLESS\b/.test(s)) codec = 'WMA Lossless';
   else if (/\bWMA[.\s_-]*PRO\b/.test(s)) codec = 'WMA Pro';
   else if (/\bWMA\b/.test(s)) codec = 'WMA';
+  else if (/\bATRAC(?:3(?:PLUS)?|ADVANCED[.\s_-]*LOSSLESS)?\b/.test(s)) codec = 'ATRAC';
+  else if (/\bDRA\b/.test(s)) codec = 'DRA';
+  else if (/\bREALAUDIO\b|\bREAL[.\s_-]*AUDIO\b/.test(s)) codec = 'RealAudio';
+  else if (/\bSPEEX\b/.test(s)) codec = 'Speex';
+  else if (/\bAMR[.\s_-]*(?:WB|NB)\b/.test(s)) codec = s.match(/\bAMR[.\s_-]*(?:WB|NB)\b/)[0].replace(/[.\s_-]+/g, '-');
 
   if (hasAtmos) return codec ? codec + ' Atmos' : 'Atmos';
   return codec;
