@@ -27,7 +27,8 @@
 
 html {
   scroll-behavior: smooth;
-  /* Stop mobile browsers inflating text and making the whole page feel zoomed. */
+  /* Prevent mobile browsers from independently inflating text and making
+     the layout appear zoomed beyond the device viewport. */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -2186,7 +2187,8 @@ ul { list-style: none; }
 #mobileNavOverlay {
   position: fixed !important;
   inset: 0 !important;
-  /* inset: 0 already sizes this fixed overlay; 100vw may exceed the visible viewport. */
+  /* inset:0 already sizes this fixed overlay to the viewport.
+     Avoid 100vw, which can include the desktop scrollbar width. */
   width: auto !important;
   max-width: 100% !important;
   height: 100vh !important;
