@@ -64,6 +64,7 @@ test('MongoDB-only importer calls the shared TMDB/OMDb engine and poster fallbac
   assert.match(pipelineSource, /validatePoster\(meta\.poster\)/);
   assert.match(pipelineSource, /rep\.imdbId \|\| null, rep\.tmdbIdHint \|\| null/);
   assert.match(pipelineSource, /const needsMetadata = !existing/);
+  assert.match(pipelineSource, /DIRECT_HOST_RE = \/gdflix\|hubcloud\|tmbcloud\//);
 });
 
 test('download importer infers missing technical metadata from filenames', () => {
