@@ -359,7 +359,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     // EAC3 remains in the download metadata but is not useful as a standalone
     // visible chip; show an Atmos enhancement, if present, without the codec.
     const visibleAudio = String(info.audio || '')
-      .replace(/\bEAC[.\s_-]?3\b/ig, '')
+      .replace(/\bE[.\s_-]?AC[.\s_-]?3\b/ig, '')
       .replace(/^[\s+,&/·-]+|[\s+,&/·-]+$/g, '')
       .trim();
     if (visibleAudio) techParts.push(visibleAudio);
