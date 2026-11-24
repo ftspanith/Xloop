@@ -6,15 +6,15 @@ function normalizeTitle(value) {
   return String(value || '')
     .normalize('NFKC')
     .toLocaleLowerCase('en')
-    .replace(/[^\\p{L}\\p{N}]+/gu, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
-    .replace(/\\s+/g, ' ');
+    .replace(/\s+/g, ' ');
 }
 
 function dateValueToDate(value) {
   if (value == null || value === '') return null;
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
-  if (typeof value === 'number' || /^\\d{10,13}$/.test(String(value).trim())) {
+  if (typeof value === 'number' || /^\d{10,13}$/.test(String(value).trim())) {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) return null;
     const milliseconds = Math.abs(numeric) < 1e12 ? numeric * 1000 : numeric;
@@ -23,7 +23,7 @@ function dateValueToDate(value) {
   }
   const raw = String(value).trim();
   if (!raw) return null;
-  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
     const date = new Date(raw + 'T00:00:00.000Z');
     return Number.isNaN(date.getTime()) ? null : date;
   }
@@ -50,24 +50,19 @@ function dateKeyInTimezone(value, timezone = DEFAULT_TIMEZONE) {
   }
 }
 
-function normalizeSearchTitle(value) {
-  return normalizeTitle(value);
-}
-
 function titleMatches(entry, query) {
-  const wanted = normalizeSearchTitle(query);
+  const wanted = normalizeTitle(query);
   if (wanted.length < 3) return false;
   const fields = [entry?.title, entry?.rawTitle, entry?.filename]
     .filter(value => typeof value === 'string' && value.trim());
   return fields.some(value => {
-    const candidate = normalizeSearchTitle(value);
-    if (!candidate) return false;
-    return (' ' + candidate + ' ').includes(' ' + wanted + ' ');
+    const candidate = normalizeTitle(value);
+    return candidate ? (' ' + candidate + ' ').includes(' ' + wanted + ' ') : false;
   });
 }
 
 /**
- * Return the entries selected by a pipeline scope.
+ * Return entries selected by a pipeline scope.
  * Daily scope intentionally uses the original Telegram message date only;
  * it does not fall back to upload/DB timestamps, which could promote old
  * messages merely because they were re-uploaded today.
@@ -82,7 +77,7 @@ function filterEntriesByScope(entries, options = {}) {
   if (!['all', 'daily', 'title'].includes(scope)) {
     throw new Error('Invalid scope. Use all, daily, or title.');
   }
-  if (scope === 'title' && normalizeSearchTitle(titleFilter).length < 3) {
+  if (scope === 'title' && normalizeTitle(titleFilter).length < 3) {
     throw new Error('Title scope requires a title filter of at least 3 characters.');
   }
 
@@ -92,19 +87,13 @@ function filterEntriesByScope(entries, options = {}) {
 
   if (scope === 'title') {
     const selected = entries.filter(entry => titleMatches(entry, titleFilter));
-    return {
-      entries: selected,
-      total: entries.length,
-      matched: selected.length,
-      missingDate: 0,
-    };
+    return { entries: selected, total: entries.length, matched: selected.length, missingDate: 0 };
   }
 
   const todayKey = dateKeyInTimezone(now, timezone);
   if (!todayKey) throw new Error('Could not determine today\'s date for daily pipeline scope.');
   let missingDate = 0;
   const selected = entries.filter(entry => {
-    // Telegram export date is the canonical message/upload date.
     const messageDate = entry?.date ?? entry?.messageDate ?? entry?.message_date ?? entry?.date_unixtime;
     if (messageDate == null || messageDate === '') {
       missingDate++;
@@ -112,12 +101,7 @@ function filterEntriesByScope(entries, options = {}) {
     }
     return dateKeyInTimezone(messageDate, timezone) === todayKey;
   });
-  return {
-    entries: selected,
-    total: entries.length,
-    matched: selected.length,
-    missingDate,
-  };
+  return { entries: selected, total: entries.length, matched: selected.length, missingDate };
 }
 
 module.exports = {
