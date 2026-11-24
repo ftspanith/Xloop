@@ -139,7 +139,9 @@ function extractTelegramLinks(inputMessages, account = '1') {
         }
         const entry = {
           messageId: parsed.messageId, title: parsed.title, rawTitle: resolvedRawTitle,
-          year: parsed.year == null ? null : parsed.year,
+          year: parsed.isSeries ? (parsed.messageYear ?? null) : (parsed.year ?? null),
+          messageYear: parsed.messageYear ?? null,
+          yearCandidates: parsed.yearCandidates || [],
           type: parsed.type || (parsed.contentType === 'anime' ? 'anime' : parsed.isSeries ? 'series' : 'movie'),
           contentType: parsed.contentType || '', isSeries: !!parsed.isSeries,
           season: download.season == null ? parsed.season : download.season,
