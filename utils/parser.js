@@ -224,10 +224,10 @@ function isMetadataLine(line) {
   if (/^(DRIVE\s+LINKS?|TELEGRAM\s+FILES?|HEVC\s*$|AVC\s*$)\s*[:#]?/i.test(s)) return true;
   // Runtime, aspect ratio and CBFC certification metadata lines
   if (/^(?:Run\s*time|Runtime|Duration|Length|Aspect\s*Ratio|Screen\s*Ratio|AR|CBFC(?:\s+Rating)?|Censor(?:ship)?|Certificate|Certification)\s*[:=]/i.test(s)) return true;
-  // Size / File Size lines
-  if (/^(?:File\s*)?Size\s*[:].*/i.test(s) && /\d/.test(s)) return true;
-  // Quality metadata: 'Quality: 2160p DV HDR'
-  if (/^Quality\s*:/i.test(s) && s.length < 80) return true;
+  // Size / File Size lines, including dash/equal separators.
+  if (/^(?:File\s*)?Size\s*[:=\-].*/i.test(s) && /\d/.test(s)) return true;
+  // Common file metadata labels may sit between a filename and its size/link.
+  if (/^(?:Quality|Source|Release|Codec|Bitrate|Bit\s*Rate|Language|Format|Video)\s*[:=\-]/i.test(s)) return true;
   // Audio track detail lines
   if (/^(Audio\s*:|#?(Hindi|Tamil|Telugu|Malayalam|Kannada|Bengali|English)\s*:)/i.test(s)) return true;
   if (/^@\d+Kbps|@\d+\s*KB/i.test(s)) return true;
