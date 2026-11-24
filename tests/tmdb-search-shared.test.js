@@ -91,3 +91,62 @@ test('Telegram upload date is not sent to TMDB as a release-year filter', async 
     axios.get = originalGet;
   }
 });
+
+test('Robo (2010) resolves through a same-year TMDB alternate title, not a later Robo film', async () => {
+  const originalGet = axios.get;
+  const calls = [];
+  axios.get = async (url, config = {}) => {
+    calls.push({ url, params: config.params || {} });
+    if (url.includes('/search/')) {
+      return { data: { results: [
+        { id: 2019, title: 'Robo', original_title: 'Robo', release_date: '2019-04-01', popularity: 150 },
+        { id: 2010, title: 'Enthiran', original_title: 'Enthiran', release_date: '2010-10-01', popularity: 12 },
+      ] } };
+    }
+    if (url.endsWith('/movie/2010/alternative_titles')) {
+      return { data: { id: 2010, titles: [{ title: 'Robo', iso_3166_1: 'IN' }] } };
+    }
+    if (url.endsWith('/movie/2010')) {
+      return { data: {
+        id: 2010, title: 'Enthiran', original_title: 'Enthiran',
+        release_date: '2010-10-01', original_language: 'ta',
+        genres: [], poster_path: null, backdrop_path: null,
+      } };
+    }
+    throw new Error('Unexpected mocked TMDB URL: ' + url);
+  };
+
+  try {
+    const result = await searchTMDB('Robo', 2010, false, null, null, null, null, { tmdbKey: 'test-key' });
+    assert.ok(result);
+    assert.equal(result.tmdbId, '2010');
+    assert.equal(result.title, 'Robo', 'the user-facing Telugu release title should be preserved');
+    assert.equal(result.originalLanguage, 'Tamil');
+    assert.ok(calls.some(call => call.url.endsWith('/movie/2010/alternative_titles')));
+    assert.equal(calls.some(call => call.url.endsWith('/movie/2019')), false, 'wrong-year candidate must not be fetched');
+  } finally {
+    axios.get = originalGet;
+  }
+});
+
+test('a known year prevents an exact-title match from linking to a film nine years later', async () => {
+  const originalGet = axios.get;
+  const calls = [];
+  axios.get = async (url, config = {}) => {
+    calls.push({ url, params: config.params || {} });
+    if (url.includes('/search/')) {
+      return { data: { results: [
+        { id: 2019, title: 'Robo', original_title: 'Robo', release_date: '2019-04-01', popularity: 250 },
+      ] } };
+    }
+    throw new Error('Wrong-year movie details should never be fetched: ' + url);
+  };
+
+  try {
+    const result = await searchTMDB('Robo', 2010, false, null, null, null, null, { tmdbKey: 'test-key' });
+    assert.equal(result, null);
+    assert.equal(calls.some(call => call.url.endsWith('/movie/2019')), false);
+  } finally {
+    axios.get = originalGet;
+  }
+});
