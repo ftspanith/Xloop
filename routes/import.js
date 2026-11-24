@@ -1204,7 +1204,8 @@ router.post('/manual-batch', auth, async (req, res) => {
       ]).filter(Boolean).map(Number).filter(year => Number.isInteger(year) && year >= 1900 && year <= 2099))];
       const seasonYearHints = items
         .filter(item => !rep.season || Number(item.season) === Number(rep.season))
-        .map(item => item.fileYear || extractYear([item.filename]))
+        .map(item => item.fileYear || extractYear([item.filename]) ||
+          (!item.messageYear && !item.parentYear && isSeries ? item.year : null))
         .filter(Boolean);
       const titleYearHint = isSeries ? (rep.messageYear || rep.parentYear || null) : (rep.messageYear || rep.year || null);
 
@@ -1246,7 +1247,8 @@ router.post('/manual-batch', auth, async (req, res) => {
         const parsedEpisode = filename ? extractSeasonEpisode(filename) : {};
         const season = item.season ?? parsedEpisode?.season ?? null;
         const episode = item.episode ?? parsedEpisode?.episode ?? null;
-        const fileYear = Number(item.fileYear || extractYear([filename])) || null;
+        const fileYear = Number(item.fileYear || extractYear([filename]) ||
+          (!item.messageYear && !item.parentYear && isSeries ? item.year : null)) || null;
         const parsedLanguages = filename ? detectAllLanguages(filename) : [];
         const language = item.language || parsedLanguages.filter(value => value !== 'Multi').join(', ') ||
           (parsedLanguages.includes('Multi') ? 'Multi' : '');
