@@ -8,7 +8,7 @@ const vm = require('node:vm');
 
 const root = path.join(__dirname, '..');
 const watchSource = fs.readFileSync(path.join(root, 'public/js/watch.js'), 'utf8');
-const helperStart = watchSource.indexOf('function normalizeAudioDisplayLabel(');
+const helperStart = watchSource.indexOf('function formatDownloadLanguageLabel(');
 const helperEnd = watchSource.indexOf('// ── Flat-list download section', helperStart);
 assert.ok(helperStart >= 0 && helperEnd > helperStart, 'download metadata helpers should exist');
 
