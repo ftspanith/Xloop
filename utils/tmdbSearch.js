@@ -273,7 +273,9 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   // For TV, the message/title year describes the show's first air date.
   // A filename year usually describes a later season and must not be scored
   // against the show's first_air_date.
-  const titleYear = validYear(options.messageYear) || validYear(year) || null;
+  const titleYear = Object.prototype.hasOwnProperty.call(options, 'messageYear')
+    ? validYear(options.messageYear)
+    : (validYear(year) || null);
   const hintYear = isSeries ? titleYear : (titleYear || yearHints[0] || null);
 
   const log = (msg) => { if (emitter) emitter(msg); };
@@ -312,7 +314,6 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   }
   // Telegram upload date is not a release-year hint. Using it as one causes
   // false year penalties for older films posted in a newer channel message.
-  const hintYear = year ? Number(year) : null;
   const isShort  = cleanTitle.trim().split(/\s+/).length <= 2;
   const typeEp   = isSeries ? 'tv' : 'movie';
   const otherEp  = isSeries ? 'movie' : 'tv';
