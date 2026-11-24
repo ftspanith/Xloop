@@ -28,3 +28,32 @@ test('preserves complete filename metadata for the MongoDB importer', () => {
   assert.equal(entry.year, 2023);
   assert.equal(entry.rawTitle, 'Sample Movie (2023)');
 });
+
+
+test('Telegram ingestion accepts bare rotated provider URLs and normalizes them', () => {
+  const message = {
+    channel_id: '123',
+    id: 203,
+    date: '2024-02-02',
+    text: [
+      'Another Sample Film (2024)',
+      'Another.Sample.Film.2024.1080p.WEB-DL.2.4GB.mkv',
+      'edge.new5.gdflix.xyz/file/bare-gdflix',
+      'Another.Sample.Film.2024.720p.WEB-DL.1.2GB.mkv',
+      'mirror.hubcloud.app/file/bare-hubcloud',
+    ].join('\\n'),
+  };
+  const result = extractTelegramLinks([message], '1');
+  assert.equal(result.links.length, 2);
+  assert.deepEqual(
+    result.links.map(entry => entry.url).sort(),
+    [
+      'https://gdflix.dev/file/bare-gdflix',
+      'https://hubcloud.one/file/bare-hubcloud',
+    ]
+  );
+  assert.deepEqual(
+    result.links.map(entry => entry.size).sort(),
+    ['1.2GB', '2.4GB']
+  );
+});
