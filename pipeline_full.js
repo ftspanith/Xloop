@@ -30,7 +30,12 @@ const axios    = require('axios');
 const { CookieJar } = require('tough-cookie');
 const { spawn }     = require('child_process');
 const Movie         = require('./models/Movie');
-const { cleanTitleForApi, detectHost } = require('./utils/parser');
+const {
+  cleanTitleForApi, detectHost, detectCodec, detectHDR, extractAudio,
+  detectBitDepth, detectAudioChannels, detectSource, detectContainer,
+  normalizeQuality, extractSize, detectAllLanguages, extractSeasonEpisode,
+} = require('./utils/parser');
+const sharedMetadataSearch = require('./utils/tmdbSearch');
 
 // ─── CLI args (only used when run directly, not when require()'d) ─────────────
 const IS_MAIN = require.main === module;
@@ -312,11 +317,7 @@ function stringSimilarity(a, b) {
 }
 function toMB(s) { if (!s) return 0; const n = parseFloat(s); return /GB/i.test(s) ? n * 1024 : (n || 0); }
 function detectCodecLocal(fn) {
-  const s = (fn||'').toUpperCase();
-  if (/\bAV1\b/.test(s))                        return 'AV1';
-  if (/HEVC|H[.\s]?265|X265\b/.test(s))        return 'HEVC';
-  if (/\bAVC\b|H[.\s]?264|X264\b/.test(s))    return 'H.264';
-  return 'Other';
+  return detectCodec(fn || '') || 'Other';
 }
 function seasonFromFilename(fn) {
   if (!fn) return null;
@@ -325,51 +326,7 @@ function seasonFromFilename(fn) {
 }
 
 async function searchOMDB(title, year, isSeries) {
-  if (!OMDB_KEY) return null;
-  const cleanTitle = cleanTitleForApi(title);
-  if (!cleanTitle || cleanTitle.length < 2) return null;
-
-  async function omdbFetch(t, y) {
-    return fetchWithRetry(async () => {
-      const params = { t, apikey: OMDB_KEY, type: isSeries ? 'series' : 'movie', plot: 'short' };
-      if (y) params.y = y;
-      const res = await axios.get('https://www.omdbapi.com/', { params, timeout: 8000 });
-      const d = res.data;
-      if (!d || d.Response === 'False') return null;
-      const m = d.Runtime ? parseInt(d.Runtime) : null;
-      return {
-        title: d.Title || title,
-        description: d.Plot !== 'N/A' ? d.Plot : '',
-        poster: d.Poster !== 'N/A' ? d.Poster : '',
-        rating: d.imdbRating !== 'N/A' ? parseFloat(d.imdbRating) : 0,
-        year: d.Year ? parseInt(d.Year, 10) : year,
-        genre: d.Genre !== 'N/A' ? d.Genre.split(', ') : [],
-        duration: m ? `${Math.floor(m / 60)}h ${m % 60}m` : '',
-        imdbId: d.imdbID || '',
-      };
-    });
-  }
-
-  // Attempt 1: title + year
-  let result = await omdbFetch(cleanTitle, year);
-  if (result) return result;
-
-  // Attempt 2: title without year (year might be off by 1)
-  if (year) {
-    result = await omdbFetch(cleanTitle, null);
-    if (result) return result;
-  }
-
-  // Attempt 3: subtitle-stripped title + year
-  const stripped = cleanTitle.replace(/[:\u2013\u2014].*$/, '').trim();
-  if (stripped.length >= 2 && stripped !== cleanTitle) {
-    result = await omdbFetch(stripped, year);
-    if (result) return result;
-    result = await omdbFetch(stripped, null);
-    if (result) return result;
-  }
-
-  return null;
+  return sharedMetadataSearch.searchOMDB(title, year, isSeries, OMDB_KEY);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -550,39 +507,69 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
     // TERTIARY: title-only match (different years, same franchise name)
     if (!existing && cleanTitle) existing = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' } });
 
-    let meta = {};
-    if (existing) {
-      meta = { tmdbId: existing.tmdbId, title: existing.title, type: existing.type };
-    } else if (cleanTitle) {
-      const tmdb = await searchTMDB(cleanTitle, rep.year, isSer, rep.season, group.msgDate, rep.imdbId || null, rep.tmdbIdHint || null);
+    let meta = existing ? {
+      tmdbId: existing.tmdbId || '', imdbId: existing.imdbId || '',
+      title: existing.title || cleanTitle, type: existing.type || (isSer ? 'series' : 'movie'),
+      totalSeasons: existing.totalSeasons || 0,
+      description: existing.description || '', poster: existing.poster || '',
+      posterFallback: existing.posterFallback || '', backdrop: existing.backdrop || '',
+      rating: existing.rating || 0, year: existing.year || rep.year || null,
+      genre: existing.genre || [], duration: existing.duration || '',
+    } : {};
+
+    const needsMetadata = !existing || !existing.tmdbId || !existing.imdbId ||
+      !existing.poster || !existing.backdrop || !existing.description ||
+      !existing.rating || !existing.genre?.length;
+
+    if (cleanTitle && needsMetadata) {
+      const tmdb = await searchTMDB(
+        cleanTitle, rep.year, isSer, rep.season, group.msgDate,
+        rep.imdbId || null, rep.tmdbIdHint || null
+      );
       if (tmdb) {
-        Object.assign(meta, tmdb);
-        // Always fetch OMDB for extra data (rating, imdbId, fallback poster)
-        const omdb = await searchOMDB(rep.title, rep.year, isSer);
-        if (omdb) {
-          if (!meta.rating      && omdb.rating)      meta.rating      = omdb.rating;
-          if (!meta.description && omdb.description) meta.description = omdb.description;
-          if (!meta.duration    && omdb.duration)    meta.duration    = omdb.duration;
-          if (!meta.genre?.length && omdb.genre?.length) meta.genre   = omdb.genre;
-          if (omdb.imdbId)                           meta.imdbId      = omdb.imdbId;
-          // Store OMDB poster as fallback (different crop/resolution)
-          if (omdb.poster && omdb.poster !== meta.poster) meta.posterFallback = omdb.poster;
+        // Keep existing catalogue values; fill missing fields from the shared
+        // 14-algorithm TMDB matcher (including direct IMDb/TMDB-ID matches).
+        for (const [key, value] of Object.entries(tmdb)) {
+          const current = meta[key];
+          const missing = current == null || current === '' || current === 0 ||
+            (Array.isArray(current) && current.length === 0);
+          if (missing && value != null && value !== '') meta[key] = value;
         }
-        // Validate primary poster; fall to OMDB fallback if broken
-        const validPoster = await validatePoster(meta.poster);
-        if (!validPoster && meta.posterFallback) {
-          const validFb = await validatePoster(meta.posterFallback);
-          if (validFb) { meta.poster = validFb; meta.posterFallback = ''; }
-          else meta.poster = '';
-        } else if (!validPoster) meta.poster = '';
-      } else {
-        const omdb = await searchOMDB(rep.title, rep.year, isSer);
-        if (omdb) Object.assign(meta, omdb, { tmdbId: '' });
       }
-      // ── Google Image fallback: fires when poster is still empty ─────────────
+
+      // OMDb supplies IMDb ID, rating, plot, runtime and poster fallback.
+      const omdb = await searchOMDB(rep.title, rep.year, isSer);
+      if (omdb) {
+        for (const key of ['imdbId', 'description', 'duration', 'rating', 'year', 'title', 'type']) {
+          if (!meta[key] && omdb[key]) meta[key] = omdb[key];
+        }
+        if ((!meta.genre || !meta.genre.length) && omdb.genre?.length) meta.genre = omdb.genre;
+        if (omdb.poster && omdb.poster !== meta.poster && !meta.posterFallback) {
+          meta.posterFallback = omdb.poster;
+        }
+        if (!meta.tmdbId) meta.tmdbId = '';
+      }
+
+      // Validate primary poster; then try OMDb and Google Images as fallbacks.
+      if (meta.poster) {
+        const validPoster = await validatePoster(meta.poster);
+        if (!validPoster) meta.poster = '';
+      }
+      if (!meta.poster && meta.posterFallback) {
+        const validFallback = await validatePoster(meta.posterFallback);
+        if (validFallback) {
+          meta.poster = validFallback;
+          meta.posterFallback = '';
+        } else {
+          meta.posterFallback = '';
+        }
+      }
       if (!meta.poster) {
         const gImg = await searchGoogleImage(rep.title, rep.year, isSer);
-        if (gImg) { meta.poster = gImg; _emitter(`[IMG] Google image used for: ${rep.title}`); }
+        if (gImg) {
+          meta.poster = gImg;
+          _emitter(`[IMG] Google image used for: ${rep.title}`);
+        }
       }
     }
 
@@ -616,14 +603,20 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         skipped++;
         continue;
       }
-      const quality  = item.quality  || 'HD';
-      const size     = item.size     || '';
-      const language = item.language || '';
-      const codec    = item.codec    || detectCodecLocal(item.filename);
-      const hdr      = item.hdr      || null;
-      const audio    = item.audio    || null;
-      const source   = item.source   || null;
-      const correctSeason = seasonFromFilename(item.filename) ?? item.season ?? null;
+      const filename = item.filename || '';
+      const fileTags = extractSeasonEpisode(filename);
+      const quality  = item.quality || normalizeQuality(filename) || 'HD';
+      const size     = item.size || extractSize(filename) || '';
+      const language = item.language || detectAllLanguages(filename).join(', ') || '';
+      const codec    = item.codec || detectCodec(filename) || 'Other';
+      const hdr      = item.hdr || detectHDR(filename) || null;
+      const audio    = item.audio || extractAudio(filename) || null;
+      const source   = item.source || detectSource(filename) || null;
+      const container = item.container || detectContainer(filename) || null;
+      const bitDepth = item.bitDepth || detectBitDepth(filename) || null;
+      const audioChannels = item.audioChannels || detectAudioChannels(filename) || null;
+      const correctSeason = seasonFromFilename(filename) ?? item.season ?? fileTags.season ?? null;
+      const correctEpisode = item.episode ?? fileTags.episode ?? null;
 
       let dbRec = existing;
       // Re-check by tmdbId in case meta search found a different record than initial lookup
@@ -633,8 +626,8 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       if (!dbRec && cleanTitle) dbRec = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' } });
 
       const newDl = {
-        quality, size, filename: item.filename || '', language, codec, hdr, audio, source,
-        season: correctSeason, episode: item.episode ?? null,
+        quality, size, filename, language, codec, hdr, audio, source, container, bitDepth, audioChannels,
+        season: correctSeason, episode: correctEpisode,
         links: [{ host, url: finalUrl, isFast: /gdflix|hubcloud|gdlink/i.test(finalUrl) }],
       };
 
@@ -647,13 +640,13 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
 
           // Series/anime: season+episode must match
           const seasOk = (finalType === 'series' || finalType === 'anime')
-            ? (ex.season == correctSeason && ex.episode == (item.episode ?? null))
+            ? (ex.season == correctSeason && ex.episode == correctEpisode)
             : true;
           if (!seasOk) continue;
 
           // TIER 1 — Filename match: same .mkv/.mp4 name = definitely same file
           const exFn  = (ex.filename  || '').trim().toLowerCase();
-          const newFn = (item.filename || '').trim().toLowerCase();
+          const newFn = filename.trim().toLowerCase();
           if (exFn && newFn && exFn === newFn) {
             matchedIdx = j; break;
           }
@@ -717,6 +710,12 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         if (finalType === 'anime' && dbRec.type === 'series') metaSet.type = 'anime';
 
         if (matchedIdx >= 0) {
+          const matchedDownload = dbRec.downloads[matchedIdx] || {};
+          for (const field of ['source', 'container', 'bitDepth', 'audioChannels', 'codec', 'hdr', 'audio', 'filename']) {
+            if (!matchedDownload[field] && newDl[field]) {
+              metaSet[`downloads.${matchedIdx}.${field}`] = newDl[field];
+            }
+          }
           if (dbRec.downloads[matchedIdx].language) {
               metaSet[`downloads.${matchedIdx}.language`] = dbRec.downloads[matchedIdx].language;
           }
@@ -1148,332 +1147,14 @@ module.exports = { runPipeline: main, searchTMDB, searchOMDB, searchGoogleImage,
 // TMDB is tried with each variant in order until a confident match is found.
 // Phase 1 = strict thresholds. Phase 2 = relaxed thresholds (same candidates).
 // ═════════════════════════════════════════════════════════════════════════
-// ─── Number-word helpers ───────────────────────────────────────────────────────
-const NUM_WORDS_MAP = { one:'1', two:'2', three:'3', four:'4', five:'5', six:'6', seven:'7', eight:'8', nine:'9', ten:'10' };
-const ROMAN_TO_NUM  = { 'I':'1','II':'2','III':'3','IV':'4','V':'5','VI':'6','VII':'7','VIII':'8','IX':'9','X':'10' };
-const NUM_TO_ROMAN  = { '1':'I','2':'II','3':'III','4':'IV','5':'V','6':'VI','7':'VII','8':'VIII','9':'IX','10':'X' };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// buildTitleCandidates — 14-algorithm title variant generator
-//
-// Each algorithm produces a different string form of the title.
-// searchTMDB tries them in order (Phase 1: strict, Phase 2: relaxed),
-// stopping at the first confident match.
-//
-// KEY IMPROVEMENTS:
-//  • Algorithm 4: colon subtitle → also converts "Part N/word" to digit
-//      "Dune: Part Two" → candidates: "Dune: Part Two", "Dune 2", "Dune"
-//  • Algorithm 2: quality suffix guard — skip candidate if < 2 words remain
-//  • Algorithm NEW: Franchise sequel helper — when title is "Base N" (e.g.
-//      "Pushpa 2"), also tries "Base" (base franchise) so TMDB's collection
-//      search finds the right sequel via year+popularity scoring.
-// ─────────────────────────────────────────────────────────────────────────────
-function buildTitleCandidates(rawTitle, cleanedTitle, year) {
-  const seen   = new Set();
-  const result = [];
-  const add = (t) => {
-    const s = (t || '').replace(/\s+/g, ' ').trim();
-    if (!s || s.length < 2) return;
-    const key = s.toLowerCase();
-    if (!seen.has(key)) { seen.add(key); result.push(s); }
-  };
-
-  // ── Helper: convert number-words and Roman numerals to Arabic digits ───────
-  const toArabic = (s) => s
-    .replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\b/gi, m => NUM_WORDS_MAP[m.toLowerCase()] || m)
-    .replace(/\b(IX|IV|VIII|VII|VI|V|III|II|X{1,3}I{0,3}|I{1,3})\b/g, m => ROMAN_TO_NUM[m.toUpperCase()] || m);
-
-  // ── Helper: "Part N" / "Part Word" at any position → digit ───────────────
-  // "Dune: Part Two" → "Dune: Part 2"  then also "Dune 2"
-  // "Part 01" "Part 1" "Part II" all normalised to plain digit
-  const normalizePart = (s) => s
-    .replace(/\bPart\s+0*(\d+)\b/gi, (_, n) => 'Part ' + parseInt(n,10))
-    .replace(/\bPart\s+(one|two|three|four|five|six|seven|eight|nine|ten)\b/gi, (_, w) => 'Part ' + (NUM_WORDS_MAP[w.toLowerCase()] || w))
-    .replace(/\bPart\s+(IX|IV|VIII|VII|VI|V|III|II|X{1,3}I{0,3}|I{1,3})\b/gi, (_, r) => 'Part ' + (ROMAN_TO_NUM[r.toUpperCase()] || r));
-
-  // ── Algorithm 1: Direct clean title ──────────────────────────────────────
-  add(cleanedTitle);
-
-  // ── Algorithm 2: Strip residual language/quality suffixes ─────────────────
-  // Guard: only add if result is ≥ 2 words (avoid "Movie" from "Movie 1080p")
-  const suf2 = cleanedTitle
-    .replace(/\s+(telugu|tamil|hindi|malayalam|kannada|bengali|english|korean|japanese|dubbed|dub|dual|multi|4k|uhd|hdr|1080p|720p|480p|360p|web[-\s]?dl|webrip|bluray|hevc|x265|x264|avc|av1|remux|hdcam|cam|proper|repack)\s*$/gi, '')
-    .trim();
-  // Only add if meaningfully different AND still ≥ 2 words (or original title was 1 word)
-  const suf2Words = suf2.split(/\s+/).filter(Boolean).length;
-  const origWords = cleanedTitle.split(/\s+/).filter(Boolean).length;
-  if (suf2 !== cleanedTitle && suf2Words >= Math.min(2, origWords)) add(suf2);
-
-  // ── Algorithm 3: Hyphen/dash → space  ("Hanu-Man" → "Hanu Man") ──────────
-  add(cleanedTitle.replace(/[-\u2013\u2014]/g, ' ').replace(/\s+/g, ' ').trim());
-
-  // ── Algorithm 4: Colon-subtitle handling ──────────────────────────────────
-  // IMPROVEMENT: When subtitle contains "Part N" convert to digit AND
-  // also try "Base N" format (TMDB sometimes uses Arabic instead of subtitles)
-  const colonMatch = cleanedTitle.match(/^(.+?)\s*[:\u2013\u2014]\s*(.+)$/);
-  if (colonMatch) {
-    const base     = colonMatch[1].trim();
-    const subtitle = colonMatch[2].trim();
-    // Try full title with normalized Part number: "Dune: Part 2" (not "Dune: Part Two")
-    const normFull = base + ': ' + normalizePart(subtitle).replace(/\s*(one|two|three|four|five|six|seven|eight|nine|ten)\b/gi, w => ' ' + (NUM_WORDS_MAP[w.trim().toLowerCase()] || w.trim()));
-    add(normFull);
-    // Extract part number from subtitle: "Part 2" → 2, "The Rule Part 2" → 2
-    const partNum = subtitle.match(/\bPart\s*(\d+)/i)?.[1]
-      || subtitle.match(/\b(\d+)\s*$/)?.[1];
-    if (partNum && parseInt(partNum) > 1) {
-      // "Dune: Part Two" → "Dune 2"  (base + number — what TMDB often calls it)
-      add(base + ' ' + parseInt(partNum));
-    }
-    // Base title alone ("Dune" from "Dune: Part Two")
-    if (base.length >= 2) add(base);
-  }
-
-  // ── Algorithm 5: Remove trailing sequel number ────────────────────────────
-  // "Pushpa 2" → "Pushpa"   but ALSO add "Pushpa 2" as it is (already A1)
-  const noTrailNum = cleanedTitle.replace(/\s+\d+\s*$/, '').trim();
-  if (noTrailNum !== cleanedTitle && noTrailNum.length >= 2) add(noTrailNum);
-
-  // ── Algorithm 6: Arabic → Roman at end ───────────────────────────────────
-  const romanized = cleanedTitle.replace(/\s+(\d{1,2})\s*$/, (_, n) => NUM_TO_ROMAN[n] ? ' ' + NUM_TO_ROMAN[n] : ' ' + n);
-  if (romanized !== cleanedTitle) add(romanized);
-
-  // ── Algorithm 7: Roman → Arabic at end ───────────────────────────────────
-  const arabicized = cleanedTitle.replace(/\s+(IX|IV|VIII|VII|VI|V|III|II|I{1,3}|X)\s*$/i, (_, r) => {
-    const a = ROMAN_TO_NUM[r.toUpperCase()]; return a ? ' ' + a : ' ' + r;
-  });
-  if (arabicized !== cleanedTitle) add(arabicized);
-
-  // ── Algorithm 8: "The" prefix toggle ─────────────────────────────────────
-  // Only toggle when title is ≥ 4 chars (avoids "The RRR", "The V" noise)
-  if (/^The\s+/i.test(cleanedTitle)) {
-    add(cleanedTitle.replace(/^The\s+/i, '').trim());
-  } else if (cleanedTitle.replace(/\s+/g,'').length >= 4) {
-    add('The ' + cleanedTitle);
-  }
-
-  // ── Algorithm 9: Number-words → digits everywhere ────────────────────────
-  // "Dune Part Two" → "Dune Part 2",  "Baahubali Two" → "Baahubali 2"
-  const numWrds = toArabic(cleanedTitle);
-  if (numWrds.toLowerCase() !== cleanedTitle.toLowerCase()) add(numWrds);
-
-  // ── Algorithm 10: First 3 / first 2 words (prefix reduction) ────────────
-  const words = cleanedTitle.split(/\s+/).filter(Boolean);
-  if (words.length > 4) { add(words.slice(0, 3).join(' ')); add(words.slice(0, 2).join(' ')); }
-  else if (words.length > 3) { add(words.slice(0, 2).join(' ')); }
-
-  // ── Algorithm 11: Ampersand / "and" toggle ───────────────────────────────
-  if (/&/.test(cleanedTitle))        add(cleanedTitle.replace(/\s*&\s*/g, ' and '));
-  if (/ and /i.test(cleanedTitle))   add(cleanedTitle.replace(/\s+and\s+/gi, ' & '));
-
-  // ── Algorithm 11b: Roman numeral in MIDDLE → Arabic ──────────────────────
-  // "Baahubali II The Conclusion" → "Baahubali 2 The Conclusion"
-  const midArabic = cleanedTitle.replace(/\b(IX|IV|VIII|VII|VI|V|III|II|I{1,3}|X{1,3})\b/g, r => ROMAN_TO_NUM[r.toUpperCase()] || r);
-  if (midArabic.toLowerCase() !== cleanedTitle.toLowerCase()) add(midArabic);
-
-  // ── Algorithm 11c: Remove mid-title sequel number ─────────────────────────
-  // "Pushpa 2 The Rule" → "Pushpa The Rule"
-  const midNumRemoved = cleanedTitle.replace(/\s+\d+(?=\s+[A-Z])/g, '').trim();
-  if (midNumRemoved.toLowerCase() !== cleanedTitle.toLowerCase()) add(midNumRemoved);
-
-  // ── Algorithm 12: "Part N" → "N" in subtitle (normalise Part phrasing) ──
-  // "KGF Chapter 2" → stays as is (no Part); "Baahubali Part 2" → "Baahubali 2"
-  const partToNum = cleanedTitle
-    .replace(/\bPart\s+(\d+)\b/gi, (_, n) => n)
-    .replace(/\bChapter\s+(\d+)\b/gi, (_, n) => n)
-    .trim();
-  if (partToNum !== cleanedTitle) add(partToNum);
-
-  // ── Algorithm 12b: Raw unclean title (when cleanTitleForApi over-strips) ──
-  const rawC = (rawTitle || '').replace(/\s+/g, ' ').trim();
-  if (rawC && rawC.toLowerCase() !== cleanedTitle.toLowerCase()) add(rawC);
-
-  return result;
-}
-
+// ─────────────────────────────────────────────────────────────────────────
+// Shared 14-algorithm metadata engine. Includes TMDB/IMDb ID fast paths,
+// confidence scoring, relaxed title candidates, and season poster lookup.
+// ─────────────────────────────────────────────────────────────────────────
 async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbIdHint) {
   if (!TMDB_KEY) return null;
-
-  // Strip language/quality suffixes that confuse TMDB
-  const LANG_SUFFIX_RE = /\s+(telugu|tamil|hindi|malayalam|kannada|bengali|english|korean|japanese|chinese|arabic|turkish|spanish|french|german|dubbed|dub|dual\s*audio|multi\s*audio|4k|uhd|hdr|1080p|720p|480p|web-?dl|webrip|bluray|hevc|x265|x264|avc|av1|remux|hdcam|cam|proper|repack)\s*$/i;
-  const strippedTitle = title.replace(LANG_SUFFIX_RE, '').trim() || title;
-
-  const cleanTitle = cleanTitleForApi(strippedTitle);
-  if (!cleanTitle || cleanTitle.length < 2) return null;
-
-  // Guard: if cleanTitle is a single ultra-generic word, it's useless for TMDB search.
-  // e.g. "Movie 1080p" → cleanTitle="Movie" — would return random results.
-  // Caller (processGroup) already logs [WARN] No TMDB when this returns null.
-  const JUNK_SINGLES = /^(movie|film|video|clip|show|series|episode|part|chapter|season|trailer|teaser|sample|test|unknown|untitled|hd|fhd|uhd|4k|1080p|720p|480p)$/i;
-  if (cleanTitle.split(/\s+/).length === 1 && JUNK_SINGLES.test(cleanTitle)) return null;
-
-  const BASE = 'https://api.themoviedb.org/3';
-  const langMap = { en:'English',te:'Telugu',ta:'Tamil',hi:'Hindi',ml:'Malayalam',kn:'Kannada',ja:'Japanese',ko:'Korean',fr:'French',es:'Spanish',de:'German',it:'Italian',zh:'Chinese',ru:'Russian',pt:'Portuguese',ar:'Arabic',tr:'Turkish',id:'Indonesian',th:'Thai',bn:'Bengali' };
-
-  function buildResult(d, isTv, extra = {}) {
-    return {
-      tmdbId: String(d.id), type: isTv ? 'series' : 'movie', totalSeasons: d.number_of_seasons || 0,
-      title: d.title || d.name || title,
-      description: extra.seasonOverview || d.overview || '',
-      poster: extra.seasonPoster || (d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : ''),
-      backdrop: d.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : '',
-      rating: Math.round((d.vote_average || 0) * 10) / 10,
-      year: d.release_date ? parseInt(d.release_date, 10) : d.first_air_date ? parseInt(d.first_air_date, 10) : year,
-      releaseDate: d.release_date || d.first_air_date || '',
-      genre: (d.genres || []).map(g => g.name),
-      duration: d.runtime ? `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}m`
-        : (d.episode_run_time?.[0] ? `${Math.floor(d.episode_run_time[0] / 60)}h ${d.episode_run_time[0] % 60}m` : ''),
-      originalLanguage: langMap[d.original_language] || d.original_language || '',
-      confidence: 100,
-    };
-  }
-
-  async function fetchSeasonData(tmdbId, sn, isTv) {
-    if (!isTv || !sn) return {};
-    const sr = await fetchWithRetry(() => axios.get(`${BASE}/tv/${tmdbId}/season/${sn}`, { params: { api_key: TMDB_KEY }, timeout: 8000 }));
-    return { seasonPoster: sr?.data?.poster_path ? `https://image.tmdb.org/t/p/w500${sr.data.poster_path}` : '', seasonOverview: sr?.data?.overview || '' };
-  }
-
-  // ── Fast-path: TMDB ID hint ─────────────────────────────────────────────────────────
-  if (tmdbIdHint) {
-    for (const mt of (isSeries ? ['tv','movie'] : ['movie','tv'])) {
-      const r = await fetchWithRetry(() => axios.get(`${BASE}/${mt}/${tmdbIdHint}`, { params: { api_key: TMDB_KEY }, timeout: 8000 }));
-      if (r?.data && (r.data.title || r.data.name)) {
-        const isTv = mt === 'tv';
-        return buildResult(r.data, isTv, await fetchSeasonData(r.data.id, season, isTv));
-      }
-    }
-  }
-  // ── Fast-path: IMDB ID ─────────────────────────────────────────────────────────────
-  if (imdbId && /^tt\d{7,}$/.test(imdbId)) {
-    const fr = await fetchWithRetry(() => axios.get(`${BASE}/find/${imdbId}`, { params: { api_key: TMDB_KEY, external_source: 'imdb_id' }, timeout: 8000 }));
-    if (fr) {
-      const hit = (fr.data?.movie_results || [])[0] || (fr.data?.tv_results || [])[0];
-      const mt  = (fr.data?.movie_results || [])[0] ? 'movie' : 'tv';
-      if (hit) {
-        const r = await fetchWithRetry(() => axios.get(`${BASE}/${mt}/${hit.id}`, { params: { api_key: TMDB_KEY }, timeout: 10000 }));
-        if (r?.data && (r.data.title || r.data.name)) {
-          const isTv = mt === 'tv';
-          return buildResult(r.data, isTv, await fetchSeasonData(r.data.id, season, isTv));
-        }
-      }
-    }
-  }
-
-  const hintYear = year || (msgDate ? new Date(msgDate).getFullYear() : null);
-  const isShort  = cleanTitle.trim().split(/\s+/).length <= 2;
-  const typeEp   = isSeries ? 'tv' : 'movie';
-  const otherEp  = isSeries ? 'movie' : 'tv';
-
-  // Build candidate list using all 12 algorithms
-  const candidates = buildTitleCandidates(strippedTitle, cleanTitle, hintYear);
-
-  // ── Core scorer ─────────────────────────────────────────────────────────────────────────
-  async function runStrategy(ep, params, strict) {
-    return fetchWithRetry(async () => {
-      const url2 = ep === 'multi' ? `${BASE}/search/multi` : `${BASE}/search/${ep}`;
-      const res  = await axios.get(url2, { params: { api_key: TMDB_KEY, ...params }, timeout: 10000 });
-      let results = res.data.results || [];
-      if (ep === 'multi') results = results.filter(r => r.media_type === 'movie' || r.media_type === 'tv');
-      if (!results.length) return null;
-
-      const queryTitle = params.query;
-      const scored = results.slice(0, 10).map(r => {
-        const rTitle = r.title || r.name || '';
-        const rOrig  = r.original_title || r.original_name || '';
-        const rYear  = r.release_date ? parseInt(r.release_date, 10) : r.first_air_date ? parseInt(r.first_air_date, 10) : null;
-        const rType  = ep === 'multi' ? (r.media_type === 'tv' ? 'series' : 'movie') : (ep === 'tv' ? 'series' : 'movie');
-        const origLang = r.original_language || '';
-        const simMain = Math.max(
-          stringSimilarity(cleanTitleForApi(rTitle), queryTitle),
-          stringSimilarity(cleanTitleForApi(rOrig),  queryTitle)
-        );
-        let score = simMain * 60;
-        if (hintYear && rYear) {
-          const d = Math.abs(hintYear - rYear);
-          score += d === 0 ? 30 : d === 1 ? 15 : d <= 2 ? 5 : -20;
-        } else if (!hintYear && !rYear) score += 5;
-        if ((isSeries ? 'series' : 'movie') === rType) score += 15; else score -= 10;
-        if (r.popularity > 50)  score += 5;
-        if (r.popularity > 200) score += 5;
-        if (origLang && origLang !== 'en' && /^(en|English)$/i.test(origLang)) score -= 5;
-        return { r, score, rTitle, rOrig, rYear, simMain };
-      });
-
-      scored.sort((a, b) => b.score - a.score);
-      const best = scored[0];
-      const simThresh   = strict ? (isShort ? 0.70 : 0.55) : (isShort ? 0.45 : 0.30);
-      const scoreThresh = strict ? (isShort ? 65  : 55)    : (isShort ? 47   : 37);
-      if (best.score < scoreThresh || best.simMain < simThresh) return null;
-
-      const isTv = ep === 'tv' || best.r.media_type === 'tv';
-      const dr = await fetchWithRetry(() =>
-        axios.get(`${BASE}/${isTv ? 'tv' : 'movie'}/${best.r.id}`, { params: { api_key: TMDB_KEY }, timeout: 10000 })
-      );
-      if (!dr) return null;
-      const sd = await fetchSeasonData(best.r.id, season, isTv);
-      const d  = dr.data;
-      const tmdbTitle  = d.title || d.name || title;
-      const queryClean = cleanTitleForApi(queryTitle) || queryTitle;
-      const tmdbClean  = cleanTitleForApi(tmdbTitle)  || tmdbTitle;
-      const titleSim   = stringSimilarity(queryClean.toLowerCase(), tmdbClean.toLowerCase());
-      const displayTitle = titleSim >= 0.5 ? tmdbTitle : (cleanTitleForApi(title) || title);
-      return {
-        tmdbId: String(d.id), type: isTv ? 'series' : 'movie', totalSeasons: d.number_of_seasons || 0,
-        title: displayTitle,
-        description: sd.seasonOverview || d.overview || '',
-        poster: sd.seasonPoster || (d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : ''),
-        backdrop: d.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : '',
-        rating: Math.round((d.vote_average || 0) * 10) / 10,
-        year: d.release_date ? parseInt(d.release_date, 10) : d.first_air_date ? parseInt(d.first_air_date, 10) : hintYear,
-        releaseDate: d.release_date || d.first_air_date || '',
-        genre: (d.genres || []).map(g => g.name),
-        duration: d.runtime
-          ? `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}m`
-          : (d.episode_run_time?.[0] ? `${Math.floor(d.episode_run_time[0] / 60)}h ${d.episode_run_time[0] % 60}m` : ''),
-        originalLanguage: langMap[d.original_language] || d.original_language || '',
-        confidence: Math.round(best.score),
-        _algo: params._algo || 'A1',
-      };
-    });
-  }
-
-  // ── Phase 1: Strict thresholds — try every candidate (all 12 algorithms) ─────────────────────
-  for (let i = 0; i < candidates.length; i++) {
-    const q = candidates[i];
-    const label = `A${i + 1}`;
-    const strats = [];
-    if (hintYear) strats.push({ ep: typeEp,  params: { query: q, year: hintYear, _algo: label } });
-    strats.push(          { ep: typeEp,  params: { query: q, _algo: label } });
-    strats.push(          { ep: 'multi', params: { query: q, _algo: label } });
-    if (hintYear) strats.push({ ep: otherEp, params: { query: q, year: hintYear, _algo: label } });
-    strats.push(          { ep: otherEp, params: { query: q, _algo: label } });
-    for (const { ep, params } of strats) {
-      const result = await runStrategy(ep, params, true);
-      if (result) {
-        if (i > 0) _emitter(`[TMDB] Algorithm ${label} matched: "${q}" → ${result.title} (${result.confidence}pts)`);
-        return result;
-      }
-    }
-  }
-
-  // ── Phase 2: Relaxed thresholds — same candidates, lower bar ────────────────────────────
-  for (let i = 0; i < candidates.length; i++) {
-    const q = candidates[i];
-    const label = `R${i + 1}`;
-    const strats = [
-      { ep: typeEp,  params: { query: q, ...(hintYear ? { year: hintYear } : {}), _algo: label } },
-      { ep: typeEp,  params: { query: q, _algo: label } },
-      { ep: 'multi', params: { query: q, _algo: label } },
-    ];
-    for (const { ep, params } of strats) {
-      const result = await runStrategy(ep, params, false);
-      if (result) {
-        _emitter(`[TMDB] Relaxed ${label} matched: "${q}" → ${result.title} (${result.confidence}pts)`);
-        return result;
-      }
-    }
-  }
-
-  return null;
+  return sharedMetadataSearch.searchTMDB(
+    title, year, isSeries, season, msgDate, imdbId, tmdbIdHint,
+    { tmdbKey: TMDB_KEY, emitter: _emitter }
+  );
 }
-
