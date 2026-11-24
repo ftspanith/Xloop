@@ -298,9 +298,8 @@ function levenshtein(a, b) {
   return dp[m][n];
 }
 function escapeRegex(value) {
-  return String(value || '').replace(/[.*+?^$()|[\]\\{}]/g, '\\function stringSimilarity(a, b) {');
+  return String(value || '').replace(/[.*+?^$()|[\\]{}]/g, '\\$&');
 }
-
 function stringSimilarity(a, b) {
   a = (a||'').toLowerCase().trim(); b = (b||'').toLowerCase().trim();
   if (a === b) return 1;
