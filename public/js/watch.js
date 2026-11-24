@@ -220,7 +220,7 @@ function getAvailableLanguageLabels(downloads) {
   const labels = new Set();
   for (const dl of downloads || []) {
     const info = detectDownloadLanguageInfo(dl || {});
-    if (info.languageType === 'Multi' || info.languages.length >= 3) labels.add('MULTI');
+    if (info.languageType === 'Multi' || info.languages.length >= 3) labels.add('MULTi');
     else if (info.languageType === 'Dual' || info.languages.length === 2) labels.add('DUAL');
     else if (info.languages.length === 1) labels.add(info.languages[0]);
   }
@@ -322,7 +322,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     const languageType = languageInfo.languageType;
     const isMulti = languageType === 'Multi';
     // Keep each download row compact on mobile: names for Single, type only for Dual/Multi.
-    const langLabel = languageType === 'Multi' ? 'MULTI'
+    const langLabel = languageType === 'Multi' ? 'MULTi'
       : languageType === 'Dual' ? 'DUAL'
       : detectedLangs.length ? detectedLangs[0] : '';
 
