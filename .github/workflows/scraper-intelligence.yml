@@ -4,6 +4,10 @@ on:
     paths:
       - 'utils/parser.js'
       - 'utils/variant-intelligence.js'
+      - 'utils/tmdbSearch.js'
+      - 'pipeline_full.js'
+      - 'tests/importer-metadata.test.js'
+      - 'models/Movie.js'
       - 'routes/scrape.js'
       - 'models/ExtractedLink.js'
       - 'scrape_api.js'
@@ -36,3 +40,4 @@ jobs:
       - run: npm ci
       - run: npm run test:scraper-intelligence
       - run: npm run test:video-formats
+      - run: npm run test:importer-metadata
