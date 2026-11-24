@@ -196,7 +196,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     const hasDualMarker = /\b(?:dual(?:[.\s_-]?audio)?|bilingual)\b/i.test(languageText);
     const languageType = hasMultiMarker || detectedLangs.length >= 3 ? 'Multi'
       : hasDualMarker || detectedLangs.length === 2 ? 'Dual'
-      : detectedLangs.length === 1 ? 'Single' : '';
+      : detectedLangs.length === 1 ? 'Single' : (dl.languageType || '');
     const isMulti = languageType === 'Multi';
     const langLabel = detectedLangs.length ? detectedLangs.join(' + ') : languageType;
 
