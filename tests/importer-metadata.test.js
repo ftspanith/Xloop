@@ -13,6 +13,8 @@ const {
 const { buildTitleCandidates } = require('../utils/tmdbSearch');
 
 const pipelineSource = fs.readFileSync(path.join(__dirname, '..', 'pipeline_full.js'), 'utf8');
+const sharedSearchSource = fs.readFileSync(path.join(__dirname, '..', 'utils', 'tmdbSearch.js'), 'utf8');
+const { analyzeVariantSet } = require('../utils/variant-intelligence');
 
 test('shared TMDB candidate engine produces sequel, subtitle and Roman numeral variants', () => {
   const dune = buildTitleCandidates('Dune: Part Two', cleanTitleForApi('Dune: Part Two'), 2024);
@@ -64,6 +66,7 @@ test('MongoDB-only importer calls the shared TMDB/OMDb engine and poster fallbac
   assert.match(pipelineSource, /validatePoster\(meta\.poster\)/);
   assert.match(pipelineSource, /rep\.imdbId \|\| null, rep\.tmdbIdHint \|\| null/);
   assert.match(pipelineSource, /const needsMetadata = !existing/);
+  assert.match(pipelineSource, /analyzeVariantSet\(group\.items/);
   assert.match(pipelineSource, /DIRECT_HOST_RE = \/gdflix\|hubcloud\|tmbcloud\//);
 });
 
@@ -90,4 +93,23 @@ test('compact audio channel labels are recognized', () => {
   assert.equal(detectAudioChannels('Movie.DDP5.1.1080p.mkv'), '5.1');
   assert.equal(detectAudioChannels('Movie.DTS-HD7.1.2160p.mkv'), '7.1');
   assert.equal(detectAudioChannels('Movie.2.0.AAC.mkv'), '2.0');
+});
+
+test('cross-account variant analysis flags suspicious near-duplicates without dropping links', () => {
+  const result = analyzeVariantSet([
+    { title: 'Film', year: 2024, quality: '1080p', codec: 'HEVC', audio: 'DDP 5.1', language: 'Telugu', size: '6 GB', url: 'https://a/1' },
+    { title: 'Film', year: 2024, quality: '1080p', codec: 'HEVC', audio: 'DDP 5.1', language: 'Telugu', size: '6.02 GB', url: 'https://b/2' },
+    { title: 'Film', year: 2024, quality: '720p', codec: 'H.264', audio: 'AAC', language: 'Hindi', size: '2 GB', url: 'https://c/3' },
+  ], { sizeTolerance: 0.01 });
+
+  assert.equal(result.totalReceived, 3);
+  assert.equal(result.uniqueVariants, 3);
+  assert.equal(result.nearDuplicates.length, 1);
+});
+
+test('TMDB main poster and season poster are returned and saved separately', () => {
+  assert.match(sharedSearchSource, /poster:\s+d\.poster_path/);
+  assert.match(sharedSearchSource, /seasonPoster:\s+extra\.seasonPoster/);
+  assert.match(pipelineSource, /seasonPosters\.s\$\{rep\.season\}/);
+  assert.match(pipelineSource, /seasonPosters: rep\.season && meta\.seasonPoster/);
 });
