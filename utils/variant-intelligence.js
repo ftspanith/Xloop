@@ -186,7 +186,7 @@ function uploadTimestamp(value) {
 
 /**
  * A repack can be explicit in the release name, or inferred only when a later
- * upload improves the technical score over an earlier matching release.
+ * same-episode upload is same/higher resolution and improves the technical score.
  * Caller supplies variants from the already matched Movie/episode record.
  */
 function inferRepackStatus(candidate, existingVariants = []) {
@@ -203,9 +203,11 @@ function inferRepackStatus(candidate, existingVariants = []) {
   const olderBetterment = (Array.isArray(existingVariants) ? existingVariants : []).some(existing => {
     const oldDate = uploadTimestamp(existing?.uploadDate || existing?.date);
     if (!oldDate || candidateDate <= oldDate) return false;
-    if ((existing.quality || '') !== (candidate.quality || '')) return false;
     if ((existing.season ?? null) !== (candidate.season ?? null)) return false;
     if ((existing.episode ?? null) !== (candidate.episode ?? null)) return false;
+    const candidateResolution = resolutionScore(candidate.quality || candidate.filename);
+    const existingResolution = resolutionScore(existing.quality || existing.filename);
+    if (candidateResolution < existingResolution) return false;
     return candidateScore >= scoreVariant(existing).qualityScore + 4;
   });
   return olderBetterment
