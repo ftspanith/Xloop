@@ -1157,7 +1157,7 @@ router.post('/manual-batch', auth, async (req, res) => {
       const isSeries = entry.type === 'series' || entry.type === 'anime' ||
         entry.isSeries === true || entry.contentType === 'series' || entry.contentType === 'anime';
       const parentYear = isSeries
-        ? (entry.messageYear || entry.year || '')
+        ? (entry.messageYear || entry.parentYear || '')
         : (entry.messageYear || entry.year || '');
       const key = title.toLowerCase() + '__' + (isSeries ? parentYear : parentYear) +
         '__' + (isSeries ? 'tv' : 'movie');
@@ -1178,7 +1178,7 @@ router.post('/manual-batch', auth, async (req, res) => {
         .filter(item => !rep.season || Number(item.season) === Number(rep.season))
         .map(item => item.fileYear || extractYear([item.filename]))
         .filter(Boolean);
-      const titleYearHint = isSeries ? (rep.messageYear || rep.year || null) : (rep.messageYear || rep.year || null);
+      const titleYearHint = isSeries ? (rep.messageYear || rep.parentYear || null) : (rep.messageYear || rep.year || null);
 
       let meta = {};
       const tmdb = await searchTMDB(
