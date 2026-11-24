@@ -538,7 +538,7 @@ router.post('/telegram-sync/chunk', auth, express.json({ limit: '3mb' }), async 
         uploadDate: allowedString(item.uploadDate || item.date, 100),
         isIMAX: item.isIMAX === true,
         aspectRatio: allowedString(item.aspectRatio, 20),
-        runtimeMinutes: item.runtimeMinutes == null ? null : Number(item.runtimeMinutes),
+        runtimeMinutes: item.runtimeMinutes == null || !Number.isFinite(Number(item.runtimeMinutes)) ? null : Number(item.runtimeMinutes),
         certification: allowedString(item.certification, 30),
         bypassedUrl: allowedString(item.bypassedUrl, 2000),
         isSeries: !!item.isSeries,
