@@ -562,7 +562,7 @@ async function searchOMDB(title, year, isSeries, omdbKey, options = {}) {
       const d = res.data;
       if (!d || d.Response === 'False') return null;
       const yearText = String(d.Year || '');
-      const omdbYears = (yearText.match(/19\\d{2}|20\\d{2}/g) || []).map(Number);
+      const omdbYears = (yearText.match(/19\d{2}|20\d{2}/g) || []).map(Number);
       const omdbYear = omdbYears[0] || null;
       const yearDiff = omdbYear && yearHints.length
         ? Math.min(...yearHints.map(hint => Math.abs(hint - omdbYear)))
