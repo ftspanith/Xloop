@@ -9,6 +9,7 @@ const {
   extractAudio,
   detectAudioChannels,
   normalizeGdflixUrl,
+  parseMessageBlock,
   parseManualInput,
 } = require('../utils/parser');
 
