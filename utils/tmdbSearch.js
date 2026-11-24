@@ -277,6 +277,13 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     ? validYear(options.messageYear)
     : (validYear(year) || null);
   const hintYear = isSeries ? titleYear : (titleYear || yearHints[0] || null);
+  // Filename years belong to individual TV seasons; compare them against
+  // TMDB's season air_date, never against the show's first_air_date.
+  const seasonYearHints = [...new Set(
+    (Array.isArray(options.seasonYearHints) ? options.seasonYearHints : (isSeries ? yearHints.filter(y => y !== titleYear) : []))
+      .map(validYear).filter(Boolean)
+  )];
+  const seasonDataCache = new Map();
 
   const log = (msg) => { if (emitter) emitter(msg); };
 
@@ -321,16 +328,22 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   // ── Season poster helper ────────────────────────────────────────────────────
   async function fetchSeasonData(tmdbId, sn, isTv) {
     if (!isTv || !sn) return {};
-    const sr = await fetchWithRetry(() =>
-      tmdbGet(`${BASE}/tv/${tmdbId}/season/${sn}`, {}, { timeout: 8000 })
-    );
-    const seasonAirDate = sr?.data?.air_date || '';
-    return {
-      seasonPoster:   sr?.data?.poster_path ? `https://image.tmdb.org/t/p/w500${sr.data.poster_path}` : '',
-      seasonOverview: sr?.data?.overview || '',
-      seasonAirDate,
-      seasonYear: seasonAirDate ? parseInt(seasonAirDate.slice(0, 4), 10) || null : null,
-    };
+    const cacheKey = String(tmdbId) + ':' + String(sn);
+    if (seasonDataCache.has(cacheKey)) return seasonDataCache.get(cacheKey);
+    const pending = (async () => {
+      const sr = await fetchWithRetry(() =>
+        tmdbGet(`${BASE}/tv/${tmdbId}/season/${sn}`, {}, { timeout: 8000 })
+      );
+      const seasonAirDate = sr?.data?.air_date || '';
+      return {
+        seasonPoster: sr?.data?.poster_path ? `https://image.tmdb.org/t/p/w500${sr.data.poster_path}` : '',
+        seasonOverview: sr?.data?.overview || '',
+        seasonAirDate,
+        seasonYear: seasonAirDate ? parseInt(seasonAirDate.slice(0, 4), 10) || null : null,
+      };
+    })();
+    seasonDataCache.set(cacheKey, pending);
+    return pending;
   }
 
   // ── Result builder ──────────────────────────────────────────────────────────
@@ -432,9 +445,22 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
         if ((isSeries ? 'series' : 'movie') === rType) score += 12; else score -= 8;
         if (r.popularity > 50) score += 3;
         if (r.popularity > 200) score += 2;
-        return { r, score, simMain };
+        return { r, score, simMain, isTvCandidate: rType === 'series' };
       });
 
+      // Where a TV search is ambiguous, compare the filename's year with the
+      // selected season's actual TMDB air date. This distinguishes same-title
+      // remakes and avoids penalizing later seasons against the series premiere.
+      if (isSeries && season && seasonYearHints.length) {
+        const seasonCandidates = scored.filter(item => item.isTvCandidate).slice(0, 8);
+        await Promise.all(seasonCandidates.map(async item => {
+          const seasonData = await fetchSeasonData(item.r.id, season, true);
+          if (!seasonData.seasonYear) return;
+          const nearest = Math.min(...seasonYearHints.map(y => Math.abs(y - seasonData.seasonYear)));
+          item.seasonYearDiff = nearest;
+          item.score += nearest === 0 ? 18 : nearest === 1 ? 12 : nearest === 2 ? 8 : nearest === 3 ? 4 : nearest <= 5 ? 1 : -8;
+        }));
+      }
       scored.sort((a, b) => b.score - a.score);
       const best = scored[0];
       const simThresh   = strict ? (isShort ? 0.70 : 0.55) : (isShort ? 0.45 : 0.30);
@@ -536,13 +562,17 @@ async function searchOMDB(title, year, isSeries, omdbKey, options = {}) {
       const d = res.data;
       if (!d || d.Response === 'False') return null;
       const yearText = String(d.Year || '');
-      const omdbYear = parseInt(yearText, 10) || null;
+      const omdbYears = (yearText.match(/19\\d{2}|20\\d{2}/g) || []).map(Number);
+      const omdbYear = omdbYears[0] || null;
       const yearDiff = omdbYear && yearHints.length
         ? Math.min(...yearHints.map(hint => Math.abs(hint - omdbYear)))
         : null;
-      // OMDb series Year values can be ranges (e.g. 2019–2024); parseInt gives
-      // the first-air year, while a later season's filename year is also valid.
-      if (yearDiff != null && yearDiff > (isSeries ? 5 : 3)) return null;
+      // IMDb often returns a series' complete run as "2018–2024".
+      // A filename year inside that range is a valid season match, even though
+      // the parent card must retain the first-air year.
+      const insideSeriesRun = isSeries && omdbYears.length > 1 &&
+        yearHints.some(hint => hint >= omdbYears[0] && hint <= omdbYears[omdbYears.length - 1]);
+      if (yearDiff != null && yearDiff > (isSeries ? 5 : 3) && !insideSeriesRun) return null;
       return {
         imdbId:      d.imdbID || '',
         title:       d.Title || title,
