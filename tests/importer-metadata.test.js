@@ -190,3 +190,13 @@ test('recovers a labelled size placed immediately before its filename', () => {
   assert.equal(parsed.downloads[0].size, '3.25GB');
   assert.equal(parsed.downloads[0].filename, 'Another.Film.2022.1080p.BluRay.mkv');
 });
+
+
+test('explicit MongoDB catalogue reset preserves the ExtractedLink source collection', () => {
+  assert.match(pipelineSource, /_argv\.includes\('--clean-catalogue'\)/);
+  assert.match(pipelineSource, /const NO_WIPE\s+= FROM_MONGODB \? !CLEAN_CATALOGUE/);
+  assert.match(pipelineSource, /await Movie\.deleteMany\(\{\}\)/);
+  assert.match(pipelineSource, /ExtractedLink\.find\(\{\}\)\.lean\(\)/);
+  assert.match(pipelineSource, /ExtractedLink source preserved/);
+  assert.doesNotMatch(pipelineSource, /ExtractedLink\.deleteMany\(/);
+});
