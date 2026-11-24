@@ -9,17 +9,17 @@ const orchestrator = fs.readFileSync(path.join(root, 'routes/orchestrator.js'), 
 const pipeline = fs.readFileSync(path.join(root, 'pipeline_full.js'), 'utf8');
 
 test('local child-process pipeline endpoint requires admin authentication', () => {
-  assert.match(orchestrator, /router\\.get\\(['"]\\/start-local['"],\\s*auth\\s*,/);
+  assert.ok(orchestrator.includes("router.get('/start-local', auth,"));
 });
 
 test('GET and POST scoped pipeline starts force no-wipe', () => {
-  const noWipeArg = /noWipe:\\s*!!skipScraper\\s*\\|\\|\\s*scope\\s*!==\\s*['"]all['"]\\s*\\|\\|\\s*!!resume/;
-  assert.equal((orchestrator.match(new RegExp(noWipeArg.source, 'g')) || []).length, 2);
+  const noWipeArg = "noWipe: !!skipScraper || scope !== 'all' || !!resume";
+  assert.equal(orchestrator.split(noWipeArg).length - 1, 2);
 });
 
 test('pipeline applies scope filtering and protects the catalogue on scoped/resume runs', () => {
-  assert.match(pipeline, /filterEntriesByScope\\(allEntries/);
-  assert.match(pipeline, /const NO_WIPE = requestedNoWipe \\|\\| scope !== 'all' \\|\\| RESUME/);
+  assert.ok(pipeline.includes('filterEntriesByScope(allEntries'));
+  assert.ok(pipeline.includes("const NO_WIPE = requestedNoWipe || scope !== 'all' || RESUME"));
 });
 
 test('catalogue deletion happens after source/provider preflight', () => {
