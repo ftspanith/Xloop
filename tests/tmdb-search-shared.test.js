@@ -122,6 +122,34 @@ test('a short exact-title collision from a different decade is rejected even dur
   }
 });
 
+test('an explicit TMDB ID is rejected when neither its canonical nor alternate title matches', async () => {
+  const originalGet = axios.get;
+  const calls = [];
+  axios.get = async url => {
+    calls.push(url);
+    if (url.endsWith('/movie/777')) {
+      return { data: {
+        id: 777, title: 'Unrelated English Film', original_title: 'Unrelated English Film',
+        release_date: '2010-04-01', genres: [],
+      } };
+    }
+    if (url.endsWith('/movie/777/alternative_titles')) return { data: { titles: [] } };
+    if (url.endsWith('/tv/777')) return { data: {} };
+    if (url.includes('/search/')) return { data: { results: [] } };
+    throw new Error('Unexpected mocked TMDB URL: ' + url);
+  };
+
+  try {
+    const result = await searchTMDB('Robo', 2010, false, null, null, null, '777', {
+      tmdbKey: 'test-key', messageYear: 2010, yearHints: [2010],
+    });
+    assert.equal(result, null);
+    assert.ok(calls.includes('https://api.themoviedb.org/3/movie/777/alternative_titles'));
+  } finally {
+    axios.get = originalGet;
+  }
+});
+
 test('long fuzzy titles still require a strong title match and a nearby release year', async () => {
   const originalGet = axios.get;
   axios.get = async url => {
