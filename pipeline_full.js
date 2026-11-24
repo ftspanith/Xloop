@@ -684,7 +684,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         }
       }
       if (!meta.poster) {
-        const gImg = await searchGoogleImage(rep.title, rep.year, isSer);
+        const gImg = await searchGoogleImage(rep.title, isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year), isSer);
         if (gImg) {
           meta.poster = gImg;
           _emitter(`[IMG] Google image used for: ${rep.title}`);
