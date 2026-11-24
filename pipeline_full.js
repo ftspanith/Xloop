@@ -879,7 +879,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
 
         if (matchedIdx >= 0) {
           const matchedDownload = dbRec.downloads[matchedIdx] || {};
-          for (const field of ['source', 'container', 'bitDepth', 'audioChannels', 'codec', 'hdr', 'audio', 'filename', 'isIMAX', 'aspectRatio', 'languageType', 'languageCount', 'releaseType', 'sourceDate']) {
+          for (const field of ['source', 'container', 'bitDepth', 'audioChannels', 'codec', 'hdr', 'audio', 'filename', 'fileYear', 'isIMAX', 'aspectRatio', 'languageType', 'languageCount', 'releaseType', 'sourceDate']) {
             if (!matchedDownload[field] && newDl[field]) {
               metaSet[`downloads.${matchedIdx}.${field}`] = newDl[field];
             }
@@ -1232,8 +1232,8 @@ async function main(opts = {}) {
                   if (!link.url) continue;
                   extracted.push({
                     url: link.url, host: link.host || classifyUrl(link.url),
-                    title: parsed.title, year: parsed.year,
-                    quality: dl.quality, size: dl.size, language: dl.language,
+                    title: parsed.title, year: parsed.year, messageYear: parsed.messageYear || parsed.year,
+                    quality: dl.quality, size: dl.size, language: dl.language, fileYear: dl.fileYear || null,
                     season: dl.season ?? null, episode: dl.episode ?? null,
                     type: parsed.type, contentType: parsed.contentType, isSeries: !!parsed.isSeries,
                     rawTitle: parsed.rawTitle || parsed.title, filename: dl.filename,
