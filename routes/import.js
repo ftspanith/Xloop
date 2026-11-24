@@ -951,7 +951,6 @@ router.post('/manual-add', auth, async (req, res) => {
         added++;
       }
       existing.seasonYears = seasonYearsFromDownloads;
-      if (!existing.originalLanguage && meta.originalLanguage) existing.originalLanguage = meta.originalLanguage;
       if (finalType === 'anime') existing.type = 'anime';
       if (!existing.tmdbId && meta.tmdbId) existing.tmdbId = String(meta.tmdbId);
       if (!existing.imdbId && meta.imdbId) existing.imdbId = meta.imdbId;
