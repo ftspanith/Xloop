@@ -10,6 +10,7 @@ const {
   detectCodec,
   detectHDR,
   extractAudio,
+  extractYear,
 } = require('../utils/parser');
 const { searchTMDB: _sharedSearchTMDB, searchOMDB: _sharedSearchOMDB } = require('../utils/tmdbSearch');
 
@@ -171,15 +172,19 @@ const TMDB_LANG_MAP = { te: 'Telugu', ta: 'Tamil', hi: 'Hindi', ml: 'Malayalam',
 async function fetchTMDB(parsed, tmdbKey) {
   // Delegate to the shared multi-algorithm TMDB search engine.
   // Passes parsed.imdbId + parsed.tmdbIdHint for fast-path ID resolution.
+  const yearHints = [...new Set([
+    parsed.messageYear, parsed.year, ...(parsed.yearCandidates || []),
+    ...(parsed.downloads || []).map(file => file.fileYear || extractYear([file.filename])),
+  ].map(Number).filter(value => Number.isInteger(value) && value >= 1900 && value <= 2099))];
   const result = await _sharedSearchTMDB(
     parsed.rawTitle || parsed.title,
-    parsed.year    || null,
+    parsed.messageYear || parsed.year || null,
     parsed.isSeries || false,
     parsed.season  || null,
-    null,           // msgDate — not available here, year hint is sufficient
+    null,
     parsed.imdbId  || null,
     parsed.tmdbIdHint || null,
-    { tmdbKey }
+    { tmdbKey, yearHints, messageYear: parsed.messageYear || parsed.year || null }
   );
   if (!result) return null;
   // Map shared result → import.js expected shape (adds confidenceReasons + isAnime)
@@ -199,7 +204,8 @@ async function fetchTMDB(parsed, tmdbKey) {
 async function fetchOMDB(parsed, omdbKey) {
   // Use the same shared OMDb/IMDb fallback as the database importer.
   const shared = await _sharedSearchOMDB(
-    parsed.rawTitle || parsed.title, parsed.year || null, !!parsed.isSeries, omdbKey
+    parsed.rawTitle || parsed.title, parsed.messageYear || parsed.year || null, !!parsed.isSeries, omdbKey,
+    { yearHints: parsed.yearCandidates || [parsed.messageYear, parsed.year].filter(Boolean) }
   );
   if (shared) return shared;
 
@@ -221,8 +227,10 @@ async function fetchOMDB(parsed, omdbKey) {
       d = res2.data;
     }
 
-    const omdbYear = d.Year ? parseInt(d.Year, 10) : parsed.year;
-    if (parsed.year && omdbYear && Math.abs(parsed.year - omdbYear) > 2) return null;
+    const omdbYear = d.Year ? parseInt(d.Year, 10) : (parsed.messageYear || parsed.year);
+    const yearHints = [...new Set([parsed.messageYear, parsed.year, ...(parsed.yearCandidates || [])].filter(Boolean).map(Number))];
+    const yearDiff = omdbYear && yearHints.length ? Math.min(...yearHints.map(value => Math.abs(value - omdbYear))) : null;
+    if (yearDiff != null && yearDiff > (parsed.isSeries ? 5 : 3)) return null;
     return {
       imdbId: d.imdbID || '',
       title: d.Title || parsed.title,
@@ -259,7 +267,7 @@ async function fetchIMDB(parsed) {
       .map(item => ({
         imdbId:   item.id,
         title:    item.l,
-        year:     item.y || null,
+        year:     parseInt(item.y, 10) || null,
         poster:   item.i?.imageUrl ? item.i.imageUrl.replace(/\._V1_.*$/, '._V1_SX1000.jpg') : '',
         type:     item.qid === 'movie' ? 'movie' : 'series',
       }));
@@ -267,9 +275,17 @@ async function fetchIMDB(parsed) {
     if (results.length === 0) return null;
 
     let best = results[0];
-    if (parsed.year) {
-      const yearMatches = results.filter(r => r.year && Math.abs(r.year - parsed.year) <= 2);
-      if (yearMatches.length > 0) best = yearMatches[0];
+    const yearHints = [...new Set([parsed.messageYear, parsed.year, ...(parsed.yearCandidates || [])]
+      .filter(Boolean).map(Number))];
+    if (yearHints.length) {
+      const yearMatches = results
+        .map(result => ({
+          result,
+          diff: result.year ? Math.min(...yearHints.map(value => Math.abs(value - result.year))) : Infinity,
+        }))
+        .filter(entry => entry.diff <= (parsed.isSeries ? 5 : 2))
+        .sort((a, b) => a.diff - b.diff);
+      if (yearMatches.length) best = yearMatches[0].result;
     }
     
     if (!best.poster) return null; // We only care if it has a poster
@@ -515,12 +531,20 @@ router.post('/bulk', auth, async (req, res) => {
     const finalType  = resolveType(parsed, meta);
 
     // ── Smart Deduplication ───────────────────────────────
-    let existing = tmdbId ? await Movie.findOne({ tmdbId }) : null;
+    let existing = tmdbId ? await Movie.findOne({ tmdbId, type: finalType === 'anime' ? 'anime' : finalType === 'series' ? { $in: ['series', 'anime'] } : 'movie' }) : null;
+    const expectedTypes = finalType === 'anime' ? { $in: ['series', 'anime'] }
+      : finalType === 'series' ? { $in: ['series', 'anime'] } : 'movie';
     if (!existing) {
-      existing = await Movie.findOne({ title: { $regex: `^${finalTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } });
+      existing = await Movie.findOne({
+        title: { $regex: `^${finalTitle.replace(/[.*+?^$\{\}()|[\]\\\\]/g, '\\\\$&')}$`, $options: 'i' },
+        type: expectedTypes,
+      });
     }
     if (!existing && finalTitle !== title) {
-      existing = await Movie.findOne({ title: { $regex: `^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } });
+      existing = await Movie.findOne({
+        title: { $regex: `^${title.replace(/[.*+?^$\{\}()|[\]\\\\]/g, '\\\\$&')}$`, $options: 'i' },
+        type: expectedTypes,
+      });
     }
 
     if (existing) {
@@ -578,6 +602,17 @@ router.post('/bulk', auth, async (req, res) => {
       }
       if (updated) {
         // Keep movie-level aggregate fields in sync with newly added variants.
+        for (const file of downloads) {
+          if (file.season && file.fileYear && !existing.seasonYears?.[`s${file.season}`]) {
+            existing.set(`seasonYears.s${file.season}`, Number(file.fileYear));
+          }
+        }
+        if (meta.season && meta.seasonYear) {
+          existing.set(`seasonYears.s${meta.season}`, Number(meta.seasonYear));
+        }
+        if (meta.tmdbId && meta.releaseDate && String(existing.tmdbId || '') === String(meta.tmdbId) && meta.year) {
+          existing.year = meta.year;
+        }
         const { recomputeAggregates } = require('../pipeline_full');
         recomputeAggregates(existing);
         await existing.save();
