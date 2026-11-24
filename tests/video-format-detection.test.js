@@ -97,6 +97,7 @@ for (const [filename, expected] of audioCases) {
 }
 assert.equal(detectAudioChannels('Film.TrueHD.Atmos.7.1.4.mkv'), '7.1.4');
 assert.equal(detectAudioChannels('Film.EAC3.5.1.2.mkv'), '5.1.2');
+assert.equal(extractAudio('Film.E-AC-3.5.1.mkv'), 'EAC3');
 assert.equal(detectAudioChannels('Film.Stereo.AAC.mkv'), '2.0');
 
 assert.equal(normalizeGdflixUrl('https://new5.gdflix.io/file/abc'), 'https://gdflix.io/file/abc');
