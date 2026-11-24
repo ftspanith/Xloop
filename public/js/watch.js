@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             <div class="wp-meta-inline">
               ${data.year     ? `<span class="wp-mi">${data.year}</span>` : ''}
-              ${data.duration ? `<span class="wp-mi">${data.duration}</span>` : ''}
+              ${(data.runtimeMinutes || data.duration) ? `<span class="wp-mi">${data.runtimeMinutes ? data.runtimeMinutes + ' min' : data.duration}</span>` : ''}
               ${starRating    ? `<span class="wp-mi wp-mi-star">${starRating}</span>` : ''}
               ${displayQuality? `<span class="wp-mi wp-mi-badge">${displayQuality}</span>` : ''}
             </div>
