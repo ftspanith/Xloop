@@ -31,7 +31,8 @@ const { CookieJar } = require('tough-cookie');
 const { spawn }     = require('child_process');
 const Movie         = require('./models/Movie');
 const {
-  cleanTitleForApi, detectHost, detectCodec, detectHDR, extractAudio,
+  cleanTitleForApi, fallbackTitleFromText, isJunkTitle, normalizeProviderUrl,
+  detectHost, detectCodec, detectHDR, extractAudio,
   detectBitDepth, detectAudioChannels, detectSource, detectContainer,
   normalizeQuality, extractSize, detectAllLanguages, extractSeasonEpisode,
   classifyLanguages, extractMediaMetadata,
@@ -74,31 +75,14 @@ const sep  = ()  => _emitter('─'.repeat(64));
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ── Canonical URL normalizer ──────────────────────────────────────────────────
-// All GDFlix mirrors → gdflix.dev  |  All HubCloud mirrors → hubcloud.one
-// Preserves the full path + query string so the link still works.
-const GDFLIX_RE    = /^https?:\/\/gdflix\.(dev|to|one|link|net|dad|cfd|xyz)/i;
-const GDLINK_RE    = /^https?:\/\/gdlink\.dev/i;
-const HUBCLOUD_RE  = /^https?:\/\/hubcloud\.(foo|one|art|cx|lol|bz|club|in|to|work|zone|dev|me|best)/i;
-const DRIVEHUB_RE  = /^https?:\/\/drivehub\.(dev|to|in|online)/i;
-
+// Uses the same provider-family rules as Telegram extraction, so newly rotated
+// TLDs and mirror subdomains deduplicate consistently during import.
 function normalizeUrl(url) {
-  if (!url) return url;
-  try {
-    const parsed = new URL(url);
-    // GDFlix family → gdflix.dev
-    if (GDFLIX_RE.test(url) || GDLINK_RE.test(url)) {
-      return `https://gdflix.dev${parsed.pathname}${parsed.search}`;
-    }
-    // HubCloud / DriveHub family → hubcloud.one
-    if (HUBCLOUD_RE.test(url) || DRIVEHUB_RE.test(url)) {
-      return `https://hubcloud.one${parsed.pathname}${parsed.search}`;
-    }
-  } catch (_) {}
-  return url;
+  return normalizeProviderUrl(url);
 }
 
 // Only accept these as valid bypassed direct URLs (reliable cloud hosts only)
-const DIRECT_HOST_RE = /gdflix|hubcloud|tmbcloud|1fichier|filemoon|streamtape|pixeldrain|krakenfiles|buzzheavier|doodstream|mixdrop/i;
+const DIRECT_HOST_RE = /gdflix|gdlink|gdtot|extralink|neolinks|gtlinks|hubcloud|drivehub|tmbcloud|1fichier|filemoon|streamtape|pixeldrain|krakenfiles|buzzheavier|doodstream|mixdrop/i;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BYPASS ENGINE  (ported from bypass_bot.js — bypassSofturl)
@@ -540,7 +524,23 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       _emitter(`[VARIANT] "${rep.title}": ${variantAnalysis.nearDuplicates.length} possible near-duplicate group(s) flagged for review; no variants removed.`);
     }
 
-    let cleanTitle = cleanTitleForApi(rep.title || '', rep.year);
+    const titleSources = [
+      rep.title,
+      rep.rawTitle,
+      ...group.items.map(item => item.filename).filter(Boolean),
+    ];
+    let cleanTitle = '';
+    for (const sourceTitle of titleSources) {
+      if (!sourceTitle) continue;
+      const direct = cleanTitleForApi(sourceTitle, rep.year);
+      const candidate = direct && !isJunkTitle(direct)
+        ? direct
+        : fallbackTitleFromText(sourceTitle, rep.year);
+      if (candidate && !isJunkTitle(candidate)) {
+        cleanTitle = candidate;
+        break;
+      }
+    }
 
     const esc = (cleanTitle || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     let existing = null;
