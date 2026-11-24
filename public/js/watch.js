@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         <!-- ── Right: floating info panel ── -->
         <div class="wp-side-panel">
-          ${[(data.duration || data.runtimeMinutes) ? `<div class="wp-side-row"><span class="wp-side-label">Runtime</span><span class="wp-side-val">${data.duration || (data.runtimeMinutes + ' min')}</span></div>` : '',
+          ${[(data.runtimeMinutes || data.duration) ? `<div class="wp-side-row"><span class="wp-side-label">Runtime</span><span class="wp-side-val">${data.runtimeMinutes ? data.runtimeMinutes + ' min' : data.duration}</span></div>` : '',
              data.language ? `<div class="wp-side-row"><span class="wp-side-label">Language</span><span class="wp-side-val">${data.language.split(',').map(language => language.trim()).join(', ')}</span></div>` : '',
              data.year ? `<div class="wp-side-row"><span class="wp-side-label">Release Year</span><span class="wp-side-val">${data.year}</span></div>` : '',
              displayQuality ? `<div class="wp-side-row"><span class="wp-side-label">Quality</span><span class="wp-side-val">${displayQuality}</span></div>` : '',
