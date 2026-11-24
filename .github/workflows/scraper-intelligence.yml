@@ -4,6 +4,9 @@ on:
     paths:
       - 'utils/parser.js'
       - 'tests/tmdb-search-shared.test.js'
+      - 'tests/series-year-grouping.test.js'
+      - 'utils/seriesGrouping.js'
+      - 'routes/series.js'
       - 'tests/telegram-ingestion-metadata.test.js'
       - 'tests/telegram-ingestion.test.js'
       - 'utils/telegram-ingestion.js'
