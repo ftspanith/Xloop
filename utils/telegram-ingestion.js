@@ -1,41 +1,20 @@
 'use strict';
-const { parseMessageBlock, classifyUrl, isJunkTitle, normalizeGdflixUrl } = require('./parser');
+const {
+  parseMessageBlock, classifyUrl, isJunkTitle, normalizeGdflixUrl,
+  getProviderFamily, fallbackTitleFromText,
+} = require('./parser');
 
 const HOST_PRIORITY = ['GDFlix', 'HubCloud', 'TMBCloud'];
 
-// Only approved Telegram download providers are retained for extraction/upload.
-// Website links, generic direct-file URLs, shorteners and other hosts are rejected.
-const ALLOWED_PROVIDER_DOMAINS = {
-  GDFlix: [
-    'gdflix.dev', 'gdflix.to', 'gdflix.one', 'gdflix.link',
-    'gdflix.net', 'gdflix.dad', 'gdflix.cfd', 'gdflix.io',
-    'gdlink.dev', 'gdtot.dad', 'gdtot.one', 'gdtot.sbs',
-    'extralink.cfd', 'neolinks.sbs', 'gtlinks.me',
-  ],
-  HubCloud: [
-    'hubcloud.foo', 'hubcloud.one', 'hubcloud.art', 'hubcloud.cx',
-    'hubcloud.lol', 'hubcloud.bz', 'hubcloud.club', 'hubcloud.in',
-    'hubcloud.to', 'hubcloud.work', 'hubcloud.zone', 'hubcloud.dev',
-    'hubcloud.me', 'hubcloud.best',
-    'drivehub.dev', 'drivehub.to', 'drivehub.in', 'drivehub.online',
-  ],
-  TMBCloud: ['tmbcloud.dev', 'tmbcloud.online', 'tmbcloud.lol'],
-};
-const ALLOWED_PROVIDER_HOSTS = new Set(Object.keys(ALLOWED_PROVIDER_DOMAINS));
-
+// Only the approved provider families are retained. The family matcher is
+// shared with parser.js so a new mirror TLD is not accepted in one stage and
+// rejected by another stage.
 function isAllowedTelegramDownloadUrl(value) {
   let parsed;
   try { parsed = new URL(String(value || '').trim()); }
   catch (_) { return false; }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
-
-  const category = classifyUrl(parsed.toString());
-  if (!ALLOWED_PROVIDER_HOSTS.has(category)) return false;
-
-  const hostname = parsed.hostname.toLowerCase().replace(/^www\./, '');
-  return ALLOWED_PROVIDER_DOMAINS[category].some((domain) =>
-    hostname === domain || hostname.endsWith('.' + domain)
-  );
+  return !!getProviderFamily(parsed.hostname);
 }
 const CDN_RE = [
   /\.(m3u8|ts|m4s)(\?|$)/i, /\/(image|img|thumbnail|poster|banner|cover)\//i,
@@ -110,6 +89,7 @@ function extractTelegramLinks(inputMessages, account = '1') {
   let skipped = 0;
   let parsedMessages = 0;
   let rejectedLinks = 0;
+  let skippedUntitledLinks = 0;
 
   for (const message of messages) {
     const rawText = telegramMessageText(message);
@@ -117,8 +97,10 @@ function extractTelegramLinks(inputMessages, account = '1') {
     let parsed;
     try { parsed = parseMessageBlock(rawText, message.id, message.date || null); }
     catch (_) { skipped++; continue; }
-    if (!parsed || !Array.isArray(parsed.downloads) || !parsed.downloads.length ||
-        !parsed.title || isJunkTitle(parsed.title)) { skipped++; continue; }
+    if (!parsed || !Array.isArray(parsed.downloads) || !parsed.downloads.length) {
+      skipped++;
+      continue;
+    }
     parsedMessages++;
     const singleFileRelease = parsed.downloads.length === 1 ? parsed.releaseType : '';
 
@@ -127,14 +109,31 @@ function extractTelegramLinks(inputMessages, account = '1') {
       const language = download.language || parsed.language || '';
       for (const link of (download.links || [])) {
         const url = normalizeTelegramUrl(link && link.url);
-        if (!url || isJunkTelegramUrl(url) || seenUrls.has(url)) continue;
+        if (!url || isJunkTelegramUrl(url)) continue;
+
+        // A malformed Telegram heading must not discard an otherwise valid file.
+        // Try the parser title, its raw heading and this download's filename.
+        const titleCandidates = [parsed.title, parsed.rawTitle, download.filename];
+        const entryTitle = titleCandidates
+          .map(value => fallbackTitleFromText(value, parsed.year))
+          .find(Boolean) || '';
+        if (!entryTitle) {
+          skippedUntitledLinks++;
+          continue;
+        }
+        if (seenUrls.has(url)) continue;
+
         const host = classifyUrl(url);
         if (!isAllowedTelegramDownloadUrl(url)) {
           rejectedLinks++;
           continue;
         }
         const entry = {
-          messageId: parsed.messageId, title: parsed.title, rawTitle: parsed.rawTitle || parsed.title,
+          messageId: parsed.messageId,
+          title: entryTitle,
+          rawTitle: fallbackTitleFromText(parsed.rawTitle, parsed.year)
+            ? parsed.rawTitle
+            : (download.filename || entryTitle),
           year: parsed.year == null ? null : parsed.year,
           type: parsed.type || (parsed.contentType === 'anime' ? 'anime' : parsed.isSeries ? 'series' : 'movie'),
           contentType: parsed.contentType || '', isSeries: !!parsed.isSeries,
@@ -155,7 +154,8 @@ function extractTelegramLinks(inputMessages, account = '1') {
           certification: parsed.certification || '',
           host, url, bypassedUrl: null,
           sourceAccount: String(message.sourceAccount || account || '1'),
-          isFast: /gdflix|hubcloud|gdlink|tmbcloud|fpgo|filebee/i.test(url),
+          isFast: ['GDFlix', 'HubCloud', 'TMBCloud'].includes(host) ||
+            /fpgo|filebee/i.test(url),
           imdbId: parsed.imdbId || null, tmdbIdHint: parsed.tmdbIdHint || null,
           date: message.date || message.date_unixtime || null,
         };
@@ -182,7 +182,8 @@ function extractTelegramLinks(inputMessages, account = '1') {
     stats: {
       rawMessages: rawMessages.length, uniqueMessages: messages.length,
       duplicateMessages: rawMessages.length - messages.length,
-      parsedMessages, skippedMessages: skipped, extractedLinks: links.length, rejectedLinks,
+      parsedMessages, skippedMessages: skipped, skippedUntitledLinks,
+      extractedLinks: links.length, rejectedLinks,
     },
   };
 }
