@@ -3,7 +3,12 @@ on:
   push:
     paths:
       - 'utils/parser.js'
+      - 'utils/telegram-ingestion.js'
+      - 'utils/tmdbSearch.js'
       - 'utils/variant-intelligence.js'
+      - 'tests/telegram-ingestion.test.js'
+      - 'tests/telegram-ingestion-metadata.test.js'
+      - 'tests/tmdb-search-shared.test.js'
       - 'utils/tmdbSearch.js'
       - 'pipeline_full.js'
       - 'tests/importer-metadata.test.js'
@@ -19,7 +24,13 @@ on:
   pull_request:
     paths:
       - 'utils/parser.js'
+      - 'utils/telegram-ingestion.js'
+      - 'utils/tmdbSearch.js'
       - 'utils/variant-intelligence.js'
+      - 'pipeline_full.js'
+      - 'tests/telegram-ingestion.test.js'
+      - 'tests/telegram-ingestion-metadata.test.js'
+      - 'tests/tmdb-search-shared.test.js'
       - 'routes/scrape.js'
       - 'models/ExtractedLink.js'
       - 'scrape_api.js'
@@ -41,3 +52,5 @@ jobs:
       - run: npm run test:scraper-intelligence
       - run: npm run test:video-formats
       - run: npm run test:importer-metadata
+      - run: npm run test:telegram-ingestion
+      - run: npm run test:metadata-search
