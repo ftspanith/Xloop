@@ -41,16 +41,16 @@ function normalizeQuality(str) {
 // ─── SIZE ────────────────────────────────────────────────────────────────────
 function extractSize(str) {
   if (!str) return '';
-  const pats = [
-    /[\/\[(\s]\s*(\d+(?:\.\d+)?\s*(?:GB|MB))\s*[\/\])]/i,  // [22.9GB], [ 22.9GB ], (22.9GB)
-    /[\u2014\u2013\-]\s*\[\s*(\d+(?:\.\d+)?\s*(?:GB|MB))\s*\]/i, // — [7.29 GB] em-dash format
-    /(\d[\d,]*(?:\.\d+)?\s*(?:GB|MB))/i,                          // bare: 22.9GB anywhere
-  ];
-  for (const re of pats) {
-    const m = str.match(re);
-    if (m) return m[1].replace(/[\s,]+/g,'').trim();
+  // Accept common file-size units, including binary labels used by Telegram posters.
+  const match = String(str).match(/(?<![A-Z0-9])(\d[\d,]*(?:\.\d+)?)\s*(TiB|TB|GiB|GB|MiB|MB|KiB|KB)\b/i);
+  if (!match) return '';
+  let amount = match[1];
+  if (amount.includes(',')) {
+    if (!amount.includes('.') && /,\d{1,2}$/.test(amount)) amount = amount.replace(',', '.');
+    else amount = amount.replace(/,/g, '');
   }
-  return '';
+  const unit = match[2].toUpperCase().replace(/IB$/, 'B');
+  return amount + unit;
 }
 
 // ─── STREAMING URL → TITLE SLUG ──────────────────────────────────────────────
@@ -75,28 +75,54 @@ function extractTitleFromStreamingUrl(url) {
   return '';
 }
 
-// Normalize every GDFlix subdomain to the canonical base domain.
-// Keep path, query, fragment and protocol unchanged.
-const PROVIDER_DOMAINS = [
-  'gdflix.dev', 'gdflix.to', 'gdflix.one', 'gdflix.link', 'gdflix.net',
-  'gdflix.dad', 'gdflix.cfd', 'gdflix.io', 'gdlink.dev',
-  'gdtot.dad', 'gdtot.one', 'gdtot.sbs', 'extralink.cfd',
-  'neolinks.sbs', 'gtlinks.me',
-  'hubcloud.foo', 'hubcloud.one', 'hubcloud.art', 'hubcloud.cx',
-  'hubcloud.lol', 'hubcloud.bz', 'hubcloud.club', 'hubcloud.in',
-  'hubcloud.to', 'hubcloud.work', 'hubcloud.zone', 'hubcloud.dev',
-  'hubcloud.me', 'hubcloud.best',
-  'drivehub.dev', 'drivehub.to', 'drivehub.in', 'drivehub.online',
-  'tmbcloud.dev', 'tmbcloud.online', 'tmbcloud.lol',
-];
+// Provider families are recognized by their final provider/TLD labels, e.g.
+// new5.gdflix.io and mirrors.gdflix.xyz. Exact suffix matching avoids lookalikes.
+const PROVIDER_FAMILY_ROOTS = {
+  gdflix: 'GDFlix', gdlink: 'GDFlix', gdtot: 'GDFlix',
+  extralink: 'GDFlix', neolinks: 'GDFlix', gtlinks: 'GDFlix',
+  hubcloud: 'HubCloud', drivehub: 'HubCloud', tmbcloud: 'TMBCloud',
+};
 
-// Normalize provider subdomains without changing unrelated hosts or TLDs.
+function providerRootFromHostname(hostname) {
+  const host = String(hostname || '').trim().toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
+  const labels = host.split('.').filter(Boolean);
+  if (labels.length < 2) return '';
+  const family = labels[labels.length - 2];
+  const tld = labels[labels.length - 1];
+  if (!PROVIDER_FAMILY_ROOTS[family] || !/^(?:[a-z]{2,63}|xn--[a-z0-9-]{2,})$/.test(tld)) return '';
+  return family + '.' + tld;
+}
+
+function getProviderFamily(value) {
+  let hostname = String(value || '').trim();
+  try { hostname = new URL(/^https?:\/\//i.test(hostname) ? hostname : 'https://' + hostname).hostname; }
+  catch (_) { return ''; }
+  const root = providerRootFromHostname(hostname);
+  return root ? PROVIDER_FAMILY_ROOTS[root.split('.')[0]] : '';
+}
+
+// Drop provider mirror subdomains but retain the provider's actual TLD.
 function normalizeGdflixUrl(value) {
   try {
     const parsed = new URL(value);
-    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-    const canonical = PROVIDER_DOMAINS.find(domain => host === domain || host.endsWith('.' + domain));
-    if (canonical) parsed.hostname = canonical;
+    const root = providerRootFromHostname(parsed.hostname);
+    if (root) parsed.hostname = root;
+    return parsed.toString();
+  } catch (_) {
+    return value;
+  }
+}
+
+// The importer uses stable canonical hosts for deduplication across mirrors.
+function normalizeProviderUrl(value) {
+  try {
+    const parsed = new URL(value);
+    const family = getProviderFamily(parsed.hostname);
+    if (family === 'GDFlix') parsed.hostname = 'gdflix.dev';
+    else if (family === 'HubCloud') parsed.hostname = 'hubcloud.one';
+    else if (family === 'TMBCloud') parsed.hostname = 'tmbcloud.dev';
+    else return value;
+    parsed.protocol = 'https:';
     return parsed.toString();
   } catch (_) {
     return value;
@@ -158,8 +184,8 @@ function classifyUrl(url) {
   if (/mediainfo|media\.info|mfinfo/i.test(url)) return 'Ignore';
   if (PASTE_RE.some(r=>r.test(url)))     return 'Paste';
   if (SHORTLINK_RE.some(r=>r.test(url))) return 'Shortlink';
-  if (/gdflix\.|gdlink\.dev|gdtot\./i.test(url))   return 'GDFlix';
-  if (/hubcloud\.|drivehub\./i.test(url))           return 'HubCloud';
+  const providerFamily = getProviderFamily(url);
+  if (providerFamily) return providerFamily;
   if (/filepress\.|fpgo\.xyz/i.test(url))           return 'FilePress';
   if (/tmbcloud\./i.test(url))                      return 'TMBCloud';
   if (/drivenext\./i.test(url))                     return 'DriveNext';
@@ -833,6 +859,38 @@ function isJunkTitle(title) {
   return JUNK_PATTERNS.some(re => re.test(c));
 }
 
+// Conservative fallback for filename/heading title variants. Strip only known
+// technical suffixes; preserve title words instead of turning a failed TMDB query
+// into a reason to drop the download itself.
+function fallbackTitleFromText(value, yearHint = null) {
+  const original = stripEmojis(String(value || '')).replace(/https?:\/\/\S+/gi, ' ').trim();
+  if (!original) return '';
+  let raw = original
+    .replace(/\.(mkv|mp4|avi|mov|ts|m2ts|zip|rar)$/i, '')
+    .replace(/[._]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const technical = /\b(?:4320p|2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4k|uhd|web[ ._-]*dl|webrip|bluray|bdrip|hdrip|remux|hevc|x265|x264|av1|vp9|avc|hdr10?\+?|dolby[ ._-]*vision|repack|re[ ._-]*rip|rerip|proper|ddp\d?(?:\.\d)?|eac3|ac3|aac|dts(?:[ ._-]*hd)?|truehd|flac|10bit|8bit)\b/i;
+  const match = technical.exec(raw);
+  if (match && match.index > 1) raw = raw.slice(0, match.index).trim();
+
+  raw = raw
+    .replace(/\b(?:19\d{2}|20\d{2})\b\s*$/i, '')
+    .replace(/[\[({\s._-]+$/g, '')
+    .replace(/^[\s._-]+/g, '')
+    .trim();
+
+  const cleaned = cleanTitleForApi(raw, yearHint);
+  const plausible = candidate => !!candidate && (
+    !isJunkTitle(candidate) ||
+    (yearHint && /^\d{4}$/.test(candidate) && Number(candidate) !== Number(yearHint))
+  );
+  if (plausible(cleaned)) return cleaned;
+  if (raw.length >= 2 && plausible(raw)) return raw;
+  return '';
+}
+
 
 // ─── AUDIO TRACKS ────────────────────────────────────────────────────────────
 function extractAudioTracks(text) {
@@ -989,6 +1047,35 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 
   // ── Helper: extract size from a 'Size :' or 'File Size:' line ─────────────
   const extractSizeFromMeta = l => extractSize(l || '');
+  const SIZE_ONLY_RE = /^\s*\[?\s*\d[\d,]*(?:\.\d+)?\s*(?:TiB|TB|GiB|GB|MiB|MB|KiB|KB)\s*\]?\s*$/i;
+  const SIZE_META_RE = /^(?:File\s*)?Size\s*[:=\-]/i;
+  const findNearbySize = (fileIndex, urlIndex) => {
+    const forwardStart = fileIndex >= 0 ? fileIndex + 1 : Math.max(0, urlIndex - 8);
+    const forwardEnd = fileIndex >= urlIndex
+      ? Math.min(lines.length, fileIndex + 7)
+      : urlIndex;
+    for (let k = forwardStart; k < forwardEnd; k++) {
+      const candidate = String(lines[k] || '').trim();
+      if (SIZE_META_RE.test(candidate) || SIZE_ONLY_RE.test(candidate)) {
+        const found = extractSizeFromMeta(candidate);
+        if (found) return found;
+      }
+      if (isFileDesc(candidate)) break;
+      if (!isMetadataLine(candidate) && !isPromo(candidate) && !isLinkLabel(candidate) && !isUrl(candidate)) break;
+    }
+    const backStart = fileIndex >= 0 ? fileIndex - 1 : urlIndex - 1;
+    const backLimit = Math.max(0, backStart - 6);
+    for (let k = backStart; k >= backLimit; k--) {
+      const candidate = String(lines[k] || '').trim();
+      if (SIZE_META_RE.test(candidate) || SIZE_ONLY_RE.test(candidate)) {
+        const found = extractSizeFromMeta(candidate);
+        if (found) return found;
+      }
+      if (isFileDesc(candidate) || isUrl(candidate)) break;
+      if (!isMetadataLine(candidate) && !isPromo(candidate) && !isLinkLabel(candidate)) break;
+    }
+    return '';
+  };
 
   // ── Build URL+filename pairs ──────────────────────────────────────────────
   // Each 'pair' = { rawFilename, size, url, urlType }
@@ -1009,7 +1096,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     if (cls==='Ignore') continue;
 
     // Walk backwards past consecutive URLs / link labels to find the owning filename
-    let fc=null, fsz='';
+    let fc=null, fsz='', filenameLineIndex=-1;
     let j=i-1;
     // Skip consecutive URLs / TgLinks / named link labels going backwards
     while(j>=0&&(isUrl(lines[j])||isTgLink(lines[j])||isYtLink(lines[j])||isLinkLabel(lines[j]))) j--;
@@ -1026,12 +1113,16 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     // Grab file descriptor
     if (j>=0&&isFileDesc(lines[j])) {
       fc=lines[j];
-      if (/^(\d{3,4}p|4k|uhd)/i.test(fc)&&j>0&&isFileDesc(lines[j-1])) fc=lines[j-1]+' '+fc;
+      filenameLineIndex=j;
+      if (/^(\d{3,4}p|4k|uhd)/i.test(fc)&&j>0&&isFileDesc(lines[j-1])) {
+        fc=lines[j-1]+' '+fc;
+        filenameLineIndex=j-1;
+      }
       if (!fsz) fsz=extractSize(fc);
     }
     // Pattern F: size on the line IMMEDIATELY after the filename (filename.mkv \n [14.03GB] \n URL)
     if (fc && !fsz) {
-      const fnLineIdx = lines.indexOf(fc);
+      const fnLineIdx = filenameLineIndex >= 0 ? filenameLineIndex : lines.indexOf(fc);
       if (fnLineIdx >= 0 && fnLineIdx + 1 < i) {
         const lineAfterFn = lines[fnLineIdx + 1];
         if (/^\[?\s*\d+(?:\.\d+)?\s*(?:GB|MB)\s*\]?\s*$/i.test(lineAfterFn)) {
@@ -1039,6 +1130,10 @@ function parseMessageBlock(rawText, messageId, msgDate) {
         }
       }
     }
+    // Search the small metadata window around this file, even when size is separated
+    // from the URL by quality/audio/provider labels.
+    if (!fsz) fsz = findNearbySize(filenameLineIndex, i);
+
     // Reject junk as filenames
     if (fc&&/\b(click\s+here|telegram\s+files?|drive\s+links?|join|credits?)\b/i.test(fc)) fc=null;
 
@@ -1052,8 +1147,11 @@ function parseMessageBlock(rawText, messageId, msgDate) {
       while (fwdIdx < lines.length && (isUrl(lines[fwdIdx])||isLinkLabel(lines[fwdIdx]))) fwdIdx++;
       if (fwdIdx < lines.length && isFileDesc(lines[fwdIdx])) {
         const fwdFc = lines[fwdIdx];
+        filenameLineIndex = fwdIdx;
         pairs[pairs.length - 1].rawFilename = fwdFc;
-        if (!pairs[pairs.length - 1].size) pairs[pairs.length - 1].size = extractSize(fwdFc);
+        if (!pairs[pairs.length - 1].size) {
+          pairs[pairs.length - 1].size = extractSize(fwdFc) || findNearbySize(fwdIdx, i);
+        }
       }
     }
     while(k<lines.length&&isUrl(lines[k])&&!isTgLink(lines[k])&&!isYtLink(lines[k])) {
@@ -1124,6 +1222,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   //   Everything BEFORE the first quality/resolution/codec/platform tag = the title.
   // ────────────────────────────────────────────────────────────────
   let cleanedTitle = masterTitle;
+  let resolvedRawTitle = masterTitle;
 
   // Step 1: Split at first tech token
   if (/[._]/.test(cleanedTitle)) {
@@ -1239,6 +1338,19 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   if ((!cleanedTitle || cleanedTitle.length < 2) && year) {
     const _slM = (masterTitle || '').trim().match(/^([A-Z])(?:\s+\(|\s+\[|\.|\s+\d{4})/);
     if (_slM) { cleanedTitle = _slM[1]; _usedNumericFallback = true; }
+  }
+  if (!_usedNumericFallback && (!cleanedTitle || cleanedTitle.length < 1 || isJunkTitle(cleanedTitle))) {
+    const fallbackSources = [masterTitle, firstFn, ...lines.filter(line =>
+      line && !isUrl(line) && !isMetadataLine(line) && !isPromo(line) && !isLinkLabel(line)
+    )];
+    for (const source of fallbackSources) {
+      const candidate = fallbackTitleFromText(source, year);
+      if (candidate) {
+        cleanedTitle = candidate;
+        if (source === firstFn) resolvedRawTitle = firstFn;
+        break;
+      }
+    }
   }
   if (!_usedNumericFallback && (!cleanedTitle || cleanedTitle.length < 1 || isJunkTitle(cleanedTitle))) {
     return null;
@@ -1369,7 +1481,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 
   const mediaMetadata = extractMediaMetadata(fullText);
   return {
-    title:cleanedTitle,rawTitle:masterTitle,year,language,languages:allLanguages,
+    title:cleanedTitle,rawTitle:resolvedRawTitle,year,language,languages:allLanguages,
     languageType:languageInfo.languageType, languageCount:languageInfo.languageCount,
     quality:bestQuality,contentType,isSeries,season,episode,downloads,messageId,
     date:msgDate||null,imdbId,tmdbIdHint,_isBatchList,
@@ -1386,7 +1498,8 @@ module.exports = {
   extractSize,toMB,detectHost,detectLanguage,detectAllLanguages,detectContentType,
   extractSeasonEpisode,detectCodec,detectContainer,detectHDR,detectBitDepth,detectAudioChannels,extractAudio,detectSource,isJunkTitle,isMetadataLine,
   normalizeLanguageList,classifyLanguages,detectReleaseMetadata,extractAspectRatio,extractRuntime,extractCertification,extractMediaMetadata,
-  extractTitleFromStreamingUrl, normalizeGdflixUrl,
+  extractTitleFromStreamingUrl, normalizeGdflixUrl, normalizeProviderUrl,
+  getProviderFamily, fallbackTitleFromText,
   parseManualInput,
 };
 
