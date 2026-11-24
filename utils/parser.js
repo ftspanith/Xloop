@@ -186,7 +186,7 @@ function isMetadataLine(line) {
   // Section headers: 'DRIVE LINKS:', 'TELEGRAM FILES:'
   if (/^(DRIVE\s+LINKS?|TELEGRAM\s+FILES?|HEVC\s*$|AVC\s*$)\s*[:#]?/i.test(s)) return true;
   // Runtime, aspect ratio and CBFC certification metadata lines
-  if (/^(?:Run\s*time|Runtime|Duration|Length|Aspect\s*Ratio|Screen\s*Ratio|AR|CBFC|Censor(?:ship)?|Certificate|Certification)\s*[:=]/i.test(s)) return true;
+  if (/^(?:Run\s*time|Runtime|Duration|Length|Aspect\s*Ratio|Screen\s*Ratio|AR|CBFC(?:\s+Rating)?|Censor(?:ship)?|Certificate|Certification)\s*[:=]/i.test(s)) return true;
   // Size / File Size lines
   if (/^(?:File\s*)?Size\s*[:].*/i.test(s) && /\d/.test(s)) return true;
   // Quality metadata: 'Quality: 2160p DV HDR'
@@ -355,7 +355,7 @@ function extractRuntime(text) {
 
 function extractCertification(text) {
   const value = String(text || '');
-  const match = value.match(/(?:CBFC|CENSOR(?:SHIP)?|CERT(?:IFICATE|IFICATION)?|CERT\.)\s*[:=\-]?\s*(U\s*[\/.-]?\s*A|U\.?A\.?|U|A|S)(?:\s*[-( ]?\s*(7|13|16)\s*\+?\)?)?/i);
+  const match = value.match(/(?:CBFC(?:\s+Rating)?|CENSOR(?:SHIP)?|CERT(?:IFICATE|IFICATION)?|CERT\.)\s*[:=\-]?\s*(U\s*[\/.-]?\s*A|U\.?A\.?|U|A|S)(?:\s*[-( ]?\s*(7|13|16)\s*\+?\)?)?/i);
   if (!match) return null;
   const base = /^U\s*[\/.-]?\s*A$/i.test(match[1]) || /^U\.?A\.?$/i.test(match[1])
     ? 'U/A' : match[1].toUpperCase();
