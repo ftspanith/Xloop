@@ -144,6 +144,7 @@ function extractTelegramLinks(inputMessages, account = '1') {
           contentType: parsed.contentType || '', isSeries: !!parsed.isSeries,
           season: download.season == null ? parsed.season : download.season,
           episode: download.episode == null ? parsed.episode : download.episode,
+          fileYear: download.fileYear || null,
           language, quality: download.quality || parsed.quality || 'HD',
           size: download.size || '', filename: download.filename || '',
           codec: download.codec || '', hdr: download.hdr || '', audio: download.audio || '',
