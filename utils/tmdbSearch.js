@@ -417,7 +417,8 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       const ultraShortTitle = normalizedQuery.split(' ').length === 1 && normalizedQuery.length <= 4;
       // A known release year is a guardrail, not a small scoring preference.
       // A title hit nine years away must never outrank the correct film.
-      const yearCompatible = results.slice(0, 30).filter(r => {
+      // TMDB orders text-search hits by relevance; cap alias lookups to the top ten same-query hits.
+      const yearCompatible = results.slice(0, 10).filter(r => {
         const candidateYear = r.release_date ? parseInt(r.release_date, 10)
           : r.first_air_date ? parseInt(r.first_air_date, 10) : null;
         return !(hintYear && candidateYear && Math.abs(hintYear - candidateYear) > 1);
