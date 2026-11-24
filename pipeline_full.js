@@ -585,10 +585,37 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       (rep.season && !existing.seasonPosters?.[`s${rep.season}`]);
 
     if (cleanTitle && needsMetadata) {
-      const tmdb = await searchTMDB(
-        searchTitle || cleanTitle, rep.year, isSer, rep.season, group.msgDate,
-        rep.imdbId || null, rep.tmdbIdHint || null
-      );
+      // A Telegram heading can be slightly different from the actual release
+      // filename. Search the best heading first, then retry distinct filename
+      // candidates before giving up on TMDB metadata for this title.
+      const tmdbSearchCandidates = [];
+      const seenTmdbSearchTitles = new Set();
+      for (const candidate of [
+        searchTitle, rep.title, rep.rawTitle,
+        ...group.items.map(item => item && item.filename),
+      ]) {
+        const value = String(candidate || '').trim();
+        const normalized = cleanTitleForApi(value, rep.year).toLowerCase();
+        if (!value || normalized.length < 2 || isJunkTitle(normalized) ||
+            isGenericTitleCandidate(normalized) || seenTmdbSearchTitles.has(normalized)) continue;
+        seenTmdbSearchTitles.add(normalized);
+        tmdbSearchCandidates.push(value);
+      }
+
+      let tmdb = null;
+      for (let candidateIndex = 0; candidateIndex < tmdbSearchCandidates.length; candidateIndex++) {
+        const candidate = tmdbSearchCandidates[candidateIndex];
+        tmdb = await searchTMDB(
+          candidate, rep.year, isSer, rep.season, group.msgDate,
+          rep.imdbId || null, rep.tmdbIdHint || null
+        );
+        if (tmdb) {
+          if (candidateIndex > 0) {
+            _emitter(`[TMDB] Filename/title fallback matched: "${candidate}" → ${tmdb.title}`);
+          }
+          break;
+        }
+      }
       if (tmdb) {
         // Keep existing catalogue values; fill missing fields from the shared
         // 14-algorithm TMDB matcher (including direct IMDb/TMDB-ID matches).
@@ -600,8 +627,13 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         }
       }
 
-      // OMDb supplies IMDb ID, rating, plot, runtime and poster fallback.
-      const omdb = await searchOMDB(rep.title, rep.year, isSer);
+      // OMDb is a final metadata fallback; try the same alternate title
+      // candidates so a slightly noisy Telegram heading doesn't block lookup.
+      let omdb = null;
+      for (const candidate of tmdbSearchCandidates.slice(0, 4)) {
+        omdb = await searchOMDB(candidate, rep.year, isSer);
+        if (omdb) break;
+      }
       if (omdb) {
         for (const key of ['imdbId', 'description', 'duration', 'rating', 'year', 'title', 'type']) {
           if (!meta[key] && omdb[key]) meta[key] = omdb[key];
