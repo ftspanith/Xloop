@@ -951,9 +951,11 @@ router.post('/manual-add', auth, async (req, res) => {
         added++;
       }
       existing.seasonYears = seasonYearsFromDownloads;
+      if (!existing.originalLanguage && meta.originalLanguage) existing.originalLanguage = meta.originalLanguage;
       if (finalType === 'anime') existing.type = 'anime';
       if (!existing.tmdbId && meta.tmdbId) existing.tmdbId = String(meta.tmdbId);
       if (!existing.imdbId && meta.imdbId) existing.imdbId = meta.imdbId;
+      if (!existing.originalLanguage && meta.originalLanguage) existing.originalLanguage = meta.originalLanguage;
       if (meta.releaseDate && meta.year && meta.tmdbId &&
           String(existing.tmdbId || '') === String(meta.tmdbId)) {
         existing.releaseDate = meta.releaseDate;
@@ -985,6 +987,7 @@ router.post('/manual-add', auth, async (req, res) => {
         poster: poster || meta.poster || existing.poster,
         backdrop: backdrop || meta.backdrop || existing.backdrop,
         posterFallback: meta.posterFallback || existing.posterFallback,
+        originalLanguage: meta.originalLanguage || existing.originalLanguage || '',
         releaseDate: meta.releaseDate || existing.releaseDate,
         seasonYears: seasonYearsFromDownloads,
         rating: rating !== undefined ? rating : (meta.rating || existing.rating),
@@ -1297,6 +1300,7 @@ router.post('/manual-batch', auth, async (req, res) => {
         if (finalType === 'anime') existing.type = 'anime';
         if (!existing.tmdbId && meta.tmdbId) existing.tmdbId = String(meta.tmdbId);
         if (!existing.imdbId && meta.imdbId) existing.imdbId = meta.imdbId;
+        if (!existing.originalLanguage && meta.originalLanguage) existing.originalLanguage = meta.originalLanguage;
         for (const field of ['poster', 'posterFallback', 'backdrop', 'description', 'rating', 'duration', 'totalSeasons']) {
           if (!existing[field] && meta[field]) existing[field] = meta[field];
         }
