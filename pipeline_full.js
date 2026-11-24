@@ -1035,6 +1035,23 @@ async function main(opts = {}) {
     ok('MongoDB connected');
   }
 
+  // Preflight before a destructive catalogue reset. Reuse the fetched rows
+  // later so the source is verified before any Movie documents are removed.
+  let preloadedMongoSourceLinks = null;
+  if (FROM_MONGODB && CLEAN_CATALOGUE) {
+    const ExtractedLink = require('./models/ExtractedLink');
+    const { isAllowedTelegramDownloadUrl } = require('./utils/telegram-ingestion');
+    preloadedMongoSourceLinks = await ExtractedLink.find({}).lean();
+    const approvedSourceCount = preloadedMongoSourceLinks.filter(entry =>
+      isAllowedTelegramDownloadUrl(entry && entry.url)
+    ).length;
+    if (!approvedSourceCount) {
+      fail('Catalogue reset aborted: no approved GDFlix, HubCloud or TMBCloud source links were found. Existing catalogue was not changed.');
+      throw new Error('No approved provider links found in MongoDB; catalogue reset aborted');
+    }
+    ok(`Preflight passed — ${approvedSourceCount} approved source links available; safe to rebuild catalogue.`);
+  }
+
   // STEP 0: Wipe
   sep();
   if (!NO_WIPE) {
@@ -1061,7 +1078,7 @@ async function main(opts = {}) {
       const ExtractedLink = require('./models/ExtractedLink');
       const PipelineCache = require('./models/PipelineCache');
       const { isAllowedTelegramDownloadUrl } = require('./utils/telegram-ingestion');
-      const storedLinks = await ExtractedLink.find({}).lean();
+      const storedLinks = preloadedMongoSourceLinks || await ExtractedLink.find({}).lean();
       if (!storedLinks.length) {
         fail('MongoDB ExtractedLink collection is empty. Nothing to import.');
         throw new Error('No extracted links found in MongoDB');
