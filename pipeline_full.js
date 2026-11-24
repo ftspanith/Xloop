@@ -461,7 +461,9 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
   // ── Group by title+year for TMDB efficiency ───────────────────────────────────────
   const groups = {};
   for (const item of deduped) {
-    const key = `${(item.title || '').toLowerCase().trim()}__${item.year || ''}`;
+    const seriesEntry = !!(item.isSeries || item.contentType === 'series' || item.contentType === 'anime');
+    const groupYear = seriesEntry ? (item.messageYear || '') : (item.messageYear || item.year || '');
+    const key = `${(item.title || '').toLowerCase().trim()}__${groupYear}`;
     if (!groups[key]) groups[key] = { items: [], msgDate: item.date || null };
     if (item.date && (!groups[key].msgDate || item.date < groups[key].msgDate)) groups[key].msgDate = item.date;
     groups[key].items.push(item);
@@ -623,7 +625,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       for (let candidateIndex = 0; candidateIndex < tmdbSearchCandidates.length; candidateIndex++) {
         const candidate = tmdbSearchCandidates[candidateIndex];
         tmdb = await searchTMDB(
-          candidate, rep.messageYear || rep.year, isSer, rep.season, group.msgDate,
+          candidate, isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year), isSer, rep.season, group.msgDate,
           rep.imdbId || null, rep.tmdbIdHint || null, yearHints
         );
         if (tmdb) {
@@ -971,7 +973,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           seasonYears: Object.fromEntries(group.items
             .filter(file => file.season && file.fileYear)
             .map(file => [`s${file.season}`, Number(file.fileYear)])),
-          rating: meta.rating || 0, year: meta.year || rep.messageYear || rep.year || item.year || new Date().getFullYear(),
+          rating: meta.rating || 0, year: meta.year || rep.messageYear || (isSer ? null : rep.year || item.year) || new Date().getFullYear(),
           genre: meta.genre || [], duration: meta.duration || item.duration || rep.duration || '',
           runtimeMinutes: meta.runtimeMinutes || item.runtimeMinutes || rep.runtimeMinutes || null,
           certification: meta.certification || item.certification || rep.certification || '',
@@ -1232,7 +1234,9 @@ async function main(opts = {}) {
                   if (!link.url) continue;
                   extracted.push({
                     url: link.url, host: link.host || classifyUrl(link.url),
-                    title: parsed.title, year: parsed.year, messageYear: parsed.messageYear || parsed.year,
+                    title: parsed.title,
+                    year: parsed.isSeries ? (parsed.messageYear ?? null) : parsed.year,
+                    messageYear: parsed.messageYear ?? null, yearCandidates: parsed.yearCandidates || [],
                     quality: dl.quality, size: dl.size, language: dl.language, fileYear: dl.fileYear || null,
                     season: dl.season ?? null, episode: dl.episode ?? null,
                     type: parsed.type, contentType: parsed.contentType, isSeries: !!parsed.isSeries,
