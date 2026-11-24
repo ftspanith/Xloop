@@ -28,6 +28,7 @@ test('detects repacks and keeps proper releases distinct', () => {
     releaseType: 'Repack',
   });
   assert.equal(detectReleaseMetadata('Example.Film.PROPER.1080p.mkv').releaseType, 'Proper');
+  assert.equal(detectReleaseMetadata('Example.Film.RE-RIP.1080p.mkv').releaseType, 'Repack');
   assert.equal(detectReleaseMetadata('Example.Film.1080p.mkv').isRepack, false);
 });
 
@@ -93,6 +94,22 @@ test('parser exposes media metadata and release status on individual download va
   assert.equal(parsed.runtimeMinutes, 145);
 });
 
+
+test('parser keeps the original and repack as separate variants in one Telegram post', () => {
+  const parsed = parseMessageBlock([
+    'Example Film (2024)',
+    'Example.Film.2024.1080p.WEB-DL.Telugu.mkv',
+    'https://gdflix.dev/file/main-file',
+    'Example.Film.2024.1080p.WEB-DL.Telugu.REPACK.mkv',
+    'https://gdflix.dev/file/repack-file',
+  ].join('\\n'), 505);
+
+  assert.ok(parsed);
+  assert.equal(parsed.downloads.length, 2);
+  assert.equal(parsed.downloads.filter(download => download.isRepack).length, 1);
+  assert.equal(parsed.downloads.filter(download => !download.isRepack).length, 1);
+});
+
 test('repack-first ranking preserves every main and repack variant', () => {
   const ranked = rankVariantsForDisplay([
     { title: 'Example Film', quality: '1080p', size: '5.5 GB', source: 'BluRay', url: 'https://x/main' },
@@ -108,6 +125,7 @@ test('import matching keeps repack and main releases in separate download groups
   const pipeline = fs.readFileSync(path.join(root, 'pipeline_full.js'), 'utf8');
   const movieSchema = fs.readFileSync(path.join(root, 'models', 'Movie.js'), 'utf8');
   const watch = fs.readFileSync(path.join(root, 'public', 'js', 'watch.js'), 'utf8');
+  const extractedSchema = fs.readFileSync(path.join(root, 'models', 'ExtractedLink.js'), 'utf8');
 
   assert.match(pipeline, /if \(!!ex\.isRepack !== !!newDl\.isRepack\) continue/);
   assert.match(pipeline, /isRepack, releaseType, isIMAX, aspectRatio, languageType, languageCount/);
