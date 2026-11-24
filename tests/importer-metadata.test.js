@@ -141,7 +141,7 @@ test('catalogue importer applies cross-account ranking without breaking quality-
 test('language classification counts explicit tracks as Single, Dual, or Multi', () => {
   assert.equal(classifyLanguageType(detectAllLanguages('Telugu')), 'Single');
   assert.equal(classifyLanguageType(detectAllLanguages('Hindi + English')), 'Dual');
-  assert.equal(classifyLanguageType(detectAllLanguages('Hindi + Telugu + Tamil + Kannada')), 'Multi');
+  assert.equal(classifyLanguageType(detectAllLanguages('Hindi + Telugu + Tamil + Kanada')), 'Multi');
   assert.equal(classifyLanguageType(detectAllLanguages('Dual Audio Hindi English'), 'Dual Audio Hindi English'), 'Dual');
 });
 
