@@ -542,9 +542,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       searchTitle = cleanTitle;
     }
 
-    const esc = (cleanTitle || '').replace(/[.*+?^${}()|[\]\\]/g, '\\    let cleanTitle = cleanTitleForApi(rep.title || '', rep.year);
-
-    const esc = (cleanTitle || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');');
+    const esc = (cleanTitle || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     let existing = null;
     // PRIMARY dedup: tmdbId hint from parser (fastest, avoids all title-variation duplicates)
     if (rep.tmdbIdHint) existing = await Movie.findOne({ tmdbId: String(rep.tmdbIdHint) });
