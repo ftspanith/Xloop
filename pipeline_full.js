@@ -844,7 +844,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
               $set: {
                 downloads: res.downloads,
                 formats: res.formats, quality: res.quality,
-                languages: res.languages, codecs: res.codecs,
+                languages: res.languages, codecs: res.codecs, languageType: res.languageType,
               }
             }, { new: true });
             _emitter(`[UPDATED] ${dbRec.title} | ${quality} -> ${host}`);
