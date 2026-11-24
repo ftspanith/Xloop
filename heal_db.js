@@ -11,6 +11,7 @@ const Movie    = require('./models/Movie');
 
 // ── Reuse the SAME cleaner as the importer (no duplicates) ───────────────────
 const { cleanTitleForApi, stripEmojis } = require('./utils/parser');
+const sharedMetadataSearch = require('./utils/tmdbSearch');
 
 const TMDB_KEY = process.env.TMDB_API_KEY || process.env.TMDB_KEY;
 const OMDB_KEY = process.env.OMDB_API_KEY || process.env.OMDB_KEY;
@@ -76,6 +77,42 @@ const TMDB_LANG = {
 async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = null) {
   if (!TMDB_KEY) return null;
   const base = 'https://api.themoviedb.org/3';
+
+  // Shared latest title engine first: direct TMDB/IMDb IDs, all candidate
+  // algorithms, confidence scoring and relaxed search. Preserve the healer's
+  // richer season-list shape and keep the older fuzzy cascade as a fallback.
+  try {
+    const shared = await sharedMetadataSearch.searchTMDB(
+      rawTitle, year, isSeries, null, null, imdbId, knownTmdbId,
+      { tmdbKey: TMDB_KEY, emitter: (line) => console.log(`[HEAL] ${line}`) }
+    );
+    if (shared) {
+      const genres = (shared.genre || []).map((g) => String(g || '').toLowerCase());
+      const originalLanguage = String(shared.originalLanguage || '').toLowerCase();
+      const isAnime = shared.type === 'series' &&
+        (/(japanese|ja|korean|ko|chinese|zh)/.test(originalLanguage) &&
+          genres.some((g) => /animation|anime/.test(g)));
+      const meta = {
+        ...shared,
+        tmdbTitle: shared.title || rawTitle,
+        actualType: isAnime ? 'anime' : shared.type === 'series' ? 'tv' : 'movie',
+        seasons: [],
+      };
+
+      if (shared.type === 'series' && shared.tmdbId) {
+        try {
+          const details = await axios.get(`${base}/tv/${shared.tmdbId}`, {
+            params: { api_key: TMDB_KEY }, timeout: 8000
+          });
+          meta.seasons = details.data?.seasons || [];
+          meta.totalSeasons = details.data?.number_of_seasons || meta.totalSeasons || 0;
+        } catch (_) {}
+      }
+      return meta;
+    }
+  } catch (error) {
+    console.log(`[HEAL] [WARN] Shared metadata lookup failed; using legacy healer fallback: ${error.message}`);
+  }
   let fastPathFallback = null;
 
   // ── FAST PATH 1: we already know the TMDB ID (re-heal run) ─────────────────
