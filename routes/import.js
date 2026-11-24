@@ -172,7 +172,7 @@ async function fetchTMDB(parsed, tmdbKey) {
   // Delegate to the shared multi-algorithm TMDB search engine.
   // Passes parsed.imdbId + parsed.tmdbIdHint for fast-path ID resolution.
   const result = await _sharedSearchTMDB(
-    parsed.title,
+    parsed.rawTitle || parsed.title,
     parsed.year    || null,
     parsed.isSeries || false,
     parsed.season  || null,
@@ -199,13 +199,13 @@ async function fetchTMDB(parsed, tmdbKey) {
 async function fetchOMDB(parsed, omdbKey) {
   // Use the same shared OMDb/IMDb fallback as the database importer.
   const shared = await _sharedSearchOMDB(
-    parsed.title, parsed.year || null, !!parsed.isSeries, omdbKey
+    parsed.rawTitle || parsed.title, parsed.year || null, !!parsed.isSeries, omdbKey
   );
   if (shared) return shared;
 
   // Preserve the older relaxed import-only fallback if the shared lookup fails.
   try {
-    const cleanTitle = cleanTitleForApi(parsed.title);
+    const cleanTitle = cleanTitleForApi(parsed.rawTitle || parsed.title);
     const type       = parsed.isSeries ? 'series' : 'movie';
     const params     = { t: cleanTitle, apikey: omdbKey, type, plot: 'short' };
     if (parsed.year) params.y = parsed.year;
