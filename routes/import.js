@@ -197,41 +197,44 @@ async function fetchTMDB(parsed, tmdbKey) {
 // ═══════════════════════════════════════════════════════════════
 
 async function fetchOMDB(parsed, omdbKey) {
+  // Use the same shared OMDb/IMDb fallback as the database importer.
+  const shared = await _sharedSearchOMDB(
+    parsed.title, parsed.year || null, !!parsed.isSeries, omdbKey
+  );
+  if (shared) return shared;
+
+  // Preserve the older relaxed import-only fallback if the shared lookup fails.
   try {
     const cleanTitle = cleanTitleForApi(parsed.title);
     const type       = parsed.isSeries ? 'series' : 'movie';
     const params     = { t: cleanTitle, apikey: omdbKey, type, plot: 'short' };
     if (parsed.year) params.y = parsed.year;
 
-    const res = await axios.get('http://www.omdbapi.com/', { params, timeout: 30000 });
-    const d   = res.data;
+    const res = await axios.get('https://www.omdbapi.com/', { params, timeout: 30000 });
+    let d = res.data;
     if (!d || d.Response === 'False') {
-      // Try without type filter
-      const res2 = await axios.get('http://www.omdbapi.com/', {
+      const res2 = await axios.get('https://www.omdbapi.com/', {
         params: { t: cleanTitle, apikey: omdbKey, plot: 'short', ...(parsed.year ? { y: parsed.year } : {}) },
         timeout: 30000
       });
       if (!res2.data || res2.data.Response === 'False') return null;
-      Object.assign(d, res2.data);
+      d = res2.data;
     }
 
-    const omdbYear = d.Year ? parseInt(d.Year) : parsed.year;
-
-    // Cross-validate: year should be close
+    const omdbYear = d.Year ? parseInt(d.Year, 10) : parsed.year;
     if (parsed.year && omdbYear && Math.abs(parsed.year - omdbYear) > 2) return null;
-
     return {
-      imdbId:      d.imdbID || '',
-      title:       d.Title  || parsed.title,
+      imdbId: d.imdbID || '',
+      title: d.Title || parsed.title,
       description: d.Plot && d.Plot !== 'N/A' ? d.Plot : '',
-      poster:      d.Poster && d.Poster !== 'N/A' ? d.Poster : '',
-      rating:      d.imdbRating && d.imdbRating !== 'N/A' ? parseFloat(d.imdbRating) : 0,
-      year:        omdbYear,
-      genre:       d.Genre && d.Genre !== 'N/A' ? d.Genre.split(', ') : [],
-      duration:    d.Runtime && d.Runtime !== 'N/A'
-        ? (() => { const m = parseInt(d.Runtime); return `${Math.floor(m/60)}h ${m%60}m`; })()
+      poster: d.Poster && d.Poster !== 'N/A' ? d.Poster : '',
+      rating: d.imdbRating && d.imdbRating !== 'N/A' ? parseFloat(d.imdbRating) : 0,
+      year: omdbYear,
+      genre: d.Genre && d.Genre !== 'N/A' ? d.Genre.split(', ') : [],
+      duration: d.Runtime && d.Runtime !== 'N/A'
+        ? (() => { const m = parseInt(d.Runtime, 10); return `${Math.floor(m / 60)}h ${m % 60}m`; })()
         : '',
-      type:        d.Type === 'series' ? 'series' : 'movie',
+      type: d.Type === 'series' ? 'series' : 'movie',
     };
   } catch (_) { return null; }
 }
