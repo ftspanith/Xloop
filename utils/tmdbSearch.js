@@ -281,6 +281,24 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   }
 
   const BASE     = 'https://api.themoviedb.org/3';
+
+  // Accept both TMDB credential formats:
+  // - v3 API key: api_key query parameter
+  // - v4 Read Access Token (JWT): Authorization: Bearer header
+  const isV4Token = String(tmdbKey).split('.').length === 3;
+  async function tmdbGet(url, params = {}, config = {}) {
+    const requestParams = { ...params };
+    delete requestParams.api_key;
+    if (!isV4Token) requestParams.api_key = tmdbKey;
+    return axios.get(url, {
+      ...config,
+      params: requestParams,
+      headers: {
+        ...(config.headers || {}),
+        ...(isV4Token ? { Authorization: `Bearer ${tmdbKey}` } : {}),
+      },
+    });
+  }
   // Telegram upload date is not a release-year hint. Using it as one causes
   // false year penalties for older films posted in a newer channel message.
   const hintYear = year ? Number(year) : null;
@@ -292,7 +310,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   async function fetchSeasonData(tmdbId, sn, isTv) {
     if (!isTv || !sn) return {};
     const sr = await fetchWithRetry(() =>
-      axios.get(`${BASE}/tv/${tmdbId}/season/${sn}`, { params: { api_key: tmdbKey }, timeout: 8000 })
+      tmdbGet(`${BASE}/tv/${tmdbId}/season/${sn}`, {}, { timeout: 8000 })
     );
     return {
       seasonPoster:   sr?.data?.poster_path ? `https://image.tmdb.org/t/p/w500${sr.data.poster_path}` : '',
@@ -328,7 +346,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   if (tmdbIdHint) {
     for (const mt of (isSeries ? ['tv','movie'] : ['movie','tv'])) {
       const r = await fetchWithRetry(() =>
-        axios.get(`${BASE}/${mt}/${tmdbIdHint}`, { params: { api_key: tmdbKey }, timeout: 8000 })
+        tmdbGet(`${BASE}/${mt}/${tmdbIdHint}`, {}, { timeout: 8000 })
       );
       if (r?.data && (r.data.title || r.data.name)) {
         const tv = mt === 'tv';
@@ -340,14 +358,14 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   // ── Fast path: IMDB ID ──────────────────────────────────────────────────────
   if (imdbId && /^tt\d{7,}$/.test(imdbId)) {
     const fr = await fetchWithRetry(() =>
-      axios.get(`${BASE}/find/${imdbId}`, { params: { api_key: tmdbKey, external_source: 'imdb_id' }, timeout: 8000 })
+      tmdbGet(`${BASE}/find/${imdbId}`, { external_source: 'imdb_id' }, { timeout: 8000 })
     );
     if (fr) {
       const hit = (fr.data?.movie_results || [])[0] || (fr.data?.tv_results || [])[0];
       const mt  = (fr.data?.movie_results || [])[0] ? 'movie' : 'tv';
       if (hit) {
         const r = await fetchWithRetry(() =>
-          axios.get(`${BASE}/${mt}/${hit.id}`, { params: { api_key: tmdbKey }, timeout: 10000 })
+          tmdbGet(`${BASE}/${mt}/${hit.id}`, {}, { timeout: 10000 })
         );
         if (r?.data && (r.data.title || r.data.name)) {
           const tv = mt === 'tv';
@@ -364,7 +382,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   async function runStrategy(ep, params, strict) {
     return fetchWithRetry(async () => {
       const url2  = ep === 'multi' ? `${BASE}/search/multi` : `${BASE}/search/${ep}`;
-      const res   = await axios.get(url2, { params: { api_key: tmdbKey, ...params }, timeout: 10000 });
+      const res   = await tmdbGet(url2, params, { timeout: 10000 });
       let results = res.data.results || [];
       if (ep === 'multi') results = results.filter(r => r.media_type === 'movie' || r.media_type === 'tv');
       if (!results.length) return null;
@@ -406,7 +424,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
 
       const isTv = ep === 'tv' || best.r.media_type === 'tv';
       const dr = await fetchWithRetry(() =>
-        axios.get(`${BASE}/${isTv ? 'tv' : 'movie'}/${best.r.id}`, { params: { api_key: tmdbKey }, timeout: 10000 })
+        tmdbGet(`${BASE}/${isTv ? 'tv' : 'movie'}/${best.r.id}`, {}, { timeout: 10000 })
       );
       if (!dr) return null;
       const sd = await fetchSeasonData(best.r.id, season, isTv);
