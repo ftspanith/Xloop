@@ -1610,7 +1610,8 @@ module.exports = {
   extractSize,toMB,detectHost,detectLanguage,detectAllLanguages,detectContentType,
   extractSeasonEpisode,detectCodec,detectContainer,detectHDR,detectBitDepth,detectAudioChannels,extractAudio,detectSource,isJunkTitle,isGenericTitleCandidate,isMetadataLine,
   normalizeLanguageList,classifyLanguages,detectReleaseMetadata,extractAspectRatio,extractRuntime,extractCertification,extractMediaMetadata,
-  extractTitleFromStreamingUrl, normalizeGdflixUrl, isKnownProviderHost,\n  extractYear, extractYearCandidates,
+  extractTitleFromStreamingUrl, normalizeGdflixUrl, isKnownProviderHost,
+  extractYear, extractYearCandidates,
   parseManualInput,
 };
 
