@@ -149,6 +149,7 @@ function extractTelegramLinks(inputMessages, account = '1') {
           codec: download.codec || '', hdr: download.hdr || '', audio: download.audio || '',
           source: download.source || '', container: download.container || '',
           bitDepth: download.bitDepth || '', audioChannels: download.audioChannels || '',
+          audioTracks: Array.isArray(download.audioTracks) && download.audioTracks.length >= 2 ? download.audioTracks : [],
           isRepack: !!download.isRepack || singleFileRelease === 'Repack',
           releaseType: download.releaseType || singleFileRelease || 'Original',
           isIMAX: !!download.isIMAX || !!parsed.isIMAX,
