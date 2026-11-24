@@ -31,6 +31,10 @@ function resolveKeys(req) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^$()|[\\]{}]/g, '\\$&');
+}
+
 // Quality normalizer
 function normalizeQuality(str) {
   if (/2160p|\b4K\b|\bUHD\b/i.test(str)) return '4K';
@@ -170,67 +174,72 @@ const TMDB_LANG_MAP = { te: 'Telugu', ta: 'Tamil', hi: 'Hindi', ml: 'Malayalam',
 // ═══════════════════════════════════════════════════════════════
 
 async function fetchTMDB(parsed, tmdbKey) {
-  // Delegate to the shared multi-algorithm TMDB search engine.
-  // Passes parsed.imdbId + parsed.tmdbIdHint for fast-path ID resolution.
+  const isSeries = !!parsed.isSeries || parsed.contentType === 'series' || parsed.contentType === 'anime';
   const yearHints = [...new Set([
     parsed.messageYear, parsed.year, ...(parsed.yearCandidates || []),
     ...(parsed.downloads || []).map(file => file.fileYear || extractYear([file.filename])),
   ].map(Number).filter(value => Number.isInteger(value) && value >= 1900 && value <= 2099))];
+  const seasonYearHints = (parsed.downloads || [])
+    .map(file => file.fileYear || extractYear([file.filename]))
+    .filter(Boolean);
+  const titleYearHint = isSeries ? (parsed.messageYear || null) : (parsed.messageYear || parsed.year || null);
   const result = await _sharedSearchTMDB(
     parsed.rawTitle || parsed.title,
-    parsed.messageYear || parsed.year || null,
-    parsed.isSeries || false,
-    parsed.season  || null,
+    titleYearHint,
+    isSeries,
+    parsed.season || null,
     null,
-    parsed.imdbId  || null,
+    parsed.imdbId || null,
     parsed.tmdbIdHint || null,
-    { tmdbKey, yearHints, messageYear: parsed.messageYear || parsed.year || null }
+    { tmdbKey, yearHints, seasonYearHints, messageYear: titleYearHint }
   );
   if (!result) return null;
-  // Map shared result → import.js expected shape (adds confidenceReasons + isAnime)
   return {
     ...result,
-    language:          result.originalLanguage || '',
+    language: result.originalLanguage || '',
     confidenceReasons: [`Matched via algorithm ${result._algo || 'A1'} (${result.confidence}pts)`],
-    isAnime:           false, // TMDB genre-based anime detection not needed here
+    isAnime: false,
   };
 }
-
 
 // ═══════════════════════════════════════════════════════════════
 //  OMDB/IMDB API  (cross-validation & fallback)
 // ═══════════════════════════════════════════════════════════════
 
 async function fetchOMDB(parsed, omdbKey) {
-  // Use the same shared OMDb/IMDb fallback as the database importer.
+  const isSeries = !!parsed.isSeries || parsed.contentType === 'series' || parsed.contentType === 'anime';
+  const titleYearHint = isSeries ? (parsed.messageYear || null) : (parsed.messageYear || parsed.year || null);
+  const yearHints = [...new Set([
+    parsed.messageYear, parsed.year, ...(parsed.yearCandidates || []),
+    ...(parsed.downloads || []).map(file => file.fileYear || extractYear([file.filename])),
+  ].filter(Boolean).map(Number))];
   const shared = await _sharedSearchOMDB(
-    parsed.rawTitle || parsed.title, parsed.messageYear || parsed.year || null, !!parsed.isSeries, omdbKey,
-    { yearHints: parsed.yearCandidates || [parsed.messageYear, parsed.year].filter(Boolean) }
+    parsed.rawTitle || parsed.title, titleYearHint, isSeries, omdbKey,
+    { yearHints }
   );
   if (shared) return shared;
 
-  // Preserve the older relaxed import-only fallback if the shared lookup fails.
+  // Preserve the relaxed import-only fallback when the shared lookup fails.
   try {
     const cleanTitle = cleanTitleForApi(parsed.rawTitle || parsed.title);
-    const type       = parsed.isSeries ? 'series' : 'movie';
-    const params     = { t: cleanTitle, apikey: omdbKey, type, plot: 'short' };
-    if (parsed.year) params.y = parsed.year;
-
+    const params = { t: cleanTitle, apikey: omdbKey, type: isSeries ? 'series' : 'movie', plot: 'short' };
+    if (titleYearHint) params.y = titleYearHint;
     const res = await axios.get('https://www.omdbapi.com/', { params, timeout: 30000 });
     let d = res.data;
     if (!d || d.Response === 'False') {
-      const res2 = await axios.get('https://www.omdbapi.com/', {
-        params: { t: cleanTitle, apikey: omdbKey, plot: 'short', ...(parsed.year ? { y: parsed.year } : {}) },
-        timeout: 30000
-      });
+      const fallbackParams = { t: cleanTitle, apikey: omdbKey, plot: 'short' };
+      if (titleYearHint) fallbackParams.y = titleYearHint;
+      const res2 = await axios.get('https://www.omdbapi.com/', { params: fallbackParams, timeout: 30000 });
       if (!res2.data || res2.data.Response === 'False') return null;
       d = res2.data;
     }
-
-    const omdbYear = d.Year ? parseInt(d.Year, 10) : (parsed.messageYear || parsed.year);
-    const yearHints = [...new Set([parsed.messageYear, parsed.year, ...(parsed.yearCandidates || [])].filter(Boolean).map(Number))];
-    const yearDiff = omdbYear && yearHints.length ? Math.min(...yearHints.map(value => Math.abs(value - omdbYear))) : null;
-    if (yearDiff != null && yearDiff > (parsed.isSeries ? 5 : 3)) return null;
+    const omdbYear = d.Year ? parseInt(d.Year, 10) : titleYearHint;
+    const yearDiff = omdbYear && yearHints.length
+      ? Math.min(...yearHints.map(value => Math.abs(value - omdbYear))) : null;
+    const omdbRange = (String(d.Year || '').match(/19\\d{2}|20\\d{2}/g) || []).map(Number);
+    const withinRun = isSeries && omdbRange.length > 1 &&
+      yearHints.some(value => value >= omdbRange[0] && value <= omdbRange[omdbRange.length - 1]);
+    if (yearDiff != null && yearDiff > (isSeries ? 5 : 3) && !withinRun) return null;
     return {
       imdbId: d.imdbID || '',
       title: d.Title || parsed.title,
@@ -240,7 +249,7 @@ async function fetchOMDB(parsed, omdbKey) {
       year: omdbYear,
       genre: d.Genre && d.Genre !== 'N/A' ? d.Genre.split(', ') : [],
       duration: d.Runtime && d.Runtime !== 'N/A'
-        ? (() => { const m = parseInt(d.Runtime, 10); return `${Math.floor(m / 60)}h ${m % 60}m`; })()
+        ? (() => { const m = parseInt(d.Runtime, 10); return Math.floor(m / 60) + 'h ' + (m % 60) + 'm'; })()
         : '',
       type: d.Type === 'series' ? 'series' : 'movie',
     };
@@ -607,8 +616,9 @@ router.post('/bulk', auth, async (req, res) => {
             existing.set(`seasonYears.s${file.season}`, Number(file.fileYear));
           }
         }
-        if (meta.season && meta.seasonYear) {
-          existing.set(`seasonYears.s${meta.season}`, Number(meta.seasonYear));
+        const importedSeason = parsed.season || downloads.find(file => file.season)?.season;
+        if (importedSeason && meta.seasonYear) {
+          existing.set(`seasonYears.s${importedSeason}`, Number(meta.seasonYear));
         }
         if (meta.tmdbId && meta.releaseDate && String(existing.tmdbId || '') === String(meta.tmdbId) && meta.year) {
           existing.year = meta.year;
@@ -644,7 +654,10 @@ router.post('/bulk', auth, async (req, res) => {
       poster:             meta.poster        || '',
       backdrop:           meta.backdrop      || '',
       rating:             meta.rating        || 0,
-      year:               meta.year    || year    || new Date().getFullYear(),
+      year:               meta.year || parsed.messageYear || (isSeries ? null : (year || new Date().getFullYear())),
+      releaseDate:        meta.releaseDate || '',
+      seasonYears:        Object.fromEntries(downloads.filter(file => file.season && file.fileYear)
+        .map(file => [`s${file.season}`, Number(file.fileYear)])),
       genre:              meta.genre   || [],
       duration:           meta.duration || '',
       quality:            quality || 'HD',
