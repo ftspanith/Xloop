@@ -25,7 +25,12 @@
   --trans:     0.2s ease;
 }
 
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  /* Stop mobile browsers inflating text and making the whole page feel zoomed. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 body {
   font-family: 'Inter', -apple-system, sans-serif;
   background-color: var(--bg);
@@ -2181,7 +2186,9 @@ ul { list-style: none; }
 #mobileNavOverlay {
   position: fixed !important;
   inset: 0 !important;
-  width: 100vw !important;
+  /* inset: 0 already sizes this fixed overlay; 100vw may exceed the visible viewport. */
+  width: auto !important;
+  max-width: 100% !important;
   height: 100vh !important;
   height: 100dvh !important;
   min-height: 100vh !important;
