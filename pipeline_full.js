@@ -37,7 +37,7 @@ const {
   cleanTitleForApi, detectHost, detectCodec, detectHDR, extractAudio,
   detectBitDepth, detectAudioChannels, detectSource, detectContainer,
   normalizeQuality, extractSize, detectAllLanguages, extractSeasonEpisode,
-  classifyLanguages, extractMediaMetadata, normalizeGdflixUrl, isJunkTitle,
+  classifyLanguages, extractMediaMetadata, extractYear, normalizeGdflixUrl, isJunkTitle,
   isGenericTitleCandidate,
 } = require('./utils/parser');
 const sharedMetadataSearch = require('./utils/tmdbSearch');
@@ -298,6 +298,9 @@ function levenshtein(a, b) {
   for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
   return dp[m][n];
 }
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^$()|[\\]{}]/g, '\\$&');
+}
 function stringSimilarity(a, b) {
   a = (a||'').toLowerCase().trim(); b = (b||'').toLowerCase().trim();
   if (a === b) return 1;
@@ -315,8 +318,8 @@ function seasonFromFilename(fn) {
   return m ? parseInt(m[1], 10) : null;
 }
 
-async function searchOMDB(title, year, isSeries) {
-  return sharedMetadataSearch.searchOMDB(title, year, isSeries, OMDB_KEY);
+async function searchOMDB(title, year, isSeries, yearHints = []) {
+  return sharedMetadataSearch.searchOMDB(title, year, isSeries, OMDB_KEY, { yearHints });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -462,7 +465,9 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
   // ── Group by title+year for TMDB efficiency ───────────────────────────────────────
   const groups = {};
   for (const item of deduped) {
-    const key = `${(item.title || '').toLowerCase().trim()}__${item.year || ''}`;
+    const seriesEntry = !!(item.isSeries || item.contentType === 'series' || item.contentType === 'anime');
+    const groupYear = seriesEntry ? (item.messageYear || '') : (item.messageYear || item.year || '');
+    const key = `${(item.title || '').toLowerCase().trim()}__${groupYear}`;
     if (!groups[key]) groups[key] = { items: [], msgDate: item.date || null };
     if (item.date && (!groups[key].msgDate || item.date < groups[key].msgDate)) groups[key].msgDate = item.date;
     groups[key].items.push(item);
@@ -520,6 +525,10 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
   async function processGroup([, group]) {
     const rep   = group.items[0];
     const isSer = rep.isSeries || rep.contentType === 'series' || rep.contentType === 'anime';
+    const yearHints = [...new Set([
+      rep.messageYear, rep.year, ...(rep.yearCandidates || []),
+      ...group.items.map(item => item && (item.fileYear || extractYear([item.filename]))),
+    ].map(value => Number(value)).filter(value => Number.isInteger(value) && value >= 1900 && value <= 2099))];
 
     // Advisory cross-account variant analysis: reports close-size/metadata
     // candidates but never drops a link or treats size as proof of identity.
@@ -552,14 +561,22 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       searchTitle = cleanTitle;
     }
 
-    const esc = (cleanTitle || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const esc = escapeRegex(cleanTitle || '');
+    const expectedTypes = isSer ? { $in: ['series', 'anime'] } : 'movie';
+    const titleQuery = cleanTitle ? { title: { $regex: `^${esc}$`, $options: 'i' }, type: expectedTypes } : null;
     let existing = null;
-    // PRIMARY dedup: tmdbId hint from parser (fastest, avoids all title-variation duplicates)
-    if (rep.tmdbIdHint) existing = await Movie.findOne({ tmdbId: String(rep.tmdbIdHint) });
-    // SECONDARY: title+year exact match
-    if (!existing && rep.year && cleanTitle)  existing = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' }, year: rep.year });
-    // TERTIARY: title-only match (different years, same franchise name)
-    if (!existing && cleanTitle) existing = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' } });
+    // IDs are authoritative. A series season year must never create a second
+    // catalogue card for the same TMDB record.
+    if (rep.tmdbIdHint) existing = await Movie.findOne({ tmdbId: String(rep.tmdbIdHint), type: expectedTypes });
+    if (!existing && titleQuery && rep.messageYear) {
+      existing = await Movie.findOne({ ...titleQuery, year: rep.messageYear });
+    }
+    if (!existing && titleQuery && rep.year && !isSer) {
+      existing = await Movie.findOne({ ...titleQuery, year: rep.year });
+    }
+    // For series/anime, only the message/show year describes the parent title.
+    // Season filename years are stored per download and do not split the parent.
+    if (!existing && titleQuery) existing = await Movie.findOne(titleQuery);
 
     let meta = existing ? {
       tmdbId: existing.tmdbId || '', imdbId: existing.imdbId || '',
@@ -567,7 +584,8 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       totalSeasons: existing.totalSeasons || 0,
       description: existing.description || '', poster: existing.poster || '',
       posterFallback: existing.posterFallback || '', backdrop: existing.backdrop || '',
-      rating: existing.rating || 0, year: existing.year || rep.year || null,
+      rating: existing.rating || 0, year: existing.year || rep.messageYear || (isSer ? null : rep.year) || null,
+      releaseDate: existing.releaseDate || '',
       genre: existing.genre || [], duration: existing.duration || '',
       runtimeMinutes: existing.runtimeMinutes ?? rep.runtimeMinutes ?? null,
       certification: existing.certification || rep.certification || '',
@@ -579,11 +597,15 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         ? existing.seasonPosters[`s${rep.season}`] : '',
     } : {};
 
+    const parentYearHint = isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year || null);
+    const parentYearMismatch = !!(existing && parentYearHint && existing.year &&
+      Math.abs(Number(existing.year) - Number(parentYearHint)) > 2);
     const needsMetadata = !existing || !existing.tmdbId || !existing.imdbId ||
       !existing.poster || !existing.backdrop || !existing.description ||
       !existing.rating || !existing.genre?.length || !existing.year ||
       !existing.duration || (isSer && !existing.totalSeasons) ||
-      (rep.season && !existing.seasonPosters?.[`s${rep.season}`]);
+      (rep.season && !existing.seasonPosters?.[`s${rep.season}`]) ||
+      parentYearMismatch;
 
     if (cleanTitle && needsMetadata) {
       // A Telegram heading can be slightly different from the actual release
@@ -607,8 +629,10 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       for (let candidateIndex = 0; candidateIndex < tmdbSearchCandidates.length; candidateIndex++) {
         const candidate = tmdbSearchCandidates[candidateIndex];
         tmdb = await searchTMDB(
-          candidate, rep.year, isSer, rep.season, group.msgDate,
-          rep.imdbId || null, rep.tmdbIdHint || null
+          candidate, isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year), isSer, rep.season, group.msgDate,
+          rep.imdbId || null, rep.tmdbIdHint || null, yearHints,
+          group.items.filter(file => !rep.season || Number(file.season) === Number(rep.season))
+            .map(file => file.fileYear || extractYear([file.filename]) || (!rep.messageYear ? file.year : null)).filter(Boolean)
         );
         if (tmdb) {
           if (candidateIndex > 0) {
@@ -632,7 +656,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       // candidates so a slightly noisy Telegram heading doesn't block lookup.
       let omdb = null;
       for (const candidate of tmdbSearchCandidates.slice(0, 4)) {
-        omdb = await searchOMDB(candidate, rep.year, isSer);
+        omdb = await searchOMDB(candidate, isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year), isSer, yearHints);
         if (omdb) break;
       }
       if (omdb) {
@@ -661,7 +685,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         }
       }
       if (!meta.poster) {
-        const gImg = await searchGoogleImage(rep.title, rep.year, isSer);
+        const gImg = await searchGoogleImage(rep.title, isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year), isSer);
         if (gImg) {
           meta.poster = gImg;
           _emitter(`[IMG] Google image used for: ${rep.title}`);
@@ -736,15 +760,15 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
 
       let dbRec = existing;
       // Re-check by tmdbId in case meta search found a different record than initial lookup
-      if (!dbRec && meta.tmdbId) dbRec = await Movie.findOne({ tmdbId: String(meta.tmdbId) });
-      // Last resort: title+year again (in case race condition between items in same group)
-      if (!dbRec && cleanTitle && rep.year) dbRec = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' }, year: rep.year });
-      if (!dbRec && cleanTitle) dbRec = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' } });
+      if (!dbRec && meta.tmdbId) dbRec = await Movie.findOne({ tmdbId: String(meta.tmdbId), type: expectedTypes });
+      // Last resort: same-type title match. Do not key TV records by a later season year.
+      if (!dbRec && cleanTitle) dbRec = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' }, type: expectedTypes });
 
       const newDl = {
         quality, size, filename, language, codec, hdr, audio, source, container, bitDepth, audioChannels, audioTracks,
         isRepack, releaseType, isIMAX, aspectRatio, languageType, languageCount,
         sourceDate: item.date || '',
+        fileYear: item.fileYear || extractYear([filename]) || null,
         season: correctSeason, episode: correctEpisode,
         links: [{ host, url: finalUrl, isFast: /gdflix|hubcloud|gdlink|tmbcloud/i.test(finalUrl) }],
       };
@@ -833,13 +857,16 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         }
         const metaSet = {};
         if (!dbRec.backdrop       && meta.backdrop)       metaSet.backdrop       = meta.backdrop;
+        if (!dbRec.releaseDate    && meta.releaseDate)    metaSet.releaseDate    = meta.releaseDate;
         if (!dbRec.poster         && meta.poster)         metaSet.poster         = meta.poster;
         if (!dbRec.posterFallback && meta.posterFallback) metaSet.posterFallback = meta.posterFallback;
         if (!dbRec.tmdbId         && meta.tmdbId)         metaSet.tmdbId         = meta.tmdbId;
         if (!dbRec.imdbId         && meta.imdbId)         metaSet.imdbId         = meta.imdbId;
         if (!dbRec.rating         && meta.rating)         metaSet.rating         = meta.rating;
         if (!dbRec.description    && meta.description)    metaSet.description    = meta.description;
-        if (!dbRec.year && meta.year) metaSet.year = meta.year;
+        if (meta.year && meta.releaseDate &&
+            (!dbRec.tmdbId || !meta.tmdbId || String(dbRec.tmdbId) === String(meta.tmdbId)) &&
+            Number(dbRec.year || 0) !== Number(meta.year)) metaSet.year = meta.year;
         if (!dbRec.duration && (meta.duration || item.duration || rep.duration)) metaSet.duration = meta.duration || item.duration || rep.duration;
         if (!dbRec.runtimeMinutes && (meta.runtimeMinutes || item.runtimeMinutes || rep.runtimeMinutes)) metaSet.runtimeMinutes = meta.runtimeMinutes || item.runtimeMinutes || rep.runtimeMinutes;
         if (!dbRec.certification && (meta.certification || item.certification || rep.certification)) metaSet.certification = meta.certification || item.certification || rep.certification;
@@ -852,10 +879,16 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         if (rep.season && meta.seasonPoster && !dbRec.seasonPosters?.[`s${rep.season}`]) {
           metaSet[`seasonPosters.s${rep.season}`] = meta.seasonPoster;
         }
+        const seasonNumberForYear = correctSeason || item.season || null;
+        const seasonYear = (seasonNumberForYear === rep.season && meta.seasonYear) || newDl.fileYear;
+        if (seasonNumberForYear && seasonYear &&
+            Number(dbRec.seasonYears?.[`s${seasonNumberForYear}`] || 0) !== Number(seasonYear)) {
+          metaSet[`seasonYears.s${seasonNumberForYear}`] = Number(seasonYear);
+        }
 
         if (matchedIdx >= 0) {
           const matchedDownload = dbRec.downloads[matchedIdx] || {};
-          for (const field of ['source', 'container', 'bitDepth', 'audioChannels', 'codec', 'hdr', 'audio', 'filename', 'isIMAX', 'aspectRatio', 'languageType', 'languageCount', 'releaseType', 'sourceDate']) {
+          for (const field of ['source', 'container', 'bitDepth', 'audioChannels', 'codec', 'hdr', 'audio', 'filename', 'fileYear', 'isIMAX', 'aspectRatio', 'languageType', 'languageCount', 'releaseType', 'sourceDate']) {
             if (!matchedDownload[field] && newDl[field]) {
               metaSet[`downloads.${matchedIdx}.${field}`] = newDl[field];
             }
@@ -944,7 +977,10 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           backdrop: meta.backdrop || '',
           seasonPosters: rep.season && meta.seasonPoster
             ? { [`s${rep.season}`]: meta.seasonPoster } : {},
-          rating: meta.rating || 0, year: meta.year || item.year || new Date().getFullYear(),
+          seasonYears: Object.fromEntries(group.items
+            .filter(file => file.season && file.fileYear)
+            .map(file => [`s${file.season}`, Number(file.fileYear)])),
+          rating: meta.rating || 0, year: meta.year || rep.messageYear || (isSer ? null : (rep.year || item.year || new Date().getFullYear())),
           genre: meta.genre || [], duration: meta.duration || item.duration || rep.duration || '',
           runtimeMinutes: meta.runtimeMinutes || item.runtimeMinutes || rep.runtimeMinutes || null,
           certification: meta.certification || item.certification || rep.certification || '',
@@ -1041,6 +1077,7 @@ async function main(opts = {}) {
   const NO_WIPE = requestedNoWipe || scope !== 'all' || RESUME;
   const NO_HEAL     = FROM_MONGODB ? true : (opts.noHeal !== undefined ? opts.noHeal : _argv.includes('--no-heal'));
   const NO_BYPASS   = FROM_MONGODB ? true : (opts.noBypass !== undefined ? opts.noBypass : _argv.includes('--no-bypass'));
+
   const CONCURRENCY = opts.concurrency || parseInt((_argv.find(a => a.startsWith('--concurrency=')) || '').replace('--concurrency=', '') || '3', 10);
   const IMPORT_SRC  = opts.importSrc  || (_argv.find(a => a.startsWith('--import-source=')) || '').replace('--import-source=', '') || null;
   const IS_STOP_REQUESTED = opts.isStopRequested || (() => false);
@@ -1111,12 +1148,10 @@ async function main(opts = {}) {
     ok(`Preflight passed — ${approvedSourceCount} approved source links available; safe to rebuild catalogue.`);
   }
 
-  // STEP 0: Destructive catalogue reset is deferred until the source has been
-  // loaded, scoped, bypassed and verified to contain usable provider links.
+  // STEP 0: Defer full catalogue reset until source, scope and provider checks pass.
   sep();
   if (NO_WIPE) warn('STEP 0 — Preserving existing catalogue (no-wipe, scoped update, or resume).');
   else log('STEP 0 — Catalogue reset deferred until source preflight succeeds.');
-
   // STEP 1: Extract / load existing source
   sep();
   if (FROM_MONGODB) {
@@ -1199,8 +1234,10 @@ async function main(opts = {}) {
                   if (!link.url) continue;
                   extracted.push({
                     url: link.url, host: link.host || classifyUrl(link.url),
-                    title: parsed.title, year: parsed.year,
-                    quality: dl.quality, size: dl.size, language: dl.language,
+                    title: parsed.title,
+                    year: parsed.isSeries ? (parsed.messageYear ?? null) : parsed.year,
+                    messageYear: parsed.messageYear ?? null, yearCandidates: parsed.yearCandidates || [],
+                    quality: dl.quality, size: dl.size, language: dl.language, fileYear: dl.fileYear || null,
                     season: dl.season ?? null, episode: dl.episode ?? null,
                     type: parsed.type, contentType: parsed.contentType, isSeries: !!parsed.isSeries,
                     rawTitle: parsed.rawTitle || parsed.title, filename: dl.filename,
@@ -1263,14 +1300,11 @@ async function main(opts = {}) {
     }
   }
 
-  // Apply scoped selection before bypass/import. A zero-result scope aborts safely.
   const scopeResult = filterEntriesByScope(allEntries, { scope, titleFilter, timezone: 'Asia/Kolkata' });
   allEntries = scopeResult.entries;
   log(`[SCOPE] ${scope}: ${scopeResult.matched}/${scopeResult.total} entries selected` +
     (scopeResult.missingDate ? `; ${scopeResult.missingDate} entries skipped because Telegram message date was missing` : ''));
-  if (!allEntries.length) {
-    throw new Error(`No entries matched scope "${scope}". Existing catalogue was not changed.`);
-  }
+  if (!allEntries.length) throw new Error(`No entries matched scope "${scope}". Existing catalogue was not changed.`);
 
   const existingBypassed = !FROM_MONGODB && fs.existsSync(BYPASSED_FILE) ? JSON.parse(fs.readFileSync(BYPASSED_FILE, 'utf8')) : [];
 
@@ -1289,16 +1323,11 @@ async function main(opts = {}) {
     for (const e of allEntries) { if (!e.bypassedUrl && bmap.has(e.url)) e.bypassedUrl = bmap.get(e.url); }
   }
 
-  // Drop unresolved shortlinks and unsupported destinations before any destructive action.
   const { isAllowedTelegramDownloadUrl } = require('./utils/telegram-ingestion');
   const beforeProviderFilter = allEntries.length;
   allEntries = allEntries.filter(entry => isAllowedTelegramDownloadUrl(entry?.bypassedUrl || entry?.url));
-  if (!allEntries.length) {
-    throw new Error('No usable GDFlix, HubCloud or TMBCloud links remain after bypass/validation. Existing catalogue was not changed.');
-  }
-  if (allEntries.length < beforeProviderFilter) {
-    warn(`[PREFLIGHT] Excluded ${beforeProviderFilter - allEntries.length} unresolved or unsupported links.`);
-  }
+  if (!allEntries.length) throw new Error('No usable GDFlix, HubCloud or TMBCloud links remain after bypass/validation. Existing catalogue was not changed.');
+  if (allEntries.length < beforeProviderFilter) warn(`[PREFLIGHT] Excluded ${beforeProviderFilter - allEntries.length} unresolved or unsupported links.`);
   if (IS_STOP_REQUESTED()) throw new Error('Pipeline stopped before catalogue import; existing catalogue was not changed.');
 
   // STEP 3: Legacy DB Connection Step (Moved to top)
@@ -1365,10 +1394,10 @@ module.exports = { runPipeline: main, searchTMDB, searchOMDB, searchGoogleImage,
 // Shared 14-algorithm metadata engine. Includes TMDB/IMDb ID fast paths,
 // confidence scoring, relaxed title candidates, and season poster lookup.
 // ─────────────────────────────────────────────────────────────────────────
-async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbIdHint) {
+async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbIdHint, yearHints = [], seasonYearHints = []) {
   if (!TMDB_KEY) return null;
   return sharedMetadataSearch.searchTMDB(
     title, year, isSeries, season, msgDate, imdbId, tmdbIdHint,
-    { tmdbKey: TMDB_KEY, emitter: _emitter }
+    { tmdbKey: TMDB_KEY, emitter: _emitter, yearHints, seasonYearHints, messageYear: year }
   );
 }
