@@ -277,6 +277,15 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     ? validYear(options.messageYear)
     : (validYear(year) || null);
   const hintYear = isSeries ? titleYear : (titleYear || yearHints[0] || null);
+  const maxYearDifference = 2;
+  const dateYear = value => {
+    const match = String(value || '').match(/^(19\\d{2}|20\\d{2})/);
+    return match ? Number(match[1]) : null;
+  };
+  const yearCompatible = value => {
+    const actualYear = dateYear(value);
+    return !hintYear || !actualYear || Math.abs(hintYear - actualYear) <= maxYearDifference;
+  };
   // Filename years belong to individual TV seasons; compare them against
   // TMDB's season air_date, never against the show's first_air_date.
   const seasonYearHints = [...new Set(
@@ -346,6 +355,26 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     return pending;
   }
 
+  // TMDB searches original, translated and alternative movie titles. Verify
+  // a cross-language hit against that movie's official alternative-title list.
+  const alternativeTitlesCache = new Map();
+  async function fetchAlternativeTitles(tmdbId, isTv) {
+    const cacheKey = (isTv ? 'tv:' : 'movie:') + String(tmdbId);
+    if (alternativeTitlesCache.has(cacheKey)) return alternativeTitlesCache.get(cacheKey);
+    const pending = (async () => {
+      const response = await fetchWithRetry(() =>
+        tmdbGet(BASE + '/' + (isTv ? 'tv' : 'movie') + '/' + tmdbId + '/alternative_titles', {}, { timeout: 8000 })
+      );
+      const data = response?.data || {};
+      const rows = Array.isArray(data.titles) ? data.titles
+        : Array.isArray(data.results) ? data.results : [];
+      return rows.map(row => typeof row === 'string' ? row : (row?.title || row?.name || ''))
+        .filter(Boolean);
+    })();
+    alternativeTitlesCache.set(cacheKey, pending);
+    return pending;
+  }
+
   // ── Result builder ──────────────────────────────────────────────────────────
   function buildResult(d, isTv, extra = {}, confidence = 100, algo = 'direct') {
     return {
@@ -380,7 +409,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       const r = await fetchWithRetry(() =>
         tmdbGet(`${BASE}/${mt}/${tmdbIdHint}`, {}, { timeout: 8000 })
       );
-      if (r?.data && (r.data.title || r.data.name)) {
+      if (r?.data && (r.data.title || r.data.name) && yearCompatible(r.data.release_date || r.data.first_air_date)) {
         const tv = mt === 'tv';
         return buildResult(r.data, tv, await fetchSeasonData(r.data.id, season, tv), 100, 'tmdb-id');
       }
@@ -399,7 +428,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
         const r = await fetchWithRetry(() =>
           tmdbGet(`${BASE}/${mt}/${hit.id}`, {}, { timeout: 10000 })
         );
-        if (r?.data && (r.data.title || r.data.name)) {
+        if (r?.data && (r.data.title || r.data.name) && yearCompatible(r.data.release_date || r.data.first_air_date)) {
           const tv = mt === 'tv';
           return buildResult(r.data, tv, await fetchSeasonData(r.data.id, season, tv), 100, 'imdb-id');
         }
@@ -413,46 +442,101 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   // ── Core scorer ─────────────────────────────────────────────────────────────
   async function runStrategy(ep, params, strict) {
     return fetchWithRetry(async () => {
-      const url2  = ep === 'multi' ? `${BASE}/search/multi` : `${BASE}/search/${ep}`;
-      const res   = await tmdbGet(url2, params, { timeout: 10000 });
+      const url2 = ep === 'multi' ? BASE + '/search/multi' : BASE + '/search/' + ep;
+      const res = await tmdbGet(url2, params, { timeout: 10000 });
       let results = res.data.results || [];
       if (ep === 'multi') results = results.filter(r => r.media_type === 'movie' || r.media_type === 'tv');
       if (!results.length) return null;
 
       const queryTitle = params.query;
+      const normalizedQuery = normalizeMatchTitle(queryTitle);
+      const compactQuery = normalizedQuery.replace(/\s+/g, '');
+      const isVeryShortTitle = compactQuery.length <= 4;
+      const expectedType = isSeries ? 'series' : 'movie';
+
       const scored = results.slice(0, 30).map(r => {
-        const rTitle   = r.title || r.name || '';
-        const rOrig    = r.original_title || r.original_name || '';
-        const rYear    = r.release_date ? parseInt(r.release_date, 10) : r.first_air_date ? parseInt(r.first_air_date, 10) : null;
-        const rType    = ep === 'multi' ? (r.media_type === 'tv' ? 'series' : 'movie') : (ep === 'tv' ? 'series' : 'movie');
-        let simMain = Math.max(
+        const rTitle = r.title || r.name || '';
+        const rOrig = r.original_title || r.original_name || '';
+        const rYear = r.release_date ? parseInt(r.release_date, 10)
+          : r.first_air_date ? parseInt(r.first_air_date, 10) : null;
+        const rType = ep === 'multi'
+          ? (r.media_type === 'tv' ? 'series' : 'movie')
+          : (ep === 'tv' ? 'series' : 'movie');
+        const directSimilarity = Math.max(
           stringSimilarity(rTitle, queryTitle),
           stringSimilarity(rOrig, queryTitle)
         );
-        const queryNumbers = normalizeMatchTitle(queryTitle).match(/\b\d+\b/g) || [];
-        const resultNumbers = normalizeMatchTitle(rTitle + ' ' + rOrig).match(/\b\d+\b/g) || [];
-        // Keep sequels distinct: a candidate containing a sequel number should
-        // not confidently resolve to the original title with that number absent.
-        if (queryNumbers.length && !queryNumbers.some(number => resultNumbers.includes(number))) {
-          simMain *= 0.72;
-        }
-
-        let score = simMain * 70;
-        if (hintYear && rYear) {
-          const d = Math.abs(hintYear - rYear);
-          score += d === 0 ? 20 : d === 1 ? 10 : d <= 2 ? 4 : -8;
-        } else if (!hintYear && !rYear) score += 3;
-        if ((isSeries ? 'series' : 'movie') === rType) score += 12; else score -= 8;
-        if (r.popularity > 50) score += 3;
-        if (r.popularity > 200) score += 2;
-        return { r, score, simMain, isTvCandidate: rType === 'series' };
+        const exactDirect = [rTitle, rOrig].some(value =>
+          normalizeMatchTitle(value) === normalizedQuery
+        );
+        const yearDiff = hintYear && rYear ? Math.abs(hintYear - rYear) : null;
+        const hasCompatibleYear = yearDiff == null || yearDiff <= maxYearDifference;
+        return {
+          r, rTitle, rOrig, rYear, rType, directSimilarity, exactDirect,
+          titleSimilarity: directSimilarity, exactTitle: exactDirect,
+          yearDiff, hasCompatibleYear, isTvCandidate: rType === 'series',
+          alternativeTitles: [],
+        };
       });
 
-      // Where a TV search is ambiguous, compare the filename's year with the
-      // selected season's actual TMDB air date. This distinguishes same-title
-      // remakes and avoids penalizing later seasons against the series premiere.
+      // Search results may match through a translated/alternative title even
+      // when their canonical original title is very different.
+      const aliasCandidates = scored
+        .filter(item => item.hasCompatibleYear && !item.exactDirect && item.directSimilarity < 0.86)
+        .sort((a, b) => (b.r.popularity || 0) - (a.r.popularity || 0))
+        .slice(0, hintYear ? 12 : 6);
+      await Promise.all(aliasCandidates.map(async item => {
+        item.alternativeTitles = await fetchAlternativeTitles(item.r.id, item.isTvCandidate);
+        const aliasSimilarity = item.alternativeTitles.reduce((best, alias) =>
+          Math.max(best, stringSimilarity(alias, queryTitle)), 0
+        );
+        const exactAlias = item.alternativeTitles.some(alias =>
+          normalizeMatchTitle(alias) === normalizedQuery
+        );
+        item.titleSimilarity = Math.max(item.directSimilarity, aliasSimilarity);
+        item.exactTitle = item.exactDirect || exactAlias;
+      }));
+
+      for (const item of scored) {
+        // Short names like Robo must match a canonical or verified alternate
+        // title exactly. Approximate matching is unsafe for short titles.
+        const titleMatched = isVeryShortTitle
+          ? item.exactTitle
+          : (item.exactTitle || item.titleSimilarity >= (strict ? 0.86 : 0.82));
+        if (!item.hasCompatibleYear || !titleMatched) {
+          item.score = -Infinity;
+          continue;
+        }
+
+        const queryNumbers = normalizedQuery.match(/\b\d+\b/g) || [];
+        const candidateNames = [item.rTitle, item.rOrig, ...item.alternativeTitles].join(' ');
+        const resultNumbers = normalizeMatchTitle(candidateNames).match(/\b\d+\b/g) || [];
+        // Keep sequel numbers distinct even when an alternate title matches.
+        if (queryNumbers.length && !queryNumbers.some(number => resultNumbers.includes(number))) {
+          item.score = -Infinity;
+          continue;
+        }
+
+        let score = item.titleSimilarity * 70;
+        if (hintYear && item.rYear) {
+          score += item.yearDiff === 0 ? 24 : item.yearDiff === 1 ? 12 : 4;
+        } else if (!hintYear && !item.rYear) {
+          score += 3;
+        }
+        if (expectedType === item.rType) score += 12;
+        else score -= 8;
+        if (item.r.popularity > 50) score += 3;
+        if (item.r.popularity > 200) score += 2;
+        if (item.exactTitle) score += 5;
+        item.score = score;
+      }
+
+      // Compare TV filename years with each candidate season air date, not
+      // against the show's first-air year.
       if (isSeries && season && seasonYearHints.length) {
-        const seasonCandidates = scored.filter(item => item.isTvCandidate).slice(0, 5);
+        const seasonCandidates = scored.filter(item =>
+          item.score > -Infinity && item.isTvCandidate
+        ).sort((a, b) => b.score - a.score).slice(0, 5);
         await Promise.all(seasonCandidates.map(async item => {
           const seasonData = await fetchSeasonData(item.r.id, season, true);
           if (!seasonData.seasonYear) return;
@@ -461,26 +545,29 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
           item.score += nearest === 0 ? 18 : nearest === 1 ? 12 : nearest === 2 ? 8 : nearest === 3 ? 4 : nearest <= 5 ? 1 : -8;
         }));
       }
+
       scored.sort((a, b) => b.score - a.score);
       const best = scored[0];
-      const simThresh   = strict ? (isShort ? 0.70 : 0.55) : (isShort ? 0.45 : 0.30);
-      const scoreThresh = strict ? (isShort ? 65  : 55)    : (isShort ? 47   : 37);
-      if (best.score < scoreThresh || best.simMain < simThresh) return null;
+      const minScore = strict ? 65 : 58;
+      if (!best || !Number.isFinite(best.score) || best.score < minScore) return null;
 
       const isTv = ep === 'tv' || best.r.media_type === 'tv';
       const dr = await fetchWithRetry(() =>
-        tmdbGet(`${BASE}/${isTv ? 'tv' : 'movie'}/${best.r.id}`, {}, { timeout: 10000 })
+        tmdbGet(BASE + '/' + (isTv ? 'tv' : 'movie') + '/' + best.r.id, {}, { timeout: 10000 })
       );
       if (!dr) return null;
-      const sd = await fetchSeasonData(best.r.id, season, isTv);
-      const d  = dr.data;
+      const d = dr.data || {};
+      if (!yearCompatible(d.release_date || d.first_air_date)) return null;
 
-      // Prefer TMDB title when similar; keep query title for dubbed names
-      const tmdbTitle    = d.title || d.name || title;
-      const queryClean   = cleanTitleForApi(queryTitle) || queryTitle;
-      const tmdbClean    = cleanTitleForApi(tmdbTitle)  || tmdbTitle;
-      const titleSim     = stringSimilarity(queryClean.toLowerCase(), tmdbClean.toLowerCase());
-      const displayTitle = titleSim >= 0.5 ? tmdbTitle : (cleanTitleForApi(title) || title);
+      const sd = await fetchSeasonData(best.r.id, season, isTv);
+      const tmdbTitle = d.title || d.name || title;
+      const queryClean = cleanTitleForApi(queryTitle) || queryTitle;
+      const tmdbClean = cleanTitleForApi(tmdbTitle) || tmdbTitle;
+      const titleSim = stringSimilarity(queryClean.toLowerCase(), tmdbClean.toLowerCase());
+      // Keep the source's dubbed title when its alternate-title alias was verified.
+      const displayTitle = (titleSim >= 0.5 || best.exactTitle)
+        ? (best.exactDirect || titleSim >= 0.5 ? tmdbTitle : (cleanTitleForApi(title) || title))
+        : (cleanTitleForApi(title) || title);
       return buildResult(
         { ...d, title: displayTitle, name: displayTitle },
         isTv, sd, Math.round(best.score), params._algo || 'A1'
