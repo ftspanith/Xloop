@@ -696,7 +696,57 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       Object.assign(newDl, inferRepackStatus(newDl, dbRec?.downloads || []));
 
       if (dbRec) {
-        if (dbRec.downloads?.some(d => d.links?.some(l => l.url === finalUrl))) { skipped++; continue; }
+        const duplicateIndex = (dbRec.downloads || []).findIndex(download =>
+          download.links?.some(link => link.url === finalUrl)
+        );
+        if (duplicateIndex >= 0) {
+          // The exact URL already exists. Do not add it twice, but still backfill
+          // metadata parsed from its filename and upgrade an explicit repack tag.
+          const duplicate = dbRec.downloads[duplicateIndex];
+          const duplicateSet = {};
+          const metadataFields = [
+            'filename', 'language', 'languageType', 'source', 'container',
+            'bitDepth', 'audioChannels', 'codec', 'hdr', 'audio',
+            'aspectRatio', 'runtimeMinutes', 'certification', 'isIMAX',
+          ];
+          for (const field of metadataFields) {
+            const value = newDl[field];
+            const missing = duplicate[field] == null || duplicate[field] === '';
+            const strongerBoolean = field === 'isIMAX' && value === true && duplicate[field] !== true;
+            if ((missing || strongerBoolean) && value !== null && value !== undefined && value !== '') {
+              duplicateSet[`downloads.${duplicateIndex}.${field}`] = value;
+            }
+          }
+          if (newDl.isRepack) {
+            duplicateSet[`downloads.${duplicateIndex}.isRepack`] = true;
+            duplicateSet[`downloads.${duplicateIndex}.releaseType`] = 'repack';
+            if (newDl.repackReason) duplicateSet[`downloads.${duplicateIndex}.repackReason`] = newDl.repackReason;
+          }
+
+          if (Object.keys(duplicateSet).length) {
+            const enriched = await Movie.findByIdAndUpdate(dbRec._id, { $set: duplicateSet }, { new: true });
+            if (enriched) {
+              recomputeAggregates(enriched);
+              existing = await Movie.findByIdAndUpdate(dbRec._id, {
+                $set: {
+                  downloads: enriched.downloads,
+                  formats: enriched.formats,
+                  quality: enriched.quality,
+                  languages: enriched.languages,
+                  codecs: enriched.codecs,
+                  isIMAX: enriched.isIMAX,
+                  aspectRatio: enriched.aspectRatio,
+                  runtimeMinutes: enriched.runtimeMinutes,
+                  certification: enriched.certification,
+                  languageType: enriched.languageType,
+                }
+              }, { new: true });
+              updated++;
+            }
+          }
+          skipped++;
+          continue;
+        }
         const newMB = toMB(size);
         let matchedIdx = -1;
         for (let j = 0; j < dbRec.downloads.length; j++) {
