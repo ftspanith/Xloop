@@ -33,6 +33,7 @@
     "test:telegram-ingestion": "node --test tests/telegram-ingestion.test.js tests/telegram-ingestion-metadata.test.js",
     "import:db": "node pipeline_full.js --from-mongodb",
     "test:metadata-search": "node --test tests/tmdb-search-shared.test.js",
+    "test:search-ui": "node --test test/search-ui-regressions.test.js",
     "test:importer-metadata": "node --test tests/importer-metadata.test.js tests/repack-media-metadata.test.js",
     "test:repack-metadata": "node --test tests/repack-media-metadata.test.js"
   },
