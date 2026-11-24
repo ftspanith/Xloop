@@ -295,6 +295,7 @@ router.get('/start', auth, async (req, res) => {
         // skipBypass is always defined here (line 156), so just use it directly
         noBypass: !!skipBypass,
         noWipe: !!skipScraper,
+        fromMongoDB: !!skipScraper,
         resume: !!resume,
         importSrc,
         scope,
@@ -363,7 +364,7 @@ router.post('/start', auth, async (req, res) => {
   setPipelineRunningFlag(true);
   broadcast(`[START] ${label}...`);
   broadcast(`[INFO] Pipeline running in background — safe to close this tab.`);
-  if (skipScraper) broadcast(`[INFO] Skip Scraper: re-extracting from telegram_export.json`);
+  if (skipScraper) broadcast(`[INFO] Skip Scraper: importing approved links directly from MongoDB ExtractedLink (no scrape or upload)`);
   if (scope === 'daily') broadcast(`[INFO] Scope: Today's new content only`);
   if (scope === 'title' && titleFilter) broadcast(`[INFO] Scope: Searching for title matching "${titleFilter}"`);
 
@@ -375,6 +376,7 @@ router.post('/start', auth, async (req, res) => {
         // (Skip Scraper = import-only = no bypass needed)
         noBypass: skipBypass !== undefined ? !!skipBypass : !!skipScraper,
         noWipe: !!skipScraper,
+        fromMongoDB: !!skipScraper,
         resume: !!resume,
         scope,
         titleFilter: titleFilter || undefined,
