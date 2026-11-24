@@ -403,7 +403,7 @@ async function searchOMDB(title, year, isSeries, omdbKey) {
     return fetchWithRetry(async () => {
       const params = { t, apikey: omdbKey, type: isSeries ? 'series' : 'movie', plot: 'short' };
       if (y) params.y = y;
-      const res = await axios.get('http://www.omdbapi.com/', { params, timeout: 10000 });
+      const res = await axios.get('https://www.omdbapi.com/', { params, timeout: 10000 });
       const d   = res.data;
       if (!d || d.Response === 'False') return null;
       const omdbYear = d.Year ? parseInt(d.Year) : year;
