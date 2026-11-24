@@ -1041,112 +1041,210 @@ router.post('/refetch-poster/:id', auth, async (req, res) => {
 // Accepts an array of pre-parsed manual entries and imports with full TMDB enrichment.
 // Entry shape: { title, year, quality, size, codec, hdr, audio, language, season, episode, type, links: [{url}] }
 router.post('/manual-batch', auth, async (req, res) => {
-  const { entries = [] } = req.body || {};
-  if (!entries.length) return res.status(400).json({ message: 'No entries provided' });
+  try {
+    const { entries = [] } = req.body || {};
+    if (!Array.isArray(entries) || !entries.length) {
+      return res.status(400).json({ message: 'No entries provided' });
+    }
 
-  const { searchTMDB, searchOMDB, recomputeAggregates } = require('../pipeline_full');
-  const { detectCodec, detectHDR, extractAudio } = require('../utils/parser');
-  // Note: detectHost is defined locally in this file (line 43)
+    const { searchTMDB, searchOMDB, recomputeAggregates } = require('../pipeline_full');
+    const {
+      detectCodec, detectHDR, extractAudio, extractSize, detectAllLanguages,
+      extractYear, extractSeasonEpisode,
+    } = require('../utils/parser');
 
-  const results = [];
-  // Group by title+year to avoid duplicate TMDB calls
-  const groups = {};
-  for (const e of entries) {
-    const key = `${(e.title || '').toLowerCase().trim()}__${e.year || ''}`;
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(e);
-  }
+    const groups = new Map();
+    for (const entry of entries) {
+      const title = String(entry.title || entry.rawTitle || '').trim();
+      if (!title) continue;
+      const isSeries = entry.type === 'series' || entry.type === 'anime' ||
+        entry.isSeries === true || entry.contentType === 'series' || entry.contentType === 'anime';
+      const parentYear = isSeries
+        ? (entry.messageYear || entry.year || '')
+        : (entry.messageYear || entry.year || '');
+      const key = title.toLowerCase() + '__' + (isSeries ? parentYear : parentYear) +
+        '__' + (isSeries ? 'tv' : 'movie');
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ ...entry, title, isSeries });
+    }
 
-  for (const [, items] of Object.entries(groups)) {
-    const rep = items[0];
-    const isSer = rep.type === 'series' || rep.type === 'anime';
+    const results = [];
+    for (const items of groups.values()) {
+      const rep = items[0];
+      const isSeries = items.some(item => item.isSeries);
+      const isAnime = items.some(item => item.type === 'anime' || item.contentType === 'anime');
+      const finalType = isAnime ? 'anime' : (isSeries ? 'series' : 'movie');
+      const yearHints = [...new Set(items.flatMap(item => [
+        item.messageYear, item.year, item.fileYear, extractYear([item.filename]),
+      ]).filter(Boolean).map(Number).filter(year => Number.isInteger(year) && year >= 1900 && year <= 2099))];
+      const seasonYearHints = items
+        .filter(item => !rep.season || Number(item.season) === Number(rep.season))
+        .map(item => item.fileYear || extractYear([item.filename]))
+        .filter(Boolean);
+      const titleYearHint = isSeries ? (rep.messageYear || rep.year || null) : (rep.messageYear || rep.year || null);
 
-    // TMDB lookup
-    let meta = {};
-    const tmdb = await searchTMDB(rep.title, rep.year, isSer, rep.season, null, null, null);
-    if (tmdb) {
-      Object.assign(meta, tmdb);
-      const omdb = await searchOMDB(rep.title, rep.year, isSer);
+      let meta = {};
+      const tmdb = await searchTMDB(
+        rep.title, titleYearHint, isSeries, rep.season || null, null,
+        rep.imdbId || null, rep.tmdbIdHint || null, yearHints, seasonYearHints
+      );
+      if (tmdb) Object.assign(meta, tmdb);
+
+      const omdb = await searchOMDB(rep.title, titleYearHint, isSeries, yearHints);
       if (omdb) {
-        if (!meta.rating && omdb.rating)           meta.rating = omdb.rating;
-        if (!meta.description && omdb.description) meta.description = omdb.description;
-        if (omdb.imdbId)                           meta.imdbId = omdb.imdbId;
-        if (omdb.poster && omdb.poster !== meta.poster) meta.posterFallback = omdb.poster;
+        if (!meta.title) meta.title = omdb.title;
+        if (!meta.rating) meta.rating = omdb.rating;
+        if (!meta.description) meta.description = omdb.description;
+        if (!meta.duration) meta.duration = omdb.duration;
+        if (!meta.genre?.length && omdb.genre?.length) meta.genre = omdb.genre;
+        if (!meta.imdbId) meta.imdbId = omdb.imdbId;
+        if (!meta.poster) meta.poster = omdb.poster;
+        else if (omdb.poster && omdb.poster !== meta.poster) meta.posterFallback = omdb.poster;
+        if (!meta.type) meta.type = omdb.type;
       }
-    } else {
-      const omdb = await searchOMDB(rep.title, rep.year, isSer);
-      if (omdb) Object.assign(meta, omdb, { tmdbId: '' });
-    }
-    if (!meta.title) meta.title = rep.title;
 
-    const finalType = rep.type === 'anime' ? 'anime' : (isSer ? 'series' : 'movie');
-    const titleEsc = meta.title.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
-    let existing = meta.tmdbId ? await Movie.findOne({ tmdbId: meta.tmdbId }) : null;
-    if (!existing) existing = await Movie.findOne({ title: { $regex: `^${titleEsc}$`, $options: 'i' } });
+      const finalTitle = meta.title || rep.title;
+      const expectedTypes = isSeries ? { $in: ['series', 'anime'] } : 'movie';
+      const escapedTitle = [...finalTitle].map(char =>
+        '$^.*+?()[]{}|'.includes(char) || char === String.fromCharCode(92)
+          ? String.fromCharCode(92) + char : char
+      ).join('');
+      const titleRegex = new RegExp('^' + escapedTitle + '$', 'i');
+      let existing = meta.tmdbId
+        ? await Movie.findOne({ tmdbId: String(meta.tmdbId), type: expectedTypes })
+        : null;
+      if (!existing) existing = await Movie.findOne({ title: titleRegex, type: expectedTypes });
 
-    const downloads = [];
-    for (const item of items) {
-      const fn = item.filename || item.links?.[0]?.url || '';
-      const parsedSize = item.size || require('../utils/parser').extractSize(fn) || '';
-      const parsedLanguages = require('../utils/parser').detectAllLanguages(fn);
-      const parsedLanguage = parsedLanguages.filter(l => l !== 'Multi').join(', ') || (parsedLanguages.includes('Multi') ? 'Multi' : '');
-      const codec = item.codec || detectCodec(fn) || 'Other';
-      const hdr   = item.hdr   || detectHDR(fn)   || null;
-      const audio = item.audio || extractAudio(fn) || null;
-      for (const link of (item.links || [])) {
-        const host = detectHost(link.url);
-        downloads.push({
-          quality: item.quality || 'HD',
-          size:    parsedSize,
-          filename: item.filename || '',
-          language: item.language || parsedLanguage || '',
-          codec, hdr, audio,
-          season:  item.season  ?? null,
-          episode: item.episode ?? null,
-          links: [{ host, url: normalizeGdflixUrl(link.url), isFast: /gdflix\.dev|hubcloud|gdlink/i.test(link.url) }],
-        });
+      const downloads = [];
+      for (const item of items) {
+        const filename = String(item.filename || '').trim();
+        const parsedEpisode = filename ? extractSeasonEpisode(filename) : {};
+        const season = item.season ?? parsedEpisode?.season ?? null;
+        const episode = item.episode ?? parsedEpisode?.episode ?? null;
+        const fileYear = Number(item.fileYear || extractYear([filename])) || null;
+        const parsedLanguages = filename ? detectAllLanguages(filename) : [];
+        const language = item.language || parsedLanguages.filter(value => value !== 'Multi').join(', ') ||
+          (parsedLanguages.includes('Multi') ? 'Multi' : '');
+        const size = item.size || (filename ? extractSize(filename) : '') || '';
+        const codec = item.codec || (filename ? detectCodec(filename) : '') || 'Other';
+        const hdr = item.hdr || (filename ? detectHDR(filename) : '') || null;
+        const audio = item.audio || (filename ? extractAudio(filename) : '') || null;
+        const audioTracks = Array.isArray(item.audioTracks) && item.audioTracks.length >= 2
+          ? item.audioTracks.slice(0, 8) : [];
+
+        for (const link of (item.links || [])) {
+          const url = normalizeGdflixUrl(link.url || '');
+          if (!url) continue;
+          downloads.push({
+            quality: item.quality || 'HD',
+            size,
+            filename,
+            fileYear,
+            language,
+            codec,
+            hdr,
+            audio,
+            audioTracks,
+            source: item.source || '',
+            container: item.container || '',
+            bitDepth: item.bitDepth || '',
+            audioChannels: item.audioChannels || '',
+            isRepack: !!item.isRepack,
+            releaseType: item.releaseType || (item.isRepack ? 'Repack' : 'Original'),
+            season,
+            episode,
+            links: [{ host: detectHost(url), url, isFast: /gdflix\.dev|hubcloud|gdlink/i.test(url) }],
+          });
+        }
       }
-    }
 
-    if (existing) {
-      // Merge: add new downloads, skip exact URL duplicates
-      let added = 0;
-      for (const dl of downloads) {
-        const url = dl.links[0]?.url;
-        if (!url || existing.downloads.some(d => d.links?.some(l => l.url === url))) continue;
-        existing.downloads.push(dl);
-        added++;
+      if (!downloads.length) {
+        results.push({ title: finalTitle, action: 'skipped', added: 0, reason: 'No valid links' });
+        continue;
       }
-      if (added > 0) {
-        recomputeAggregates(existing);
-        await existing.save();
-        results.push({ title: meta.title, action: 'updated', added });
+
+      if (existing) {
+        const knownUrls = new Set((existing.downloads || []).flatMap(download =>
+          (download.links || []).map(link => String(link.url || ''))
+        ));
+        let added = 0;
+        for (const download of downloads) {
+          const url = download.links[0]?.url;
+          if (!url || knownUrls.has(url)) continue;
+          existing.downloads.push(download);
+          knownUrls.add(url);
+          added++;
+        }
+
+        const seasonYears = { ...(existing.seasonYears || {}) };
+        for (const download of downloads) {
+          if (download.season && download.fileYear && !seasonYears['s' + download.season]) {
+            seasonYears['s' + download.season] = download.fileYear;
+          }
+        }
+        if (rep.season && meta.seasonYear) seasonYears['s' + rep.season] = Number(meta.seasonYear);
+        existing.seasonYears = seasonYears;
+        if (meta.releaseDate && meta.year && meta.tmdbId &&
+            String(existing.tmdbId || '') === String(meta.tmdbId)) {
+          existing.releaseDate = meta.releaseDate;
+          existing.year = meta.year;
+        }
+        if (finalType === 'anime') existing.type = 'anime';
+        if (!existing.tmdbId && meta.tmdbId) existing.tmdbId = String(meta.tmdbId);
+        if (!existing.imdbId && meta.imdbId) existing.imdbId = meta.imdbId;
+        for (const field of ['poster', 'posterFallback', 'backdrop', 'description', 'rating', 'duration', 'totalSeasons']) {
+          if (!existing[field] && meta[field]) existing[field] = meta[field];
+        }
+        if ((!existing.genre || !existing.genre.length) && meta.genre?.length) existing.genre = meta.genre;
+        if (!existing.releaseDate && meta.releaseDate) existing.releaseDate = meta.releaseDate;
+        if (!existing.year && meta.year && !isSeries) existing.year = meta.year;
+
+        if (added) {
+          recomputeAggregates(existing);
+          await existing.save();
+        } else {
+          await existing.save();
+        }
+        results.push({ title: existing.title, action: added ? 'updated' : 'skipped', added });
       } else {
-        results.push({ title: meta.title, action: 'skipped', added: 0 });
+        const seasonYears = Object.fromEntries(downloads
+          .filter(download => download.season && download.fileYear)
+          .map(download => ['s' + download.season, download.fileYear]));
+        if (rep.season && meta.seasonYear) seasonYears['s' + rep.season] = Number(meta.seasonYear);
+        const document = await Movie.create({
+          title: finalTitle,
+          tmdbId: meta.tmdbId || '',
+          imdbId: meta.imdbId || '',
+          type: finalType,
+          totalSeasons: meta.totalSeasons || 0,
+          description: meta.description || '',
+          poster: meta.poster || '',
+          posterFallback: meta.posterFallback || '',
+          backdrop: meta.backdrop || '',
+          releaseDate: meta.releaseDate || '',
+          seasonYears,
+          rating: meta.rating || 0,
+          year: meta.year || rep.messageYear || (isSeries ? null : rep.year || null),
+          genre: meta.genre || [],
+          duration: meta.duration || '',
+          quality: downloads[0].quality,
+          language: meta.originalLanguage || rep.language || '',
+          formats: [...new Set(downloads.map(download => download.quality))].filter(Boolean),
+          codecs: [...new Set(downloads.map(download => download.codec))].filter(codec => codec && codec !== 'Other'),
+          languages: [...new Set(downloads.map(download => download.language))].filter(Boolean),
+          downloads,
+        });
+        recomputeAggregates(document);
+        await document.save();
+        results.push({ title: document.title, action: 'created', id: document._id, added: downloads.length });
       }
-    } else {
-      const quality = downloads[0]?.quality || 'HD';
-      const newMovie = await Movie.create({
-        title: meta.title, tmdbId: meta.tmdbId || '', imdbId: meta.imdbId || '',
-        type: finalType, totalSeasons: meta.totalSeasons || 0,
-        description: meta.description || '',
-        poster: meta.poster || '', posterFallback: meta.posterFallback || '',
-        backdrop: meta.backdrop || '',
-        rating: meta.rating || 0, year: meta.year || rep.year || null,
-        genre: meta.genre || [], duration: meta.duration || '',
-        quality, language: meta.originalLanguage || rep.language || '',
-        formats: [...new Set(downloads.map(d => d.quality))].filter(Boolean),
-        codecs:  [...new Set(downloads.map(d => d.codec))].filter(c => c && c !== 'Other'),
-        languages: [...new Set(downloads.map(d => d.language))].filter(Boolean),
-        downloads,
-      });
-      results.push({ title: meta.title, action: 'created', id: newMovie._id });
     }
+
+    res.json({ message: 'Processed ' + results.length + ' title groups', results });
+  } catch (error) {
+    res.status(500).json({ message: 'Manual batch import failed: ' + error.message });
   }
-
-  res.json({ message: `Processed ${results.length} title groups`, results });
 });
-
 
 // ── POST /api/import/normalize-links-batch ──────────────────────────────────
 // Safely migrate existing GDFlix/HubCloud links in small resumable batches.
