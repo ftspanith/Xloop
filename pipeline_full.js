@@ -893,7 +893,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           certification: newDl.certification || '',
           isIMAX: !!newDl.isIMAX,
           aspectRatio: newDl.aspectRatio || '',
-          languageType: newDl.languageType || classifyLanguageType(allLangsSet, language),
+          languageType: newDl.languageType || classifyLanguageType(detectAllLanguages(displayLang), displayLang),
           quality, language: displayLang,
           formats: [quality].filter(Boolean), codecs: [codec].filter(c => c !== 'Other'),
           languages: allLangsSet,
