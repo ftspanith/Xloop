@@ -177,3 +177,16 @@ test('provider normalization handles new subdomains and TLD rotations safely', (
     'https://www.example.com/file/abc'
   );
 });
+
+test('recovers a labelled size placed immediately before its filename', () => {
+  const parsed = parseMessageBlock([
+    'Another Film (2022)',
+    'Size: 3.25 GB',
+    'Another.Film.2022.1080p.BluRay.mkv',
+    'https://node.gdflix.xyz/file/size-before',
+  ].join('\\n'), 78, '2022-10-01');
+
+  assert.ok(parsed);
+  assert.equal(parsed.downloads[0].size, '3.25GB');
+  assert.equal(parsed.downloads[0].filename, 'Another.Film.2022.1080p.BluRay.mkv');
+});
