@@ -190,6 +190,19 @@ test('repack ranks ahead of main even when main has higher resolution', () => {
   assert.deepEqual(items.map(item => item.quality), ['1080p', '4K']);
 });
 
+test('a later same-episode higher-resolution encode can be inferred as a repack', () => {
+  const main = {
+    quality:'1080p', source:'WEB-DL', codec:'H.264', audio:'AAC',
+    size:'2 GB', season:null, episode:null, uploadDate:'2024-01-01',
+  };
+  const higherResolution = {
+    ...main, quality:'4K', source:'BluRay', codec:'HEVC', hdr:'HDR10',
+    audio:'DTS-HD', size:'8 GB', uploadDate:'2024-02-01',
+  };
+  assert.equal(inferRepackStatus(higherResolution,[main]).isRepack,true);
+  assert.equal(inferRepackStatus({...higherResolution,quality:'720p'},[main]).isRepack,false);
+});
+
 test('a later upload date alone does not turn an otherwise equal encode into a repack', () => {
   const old = {quality:'1080p',source:'WEB-DL',codec:'HEVC',size:'2 GB',uploadDate:'2024-01-01'};
   const newer = {...old,uploadDate:'2024-02-01'};
