@@ -523,7 +523,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
 
     if (cleanTitle && needsMetadata) {
       const tmdb = await searchTMDB(
-        cleanTitle, rep.year, isSer, rep.season, group.msgDate,
+        rep.title || cleanTitle, rep.year, isSer, rep.season, group.msgDate,
         rep.imdbId || null, rep.tmdbIdHint || null
       );
       if (tmdb) {
