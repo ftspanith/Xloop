@@ -199,4 +199,11 @@ test('explicit MongoDB catalogue reset preserves the ExtractedLink source collec
   assert.match(pipelineSource, /ExtractedLink\.find\(\{\}\)\.lean\(\)/);
   assert.match(pipelineSource, /ExtractedLink source preserved/);
   assert.doesNotMatch(pipelineSource, /ExtractedLink\.deleteMany\(/);
+
+  const preflight = pipelineSource.indexOf('let preloadedMongoSourceLinks = null;');
+  const catalogueDelete = pipelineSource.indexOf('await Movie.deleteMany({});');
+  assert.ok(preflight >= 0 && catalogueDelete > preflight,
+    'approved source links must be validated before deleting Movie documents');
+  assert.match(pipelineSource, /if \(!approvedSourceCount\)[\s\S]*?throw new Error\('No approved provider links found in MongoDB; catalogue reset aborted'\)/);
+  assert.match(pipelineSource, /preloadedMongoSourceLinks \|\| await ExtractedLink\.find\(\{\}\)\.lean\(\)/);
 });
