@@ -412,12 +412,25 @@ function recomputeAggregates(doc) {
   doc.formats = [...new Set(dls.map(d => d.quality))].filter(Boolean);
   doc.codecs  = [...new Set(dls.map(d => d.codec || detectCodecLocal(d.filename)))].filter(c => c && c !== 'Other');
   const allLangs = [];
-  dls.forEach(d => { if (d.language) d.language.split(',').forEach(l => { const c = l.trim(); allLangs.push(c.charAt(0).toUpperCase() + c.slice(1).toLowerCase()); }); });
-  doc.languages = [...new Set(allLangs)].filter(lang => Boolean(lang) && !/^multi$/i.test(lang));
-  const primaryDownload = dls.find(download => download.languageType || download.language);
+  dls.forEach(d => {
+    if (!d.language) return;
+    d.language.split(',').forEach(l => {
+      const c = l.trim();
+      if (c && !/^(?:single|dual|multi)(?:\s+audio)?$/i.test(c)) {
+        allLangs.push(c.charAt(0).toUpperCase() + c.slice(1).toLowerCase());
+      }
+    });
+  });
+  doc.languages = [...new Set(allLangs)].filter(Boolean);
+  // Root language is derived from stored downloads, never TMDB/OMDb original language.
+  doc.language = doc.languages.join(', ');
+  const primaryDownload = dls.find(download =>
+    (download.language && !/^(?:single|dual|multi)(?:\s+audio)?$/i.test(String(download.language).trim()))
+    || Number(download.languageCount) > 0
+  ) || dls.find(download => download.languageType || download.language);
   const primaryLanguageInfo = primaryDownload
     ? classifyLanguages(primaryDownload.language || '', primaryDownload.filename || '')
-    : classifyLanguages(doc.languages || [], doc.language || '');
+    : classifyLanguages(doc.languages || [], '');
   doc.languageType = primaryDownload?.languageType || primaryLanguageInfo.languageType || '';
   const best = QUALITY_ORDER.find(q => doc.formats.includes(q));
   if (best) doc.quality = best;
@@ -824,7 +837,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
               $set: {
                 downloads: res.downloads,
                 formats: res.formats, quality: res.quality,
-                languages: res.languages, codecs: res.codecs, languageType: res.languageType,
+                languages: res.languages, language: res.language, codecs: res.codecs, languageType: res.languageType,
               }
             }, { new: true });
             _emitter(`[MERGED] ${dbRec.title} | ${quality} -> ${host}`);
@@ -844,7 +857,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
               $set: {
                 downloads: res.downloads,
                 formats: res.formats, quality: res.quality,
-                languages: res.languages, codecs: res.codecs, languageType: res.languageType,
+                languages: res.languages, language: res.language, codecs: res.codecs, languageType: res.languageType,
               }
             }, { new: true });
             _emitter(`[UPDATED] ${dbRec.title} | ${quality} -> ${host}`);
@@ -855,14 +868,14 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       }
 
       try {
-        const origLang2 = meta.originalLanguage || '';
-        // Prefer the download's detected language (e.g. 'Telugu') over TMDB original_language
-        // so dubbed movies show the right language, not the source film's language.
-        const displayLang = language || origLang2;
+        // Only languages actually present in our Telegram download records belong here.
+        // Do not add TMDB/OMDb original_language: it may not be available in any download.
         const allLangsSet = [...new Set(
-          [...(language||'').split(','), ...(origLang2||'').split(',')]
-            .map(l => l.trim()).filter(Boolean)
+          String(language || '').split(',')
+            .map(l => l.trim())
+            .filter(l => l && !/^(?:single|dual|multi)(?:\s+audio)?$/i.test(l))
         )];
+        const displayLang = allLangsSet.join(', ');
         const newDoc = await Movie.create({
           title: meta.title, tmdbId: meta.tmdbId || '', imdbId: meta.imdbId || '',
           type: finalType, totalSeasons: meta.totalSeasons || 0,
