@@ -220,12 +220,9 @@ function getAvailableLanguageLabels(downloads) {
   const labels = new Set();
   for (const dl of downloads || []) {
     const info = detectDownloadLanguageInfo(dl || {});
-    const names = info.languages.join(' + ');
-    if (info.languageType === 'Multi') labels.add(names ? 'MULTI (' + names + ')' : 'MULTI');
-    else if (info.languageType === 'Dual') labels.add(names ? 'DUAL (' + names + ')' : 'DUAL');
+    if (info.languageType === 'Multi' || info.languages.length >= 3) labels.add('MULTI');
+    else if (info.languageType === 'Dual' || info.languages.length === 2) labels.add('DUAL');
     else if (info.languages.length === 1) labels.add(info.languages[0]);
-    else if (info.languages.length === 2) labels.add('DUAL (' + names + ')');
-    else if (info.languages.length >= 3) labels.add('MULTI (' + names + ')');
   }
   return [...labels];
 }
@@ -246,9 +243,10 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     const detectedLangs = languageInfo.languages;
     const languageType = languageInfo.languageType;
     const isMulti = languageType === 'Multi';
-    const langLabel = detectedLangs.length
-      ? detectedLangs.join(' + ')
-      : (languageType === 'Dual' ? 'DUAL' : languageType === 'Multi' ? 'MULTI' : '');
+    // Keep each download row compact on mobile: names for Single, type only for Dual/Multi.
+    const langLabel = languageType === 'Multi' ? 'MULTI'
+      : languageType === 'Dual' ? 'DUAL'
+      : detectedLangs.length ? detectedLangs[0] : '';
 
     let res = dl.quality || 'HD';
     // Override from filename if filename has explicit quality token
