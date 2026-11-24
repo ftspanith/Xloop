@@ -1,0 +1,27 @@
+name: Media UI Regression Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'utils/parser.js'
+      - 'public/js/watch.js'
+      - 'public/css/style.css'
+      - 'tests/audio-codec-detection.test.js'
+      - 'tests/watch-download-display.test.js'
+      - 'tests/responsive-viewport.test.js'
+      - 'public/**/*.html'
+      - 'package.json'
+
+jobs:
+  media-ui-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run audio and responsive UI regressions
+        run: npm run test:media-ui
