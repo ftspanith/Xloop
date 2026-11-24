@@ -529,6 +529,7 @@ router.post('/import-batch', auth, async (req, res) => {
           const codec = item.codec || detectCodecLocal(item.filename);
           const hdr = item.hdr || null;
           const audio = item.audio || null;
+          const audioTracks = Array.isArray(item.audioTracks) && item.audioTracks.length >= 2 ? item.audioTracks.slice(0, 8) : [];
           const correctSeason = seasonFromFilename(item.filename) ?? item.season ?? null;
 
           let dbRec = existing;
@@ -538,13 +539,23 @@ router.post('/import-batch', auth, async (req, res) => {
           }
 
           const newDl = {
-            quality, size, filename: item.filename || '', language, codec, hdr, audio,
+            quality, size, filename: item.filename || '', language, codec, hdr, audio, audioTracks,
             season: correctSeason, episode: item.episode ?? null,
             links: [{ host, url: finalUrl, isFast: /gdflix|hubcloud|gdlink/i.test(finalUrl) }],
           };
 
           if (dbRec) {
-            if (dbRec.downloads?.some(d => d.links?.some(l => l.url === finalUrl))) { skipped++; continue; }
+            const duplicateDownloadIndex = dbRec.downloads?.findIndex(d => d.links?.some(l => l.url === finalUrl)) ?? -1;
+            if (duplicateDownloadIndex >= 0) {
+              const savedTracks = dbRec.downloads[duplicateDownloadIndex]?.audioTracks;
+              if (audioTracks.length >= 2 && (!Array.isArray(savedTracks) || savedTracks.length < 2)) {
+                await Movie.findByIdAndUpdate(dbRec._id, {
+                  $set: { [`downloads.${duplicateDownloadIndex}.audioTracks`]: audioTracks }
+                });
+              }
+              skipped++;
+              continue;
+            }
             const newMB = toMB(size);
             let matchedIdx = -1;
             for (let j = 0; j < dbRec.downloads.length; j++) {
@@ -577,6 +588,10 @@ router.post('/import-batch', auth, async (req, res) => {
             if (finalType === 'anime' && dbRec.type === 'series') metaSet.type = 'anime';
 
             if (matchedIdx >= 0) {
+              const matchedDownload = dbRec.downloads[matchedIdx] || {};
+              if (audioTracks.length >= 2 && (!Array.isArray(matchedDownload.audioTracks) || matchedDownload.audioTracks.length < 2)) {
+                metaSet[`downloads.${matchedIdx}.audioTracks`] = audioTracks;
+              }
               if (dbRec.downloads[matchedIdx].language) {
                 metaSet[`downloads.${matchedIdx}.language`] = dbRec.downloads[matchedIdx].language;
               }

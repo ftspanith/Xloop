@@ -220,7 +220,7 @@ function getAvailableLanguageLabels(downloads) {
   const labels = new Set();
   for (const dl of downloads || []) {
     const info = detectDownloadLanguageInfo(dl || {});
-    if (info.languageType === 'Multi' || info.languages.length >= 3) labels.add('MULTI');
+    if (info.languageType === 'Multi' || info.languages.length >= 3) labels.add('MULTi');
     else if (info.languageType === 'Dual' || info.languages.length === 2) labels.add('DUAL');
     else if (info.languages.length === 1) labels.add(info.languages[0]);
   }
@@ -243,17 +243,29 @@ function normalizeAudioDisplayLabel(value) {
 
 function detectAudioChannelsForDisplay(download) {
   const stored = String(download?.audioChannels || '').trim();
-  const layouts = /^(?:9\.1\.6|7\.1\.6|7\.1\.4|5\.1\.4|5\.1\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)$/;
+  const layouts = /^(?:11\.1\.8|9\.1\.8|9\.1\.6|9\.1\.4|7\.2\.4|7\.2\.2|7\.1\.8|7\.1\.6|7\.1\.4|7\.1\.2|5\.2\.4|5\.1\.6|5\.1\.4|5\.1\.2|3\.1\.2|7\.2|5\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)$/;
   if (layouts.test(stored)) return stored;
   const technicalText = [download?.filename || '', download?.tags || ''].join(' ');
-  const match = technicalText.match(/(?<!\d)(9\.1\.6|7\.1\.6|7\.1\.4|5\.1\.4|5\.1\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)(?!\d)/i);
+  const match = technicalText.match(/(?<!\d)(11\.1\.8|9\.1\.8|9\.1\.6|9\.1\.4|7\.2\.4|7\.2\.2|7\.1\.8|7\.1\.6|7\.1\.4|7\.1\.2|5\.2\.4|5\.1\.6|5\.1\.4|5\.1\.2|3\.1\.2|7\.2|5\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)(?!\d)/i);
   if (match) return match[1];
   if (/\b(?:STEREO|2CH)\b/i.test(technicalText)) return '2.0';
   if (/\b(?:MONO|1CH)\b/i.test(technicalText)) return '1.0';
   return '';
 }
-
 function buildAudioDisplayTag(download, audioValue) {
+  const tracks = Array.isArray(download?.audioTracks) ? download.audioTracks : [];
+  const explicitTrackLabels = tracks.map(track => {
+    const codec = normalizeAudioDisplayLabel(track?.codec);
+    if (!codec) return '';
+    const channels = detectAudioChannelsForDisplay({ audioChannels: track?.channels || '' });
+    const language = String(track?.language || '').trim();
+    return codec
+      + (channels ? ' + ' + channels : '')
+      + (language ? ' (' + language + ')' : '');
+  }).filter(Boolean);
+  const uniqueTrackLabels = [...new Set(explicitTrackLabels)];
+  if (uniqueTrackLabels.length >= 2) return uniqueTrackLabels.join(' / ');
+
   const audio = normalizeAudioDisplayLabel(audioValue || download?.audio);
   if (!audio) return '';
   const channels = detectAudioChannelsForDisplay(download);
@@ -309,7 +321,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     const languageType = languageInfo.languageType;
     const isMulti = languageType === 'Multi';
     // Keep each download row compact on mobile: names for Single, type only for Dual/Multi.
-    const langLabel = languageType === 'Multi' ? 'MULTI'
+    const langLabel = languageType === 'Multi' ? 'MULTi'
       : languageType === 'Dual' ? 'DUAL'
       : detectedLangs.length ? detectedLangs[0] : '';
 
@@ -349,25 +361,47 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     // Normalize source labels in legacy rows and infer missing values from filenames.
     let source = normalizeSourceLabel(fn) || normalizeSourceLabel(dl.source) || normalizeSourceLabel(tags);
 
-    // Audio: DB-stored field first, then detect from filename
+    // Audio: preserve stored metadata first, then recognize common release-codec aliases.
     let audio = dl.audio || '';
     if (!audio) {
       if (/truehd/i.test(fn)) audio = /\batmos\b/i.test(fn) ? 'TrueHD Atmos' : 'TrueHD';
       else if (/dts[.\s_-]?x\b/i.test(fn)) audio = 'DTS:X';
-      else if (/dts[.\s_-]?hd[.\s_-]?ma/i.test(fn)) audio = 'DTS-HD MA';
-      else if (/dts[.\s_-]?hd/i.test(fn)) audio = 'DTS-HD';
-      else if (/\bdts\b/i.test(fn)) audio = 'DTS';
+      else if (/dts[.\s_-]?hd[.\s_-]?ma\b|dts[.\s_-]?hd[.\s_-]?master[.\s_-]*audio\b/i.test(fn)) audio = 'DTS-HD MA';
+      else if (/dts[.\s_-]?hd[.\s_-]?(?:hra|hr)\b|dts[.\s_-]?hd[.\s_-]*high[.\s_-]*resolution[.\s_-]*audio\b/i.test(fn)) audio = 'DTS-HD HRA';
+      else if (/dts[.\s_-]?hd\b/i.test(fn)) audio = 'DTS-HD';
+      else if (/dts[.\s_-]?es\b/i.test(fn)) audio = 'DTS-ES';
+      else if (/dts[.\s_-]?96[.\s_-]?24\b/i.test(fn)) audio = 'DTS 96/24';
+      else if (/dts[.\s_-]?express\b/i.test(fn)) audio = 'DTS Express';
+      else if (/dolby[.\s_-]*digital[.\s_-]*ex|\bdd[.\s_-]*ex\b/i.test(fn)) audio = 'DD-EX';
+      else if (/e[.\s_-]?ac[.\s_-]?3[.\s_-]*joc\b|\bddp[.\s_-]*joc\b/i.test(fn)) audio = 'EAC3 JOC';
       else if (/e[.\s_-]?ac[.\s_-]?3|\bddp\+?|\bdd\+|dolby[.\s_-]*digital[.\s_-]*plus/i.test(fn)) audio = /\batmos\b/i.test(fn) ? 'DDP Atmos' : 'DDP';
       else if (/\bac[.\s_-]?3\b|\bdd5[.\s_-]?1|\bdd\b|dolby[.\s_-]*digital/i.test(fn)) audio = 'DD';
       else if (/\bac[.\s_-]?4\b/i.test(fn)) audio = 'AC4';
+      else if (/\bmpeg[.\s_-]*h(?:[.\s_-]*3d)?\b/i.test(fn)) audio = 'MPEG-H';
+      else if (/\bauro[.\s_-]?3d\b/i.test(fn)) audio = 'Auro-3D';
+      else if (/\bhe[.\s_-]?aac[.\s_-]?v?2\b|\bheaacv?2\b/i.test(fn)) audio = 'HE-AAC v2';
+      else if (/\bhe[.\s_-]?aac\b|\bheaac\b/i.test(fn)) audio = 'HE-AAC';
+      else if (/\baac[.\s_-]?lc\b/i.test(fn)) audio = 'AAC-LC';
       else if (/\baac\b/i.test(fn)) audio = 'AAC';
       else if (/\bflac\b/i.test(fn)) audio = 'FLAC';
       else if (/\bopus\b/i.test(fn)) audio = 'Opus';
       else if (/\balac\b/i.test(fn)) audio = 'ALAC';
+      else if (/\blpcm\b/i.test(fn)) audio = 'LPCM';
       else if (/\bpcm\b/i.test(fn)) audio = 'PCM';
       else if (/\bvorbis\b/i.test(fn)) audio = 'Vorbis';
-      else if (/\bmp3\b/i.test(fn)) audio = 'MP3';
+      else if (/\bmp3\b|mpeg[.\s_-]*1[.\s_-]*layer[.\s_-]*iii/i.test(fn)) audio = 'MP3';
+      else if (/\bmp2\b|mpeg[.\s_-]*1[.\s_-]*layer[.\s_-]*ii/i.test(fn)) audio = 'MP2';
+      else if (/\bmlp\b/i.test(fn)) audio = 'MLP';
+      else if (/\bwma[.\s_-]*lossless\b/i.test(fn)) audio = 'WMA Lossless';
+      else if (/\bwma[.\s_-]*pro\b/i.test(fn)) audio = 'WMA Pro';
+      else if (/\bwma\b/i.test(fn)) audio = 'WMA';
+      else if (/\batrac(?:3(?:plus)?|advanced[.\s_-]*lossless)?\b/i.test(fn)) audio = 'ATRAC';
+      else if (/\bdra\b/i.test(fn)) audio = 'DRA';
+      else if (/\brealaudio\b|\breal[.\s_-]*audio\b/i.test(fn)) audio = 'RealAudio';
+      else if (/\bspeex\b/i.test(fn)) audio = 'Speex';
+      else if (/\bamr[.\s_-]*(?:wb|nb)\b/i.test(fn)) audio = fn.match(/\bamr[.\s_-]*(?:wb|nb)\b/i)[0].replace(/[.\s_-]+/g, '-').toUpperCase();
     }
+
 
     let platform = '';
     if      (/ nf[.\- ]|netflix/i.test(fn))                  platform = 'NF';

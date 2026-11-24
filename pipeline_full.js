@@ -721,6 +721,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       const container = item.container || detectContainer(filename) || null;
       const bitDepth = item.bitDepth || detectBitDepth(filename) || null;
       const audioChannels = item.audioChannels || detectAudioChannels(filename) || null;
+      const audioTracks = Array.isArray(item.audioTracks) && item.audioTracks.length >= 2 ? item.audioTracks.slice(0, 8) : [];
       const parsedFileMetadata = extractMediaMetadata([filename, item.rawTitle || ''].filter(Boolean).join(' '));
       const isRepack = !!item.isRepack || /repack|rerip/i.test(String(item.releaseType || '')) || parsedFileMetadata.isRepack;
       const releaseType = isRepack ? 'Repack' : (item.releaseType || parsedFileMetadata.releaseType || 'Original');
@@ -740,7 +741,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       if (!dbRec && cleanTitle) dbRec = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' } });
 
       const newDl = {
-        quality, size, filename, language, codec, hdr, audio, source, container, bitDepth, audioChannels,
+        quality, size, filename, language, codec, hdr, audio, source, container, bitDepth, audioChannels, audioTracks,
         isRepack, releaseType, isIMAX, aspectRatio, languageType, languageCount,
         sourceDate: item.date || '',
         season: correctSeason, episode: correctEpisode,
@@ -748,7 +749,17 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       };
 
       if (dbRec) {
-        if (dbRec.downloads?.some(d => d.links?.some(l => l.url === finalUrl))) { skipped++; continue; }
+        const duplicateDownloadIndex = dbRec.downloads?.findIndex(d => d.links?.some(l => l.url === finalUrl)) ?? -1;
+        if (duplicateDownloadIndex >= 0) {
+          const savedTracks = dbRec.downloads[duplicateDownloadIndex]?.audioTracks;
+          if (audioTracks.length >= 2 && (!Array.isArray(savedTracks) || savedTracks.length < 2)) {
+            await Movie.findByIdAndUpdate(dbRec._id, {
+              $set: { [`downloads.${duplicateDownloadIndex}.audioTracks`]: audioTracks }
+            });
+          }
+          skipped++;
+          continue;
+        }
         const newMB = toMB(size);
         let matchedIdx = -1;
         for (let j = 0; j < dbRec.downloads.length; j++) {
@@ -847,6 +858,9 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
             if (!matchedDownload[field] && newDl[field]) {
               metaSet[`downloads.${matchedIdx}.${field}`] = newDl[field];
             }
+          }
+          if (newDl.audioTracks.length >= 2 && (!Array.isArray(matchedDownload.audioTracks) || matchedDownload.audioTracks.length < 2)) {
+            metaSet[`downloads.${matchedIdx}.audioTracks`] = newDl.audioTracks;
           }
           if (dbRec.downloads[matchedIdx].language) {
               metaSet[`downloads.${matchedIdx}.language`] = dbRec.downloads[matchedIdx].language;

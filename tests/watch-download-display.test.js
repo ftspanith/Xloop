@@ -37,6 +37,45 @@ test('audio channel layout is joined to its codec instead of shown as a standalo
   assert.equal(helpers.buildAudioDisplayTag({ audioChannels: '5.1' }, ''), '');
 });
 
+test('two or more explicit audio tracks display their codec, channel layout and language', () => {
+  assert.equal(
+    helpers.buildAudioDisplayTag({
+      audioTracks: [
+        { codec: 'EAC3', channels: '5.1', language: 'Telugu' },
+        { codec: 'AAC', channels: '2.0', language: 'Hindi' },
+      ],
+      audio: 'EAC3',
+      audioChannels: '5.1',
+    }, 'EAC3'),
+    'DDP + 5.1 (Telugu) / AAC + 2.0 (Hindi)'
+  );
+});
+
+test('one stored track does not imply multi-audio; the normal single audio label remains', () => {
+  assert.equal(
+    helpers.buildAudioDisplayTag({
+      audioTracks: [{ codec: 'EAC3', channels: '5.1', language: 'Telugu' }],
+      audio: 'EAC3',
+      audioChannels: '5.1',
+    }, 'EAC3'),
+    'DDP + 5.1'
+  );
+});
+
+test('audio display normalizes newer codec variants without losing their subtype', () => {
+  assert.equal(helpers.normalizeAudioDisplayLabel('EAC3 JOC'), 'DDP JOC');
+  assert.equal(helpers.normalizeAudioDisplayLabel('DTS-ES'), 'DTS-ES');
+  assert.equal(helpers.normalizeAudioDisplayLabel('HE-AAC'), 'HE-AAC');
+  assert.equal(helpers.normalizeAudioDisplayLabel('AAC-LC'), 'AAC-LC');
+  assert.equal(helpers.normalizeAudioDisplayLabel('WMA Lossless'), 'WMA Lossless');
+});
+
+test('available language labels spell Multi as MULTi consistently', () => {
+  assert.ok(watchSource.includes("labels.add('MULTi')"));
+  assert.ok(watchSource.includes("languageType === 'Multi' ? 'MULTi'"));
+  assert.equal(watchSource.includes("labels.add('MULTI')"), false);
+});
+
 test('video metadata remains visible without audio metadata', () => {
   assert.equal(
     helpers.buildTechnicalMetadataTags(
