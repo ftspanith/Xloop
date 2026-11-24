@@ -34,6 +34,7 @@ const DownloadSchema = new mongoose.Schema({
   languageType: { type: String, enum: ['Single', 'Dual', 'Multi', ''], default: '' },
   languageCount: { type: Number, default: 0 },
   sourceDate: { type: String, default: '' },
+  fileYear:  { type: Number, default: null },
   links:    [LinkSchema]
 }, { _id: false });
 
@@ -45,6 +46,7 @@ const MovieSchema = new mongoose.Schema({
   type:        { type: String, enum: ['movie', 'series', 'anime'], default: 'movie' },
   totalSeasons:{ type: Number, default: 0 },
   seasonPosters:{ type: mongoose.Schema.Types.Mixed, default: {} }, // { s1: url, s2: url, ... }
+  seasonYears:  { type: mongoose.Schema.Types.Mixed, default: {} }, // { s1: 2019, s2: 2020, ... }
   poster:        { type: String, default: '' },
   posterFallback:{ type: String, default: '' },  // OMDB high-res fallback
   backdrop:      { type: String, default: '' },
