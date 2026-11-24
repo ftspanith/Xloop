@@ -4,7 +4,6 @@ on:
     paths:
       - 'utils/parser.js'
       - 'utils/telegram-ingestion.js'
-      - 'utils/tmdbSearch.js'
       - 'utils/variant-intelligence.js'
       - 'tests/telegram-ingestion.test.js'
       - 'tests/telegram-ingestion-metadata.test.js'
