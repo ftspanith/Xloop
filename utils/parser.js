@@ -77,15 +77,26 @@ function extractTitleFromStreamingUrl(url) {
 
 // Normalize every GDFlix subdomain to the canonical base domain.
 // Keep path, query, fragment and protocol unchanged.
+const PROVIDER_DOMAINS = [
+  'gdflix.dev', 'gdflix.to', 'gdflix.one', 'gdflix.link', 'gdflix.net',
+  'gdflix.dad', 'gdflix.cfd', 'gdflix.io', 'gdlink.dev',
+  'gdtot.dad', 'gdtot.one', 'gdtot.sbs', 'extralink.cfd',
+  'neolinks.sbs', 'gtlinks.me',
+  'hubcloud.foo', 'hubcloud.one', 'hubcloud.art', 'hubcloud.cx',
+  'hubcloud.lol', 'hubcloud.bz', 'hubcloud.club', 'hubcloud.in',
+  'hubcloud.to', 'hubcloud.work', 'hubcloud.zone', 'hubcloud.dev',
+  'hubcloud.me', 'hubcloud.best',
+  'drivehub.dev', 'drivehub.to', 'drivehub.in', 'drivehub.online',
+  'tmbcloud.dev', 'tmbcloud.online', 'tmbcloud.lol',
+];
+
+// Normalize provider subdomains without changing unrelated hosts or TLDs.
 function normalizeGdflixUrl(value) {
   try {
     const parsed = new URL(value);
-    const host = parsed.hostname.toLowerCase();
-    if (host === 'gdflix.dev' || host.endsWith('.gdflix.dev')) {
-      parsed.hostname = 'gdflix.dev';
-    } else if (host === 'hubcloud.one' || host.endsWith('.hubcloud.one')) {
-      parsed.hostname = 'hubcloud.one';
-    }
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    const canonical = PROVIDER_DOMAINS.find(domain => host === domain || host.endsWith('.' + domain));
+    if (canonical) parsed.hostname = canonical;
     return parsed.toString();
   } catch (_) {
     return value;
@@ -473,9 +484,12 @@ function detectBitDepth(fn) {
 
 function detectAudioChannels(fn) {
   const s = String(fn || '').toUpperCase();
-  // Permit compact release tags such as DDP5.1 as well as spaced "AAC 5.1".
-  const m = s.match(/(?<!\d)(7\.1|5\.1|2\.1|2\.0|1\.0)(?!\d)/);
-  return m ? m[1] : null;
+  // Check immersive layouts before shorter prefixes (e.g. 5.1.2 before 5.1).
+  const m = s.match(/(?<!\d)(9\.1\.6|7\.1\.6|7\.1\.4|5\.1\.4|5\.1\.2|7\.1|6\.1|5\.1|4\.1|4\.0|3\.1|3\.0|2\.1|2\.0|1\.0)(?!\d)/);
+  if (m) return m[1];
+  if (/\b(?:STEREO|2CH)\b/.test(s)) return '2.0';
+  if (/\b(?:MONO|1CH)\b/.test(s)) return '1.0';
+  return null;
 }
 
 function detectHDR(fn) {
@@ -491,15 +505,18 @@ function detectHDR(fn) {
 
 // ─── SOURCE ───────────────────────────────────────────────────────────────────
 function detectSource(fn) {
-  const s = (fn || '').toUpperCase();
-  if (/REMUX/.test(s))                                    return 'REMUX';
-  if (/WEB[.\s_-]?DL|WEBDL/.test(s))                     return 'WEB-DL';
-  if (/WEB[.\s_-]?RIP|WEBRIP/.test(s))                   return 'WEBRip';
-  if (/BLU[.\s_-]?RAY|BLURAY|BDRIP|BRRIP/.test(s))       return 'BluRay';
-  if (/HDTV/.test(s))                                    return 'HDTV';
-  if (/HDRIP|HD[.\s_-]?RIP/.test(s))                     return 'HDRip';
-  if (/DVDRIP|DVD/.test(s))                              return 'DVD';
-  if (/CAM|HDCAM/.test(s))                               return 'CAM';
+  const s = String(fn || '').toUpperCase();
+  // Most specific disc/source labels must win when multiple tags are present.
+  if (/\bREMUX\b/.test(s)) return 'REMUX';
+  if (/\b(?:BLU[.\s_-]?RAY|BLURAY|BDRIP|BRRIP|BD[ ._-]?(?:25|50)|BDMV)\b/.test(s)) return 'BluRay';
+  if (/\bDVD[.\s_-]?9\b/.test(s)) return 'DVD9';
+  if (/\bDVD[.\s_-]?5\b/.test(s)) return 'DVD5';
+  if (/\bWEB[.\s_-]?DL\b|\bWEBDL\b/.test(s)) return 'WEB-DL';
+  if (/\bWEB[.\s_-]?RIP\b|\bWEBRIP\b/.test(s)) return 'WEBRip';
+  if (/\bHDTV\b/.test(s)) return 'HDTV';
+  if (/\bHDRIP\b|\bHD[.\s_-]?RIP\b/.test(s)) return 'HDRip';
+  if (/\bDVDRIP\b|\bDVD\b/.test(s)) return 'DVD';
+  if (/\b(?:CAMRIP|HDCAM|CAM)\b/.test(s)) return 'CAM';
   return null;
 }
 
@@ -507,27 +524,32 @@ function detectSource(fn) {
 // Detects audio codec/format from a filename or message text.
 // Returns a short label string or null.
 function extractAudio(fn) {
-  const s = (fn || '').toUpperCase();
-  // Dolby Atmos (must check before TrueHD/DDP since Atmos is often combined)
-  if (/DOLBY\s*ATMOS|\bATMOS\b/.test(s))           return 'Atmos';
-  // Dolby TrueHD
-  if (/TRUEHD/.test(s))                             return 'TrueHD';
-  // DTS variants — order matters: check X and HD-MA before plain DTS
-  if (/DTS[:\s._-]?X\b/.test(s))                   return 'DTS:X';
-  if (/DTS[:\s._-]?HD[:\s._-]?MA/.test(s))         return 'DTS-HD MA';
-  if (/DTS[:\s._-]?HD/.test(s))                     return 'DTS-HD';
-  if (/\bDTS\b/.test(s))                            return 'DTS';
-  // Dolby Digital Plus / EAC3
-  if (/EAC[\s._-]?3|DD[P+]/.test(s))               return 'EAC3';
-  // Dolby Digital / AC3
-  if (/\bAC[\s._-]?3\b|\bDD\b/.test(s))            return 'DD';
-  // AAC
-  if (/\bAAC\b/.test(s))                            return 'AAC';
-  // FLAC
-  if (/\bFLAC\b/.test(s))                           return 'FLAC';
-  // MP3
-  if (/\bMP3\b/.test(s))                            return 'MP3';
-  return null;
+  const s = String(fn || '').toUpperCase();
+  const hasAtmos = /DOLBY[\s._-]*ATMOS|\bATMOS\b/.test(s);
+  let codec = null;
+
+  // Prefer the underlying audio codec while preserving Atmos as an enhancement.
+  if (/TRUEHD/.test(s)) codec = 'TrueHD';
+  else if (/DTS[.\s_-]?X\b/.test(s)) codec = 'DTS:X';
+  else if (/DTS[.\s_-]?HD[.\s_-]?MA\b/.test(s)) codec = 'DTS-HD MA';
+  else if (/DTS[.\s_-]?HD[.\s_-]?HRA\b/.test(s)) codec = 'DTS-HD HRA';
+  else if (/DTS[.\s_-]?HD\b/.test(s)) codec = 'DTS-HD';
+  else if (/\bDTS\b/.test(s)) codec = 'DTS';
+  else if (/E[.\s_-]?AC[.\s_-]?3|\bDDP(?:\+|\d+(?:\.\d+)?)?|\bDD\+|DOLBY[.\s_-]*DIGITAL[.\s_-]*PLUS/.test(s)) codec = 'EAC3';
+  else if (/\bAC[.\s_-]?3\b|\bDD(?=\d|[.\s_-]|$)|\bDOLBY[.\s_-]*DIGITAL\b/.test(s)) codec = 'DD';
+  else if (/\bAC[.\s_-]?4\b/.test(s)) codec = 'AC4';
+  else if (/\b(?:HE[.\s_-]?)?AAC(?:[.\s_-]?LC)?\b/.test(s)) codec = 'AAC';
+  else if (/\bFLAC\b/.test(s)) codec = 'FLAC';
+  else if (/\bOPUS\b/.test(s)) codec = 'Opus';
+  else if (/\bALAC\b/.test(s)) codec = 'ALAC';
+  else if (/\bL?PCM\b/.test(s)) codec = 'PCM';
+  else if (/\bVORBIS\b/.test(s)) codec = 'Vorbis';
+  else if (/\bMP3\b/.test(s)) codec = 'MP3';
+  else if (/\bMP2\b|MPEG[.\s_-]*AUDIO/.test(s)) codec = 'MP2';
+  else if (/\bWMA\b/.test(s)) codec = 'WMA';
+
+  if (hasAtmos) return codec ? codec + ' Atmos' : 'Atmos';
+  return codec;
 }
 
 // ─── SIZE → MB ───────────────────────────────────────────────────────────────
@@ -1299,10 +1321,13 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     const fileIdentity = stripEmojis(rawFn).toLowerCase().replace(/\s+/g, ' ').trim();
     const key=`${quality}__${size||'nosize'}__${releaseMeta.releaseType}__S${fs??''}E${fe??''}__${fileIdentity||pair.url}`;
 
-    const audio = extractAudio(rawFn) || null;
-    const bitDepth = detectBitDepth(rawFn);
-    const audioChannels = detectAudioChannels(rawFn);
-    const source = detectSource(rawFn) || null;
+    // Audio/source details are sometimes posted as adjacent "Audio:" / "Source:"
+    // lines instead of being embedded in the filename.
+    const technicalContext = [rawFn, pairContext].filter(Boolean).join(' ');
+    const audio = extractAudio(technicalContext) || null;
+    const bitDepth = detectBitDepth(technicalContext);
+    const audioChannels = detectAudioChannels(technicalContext);
+    const source = detectSource(technicalContext) || null;
     const container = detectContainer(rawFn) || null;
     if (!fileMap[key]) fileMap[key]={
       quality,size,hdr,codec,container,audio,bitDepth,audioChannels,source,
@@ -1384,6 +1409,8 @@ function parseManualInput(line) {
   const container = detectContainer(raw) || null;
   const hdr   = detectHDR(raw)   || null;
   const audio = extractAudio(raw) || null;
+  const source = detectSource(raw) || null;
+  const audioChannels = detectAudioChannels(raw) || null;
 
   // Extract season / episode
   const { season, episode } = extractSeasonEpisode(raw);
@@ -1418,5 +1445,5 @@ function parseManualInput(line) {
   title = title.replace(/\s*(BluRay|WEB-?DL|WEBRip|DVDRip|HDTV|Blu-?Ray|Remux|Extended|Theatrical|Directors\.?Cut)\s*/gi, ' ').trim();
   title = cleanTitleForApi(title) || title;
 
-  return { title, year, quality, size, codec, container, hdr, audio, language, season, episode, type, raw };
+  return { title, year, quality, size, codec, container, hdr, audio, audioChannels, source, language, season, episode, type, raw };
 }

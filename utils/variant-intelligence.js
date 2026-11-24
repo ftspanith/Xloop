@@ -44,7 +44,10 @@ function sourceScore(value) {
   if (/web.?dl/.test(s)) return 31;
   if (/web.?rip/.test(s)) return 25;
   if (/hdtv/.test(s)) return 18;
+  if (/dvd.?9/.test(s)) return 16;
+  if (/dvd.?5|\bdvd\b/.test(s)) return 14;
   if (/hdrip/.test(s)) return 12;
+  if (/cam/.test(s)) return 2;
   return 0;
 }
 

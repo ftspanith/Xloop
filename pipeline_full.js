@@ -410,7 +410,11 @@ function recomputeAggregates(doc) {
   dls.splice(0, dls.length, ...sortedDownloads);
 
   doc.formats = [...new Set(dls.map(d => d.quality))].filter(Boolean);
-  doc.codecs  = [...new Set(dls.map(d => d.codec || detectCodecLocal(d.filename)))].filter(c => c && c !== 'Other');
+  // Root codecs are video codecs only. Older records may have audio formats
+  // mistakenly copied into this aggregate; keep audio on each download row.
+  doc.codecs  = [...new Set(dls.map(d => d.codec || detectCodecLocal(d.filename)))].filter(c =>
+    c && c !== 'Other' && !/^(?:E-?AC-?3|DDP|DD\+?|AC-?3|DTS|TRUEHD|ATMOS|AAC|FLAC|MP3|OPUS|ALAC|L?PCM|VORBIS|AC4|WMA|DOLBY)/i.test(String(c).trim())
+  );
   const allLangs = [];
   dls.forEach(d => {
     if (!d.language) return;
@@ -672,7 +676,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       const codec    = item.codec || detectCodec(filename) || 'Other';
       const hdr      = item.hdr || detectHDR(filename) || null;
       const audio    = item.audio || extractAudio(filename) || null;
-      const source   = item.source || detectSource(filename) || null;
+      const source   = detectSource(item.source || filename) || detectSource(filename) || item.source || null;
       const container = item.container || detectContainer(filename) || null;
       const bitDepth = item.bitDepth || detectBitDepth(filename) || null;
       const audioChannels = item.audioChannels || detectAudioChannels(filename) || null;

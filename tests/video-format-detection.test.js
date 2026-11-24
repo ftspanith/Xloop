@@ -5,6 +5,11 @@ const {
   detectCodec,
   detectContainer,
   normalizeQuality,
+  detectSource,
+  extractAudio,
+  detectAudioChannels,
+  normalizeGdflixUrl,
+  parseMessageBlock,
   parseManualInput,
 } = require('../utils/parser');
 
@@ -63,3 +68,38 @@ assert.equal(manual.container, 'MKV');
 assert.equal(manual.quality, '1080p');
 
 console.log('Video format detection tests passed.');
+
+
+const sourceCases = [
+  ['Film.1080p.Blu-Ray.mkv', 'BluRay'],
+  ['Film.1080p.BDRip.mkv', 'BluRay'],
+  ['Film.2160p.BluRay.REMUX.mkv', 'REMUX'],
+  ['Film.DVD9.mkv', 'DVD9'],
+  ['Film.DVD.9.mkv', 'DVD9'],
+  ['Film.DVD5.mkv', 'DVD5'],
+  ['Film.WEB.DL.mkv', 'WEB-DL'],
+];
+for (const [filename, expected] of sourceCases) {
+  assert.equal(detectSource(filename), expected, filename);
+}
+
+const audioCases = [
+  ['Film.DDP5.1.1080p.mkv', 'EAC3'],
+  ['Film.Dolby.Digital.Plus.Atmos.5.1.mkv', 'EAC3 Atmos'],
+  ['Film.TrueHD.Atmos.7.1.4.mkv', 'TrueHD Atmos'],
+  ['Film.DTS-HD.MA.7.1.mkv', 'DTS-HD MA'],
+  ['Film.AC3.5.1.mkv', 'DD'],
+  ['Film.Opus.2.0.mkv', 'Opus'],
+  ['Film.AAC.2.0.mkv', 'AAC'],
+];
+for (const [filename, expected] of audioCases) {
+  assert.equal(extractAudio(filename), expected, filename);
+}
+assert.equal(detectAudioChannels('Film.TrueHD.Atmos.7.1.4.mkv'), '7.1.4');
+assert.equal(detectAudioChannels('Film.EAC3.5.1.2.mkv'), '5.1.2');
+assert.equal(extractAudio('Film.E-AC-3.5.1.mkv'), 'EAC3');
+assert.equal(detectAudioChannels('Film.Stereo.AAC.mkv'), '2.0');
+
+assert.equal(normalizeGdflixUrl('https://new5.gdflix.io/file/abc'), 'https://gdflix.io/file/abc');
+assert.equal(normalizeGdflixUrl('https://www.hubcloud.foo/file/abc'), 'https://hubcloud.foo/file/abc');
+assert.equal(normalizeGdflixUrl('https://www.tmbcloud.dev/file/abc'), 'https://tmbcloud.dev/file/abc');

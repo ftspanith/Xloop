@@ -76,3 +76,22 @@ test('backend search preserves Unicode scripts and typo-tolerant ranking', () =>
   assert.ok(searchApi.includes('function relevanceScore('));
   assert.ok(searchApi.includes('Movie.find(searchFilter)'));
 });
+
+
+test('multi-word searches preserve spaces and prefer word-separated title matches', () => {
+  const vm = require('node:vm');
+  const normalizeStart = searchApi.indexOf('function normalize(');
+  const routeEnd = searchApi.indexOf('// GET /api/search', normalizeStart);
+  assert.ok(normalizeStart >= 0 && routeEnd > normalizeStart);
+  const helpers = vm.runInNewContext(
+    searchApi.slice(normalizeStart, routeEnd) + String.fromCharCode(10) +
+    '({ normalize, levenshtein, relevanceScore });'
+  );
+  const query = helpers.normalize('DJ   Tillu');
+  assert.equal(query, 'dj tillu');
+  const phraseScore = helpers.relevanceScore({ title: 'DJ Tillu' }, query, ['dj', 'tillu']);
+  const compactCollisionScore = helpers.relevanceScore({ title: 'Djtillu' }, query, ['dj', 'tillu']);
+  assert.ok(phraseScore > compactCollisionScore);
+  assert.ok(activeSearchScript.includes('function normalizeSearchQuery(value)'));
+  assert.ok(activeSearchScript.includes("replace(/\\s+/g, ' ').trim()"));
+});

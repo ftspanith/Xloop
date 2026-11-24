@@ -233,6 +233,21 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
 
   const toMB = s => { if (!s) return 0; const n = parseFloat(s); return /GB/i.test(s) ? n*1024 : (n||0); };
 
+  function normalizeSourceLabel(value) {
+    const s = String(value || '').toUpperCase();
+    if (/\bREMUX\b/.test(s)) return 'REMUX';
+    if (/\b(?:BLU[.\s_-]?RAY|BLURAY|BDRIP|BRRIP|BD[ ._-]?(?:25|50)|BDMV)\b/.test(s)) return 'BluRay';
+    if (/\bDVD[.\s_-]?9\b/.test(s)) return 'DVD9';
+    if (/\bDVD[.\s_-]?5\b/.test(s)) return 'DVD5';
+    if (/\bWEB[.\s_-]?DL\b|\bWEBDL\b/.test(s)) return 'WEB-DL';
+    if (/\bWEB[.\s_-]?RIP\b|\bWEBRIP\b/.test(s)) return 'WEBRip';
+    if (/\bHDTV\b/.test(s)) return 'HDTV';
+    if (/\bHDRIP\b|\bHD[.\s_-]?RIP\b/.test(s)) return 'HDRip';
+    if (/\bDVDRIP\b|\bDVD\b/.test(s)) return 'DVD';
+    if (/\b(?:CAMRIP|HDCAM|CAM)\b/.test(s)) return 'CAM';
+    return '';
+  }
+
   // ─ Per-file metadata detection ───────────────────────────────────────────
   function parseDlInfo(dl) {
     const fn   = dl.filename || '';
@@ -281,16 +296,8 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     else if (codec && /avc|h\.264|x264/i.test(codec))  codec = 'AVC';
     else if (codec && /av1/i.test(codec))               codec = 'AV1';
 
-    // Source: DB-stored field first, then detect from filename
-    let source = dl.source || '';
-    if (!source) {
-      if      (/remux/i.test(fn))                              source = 'REMUX';
-      else if (/web-dl|webdl/i.test(fn)||/web.?dl/i.test(tags)) source = 'WEB-DL';
-      else if (/webrip/i.test(fn))                             source = 'WEBRip';
-      else if (/bluray|blu-ray|bdrip|brrip/i.test(fn))         source = 'BluRay';
-      else if (/hdrip/i.test(fn))                              source = 'HDRip';
-      else if (/dvdrip|dvd/i.test(fn))                         source = 'DVD';
-    }
+    // Normalize source labels in legacy rows and infer missing values from filenames.
+    let source = normalizeSourceLabel(dl.source) || normalizeSourceLabel(fn) || normalizeSourceLabel(tags);
 
     // Audio: DB-stored field first, then detect from filename
     let audio = dl.audio || '';
@@ -349,7 +356,13 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     if (info.hdr)      techParts.push(info.hdr);
     if (info.source)   techParts.push(info.source);
     if (info.codec)    techParts.push(info.codec);
-    if (info.audio)    techParts.push(info.audio);
+    // EAC3 remains in the download metadata but is not useful as a standalone
+    // visible chip; show an Atmos enhancement, if present, without the codec.
+    const visibleAudio = String(info.audio || '')
+      .replace(/\bE[.\s_-]?AC[.\s_-]?3\b/ig, '')
+      .replace(/^[\s+,&/·-]+|[\s+,&/·-]+$/g, '')
+      .trim();
+    if (visibleAudio) techParts.push(visibleAudio);
     if (info.platform) techParts.push(info.platform);
     if (dl.isIMAX || /\bIMAX\b/i.test(dl.filename || '')) techParts.push('IMAX');
     if (dl.aspectRatio) techParts.push('AR ' + dl.aspectRatio);
