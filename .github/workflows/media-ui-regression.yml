@@ -8,6 +8,7 @@ on:
       - 'public/js/watch.js'
       - 'public/css/style.css'
       - 'tests/audio-codec-detection.test.js'
+      - 'tests/telegram-ingestion-metadata.test.js'
       - 'tests/watch-download-display.test.js'
       - 'tests/responsive-viewport.test.js'
       - 'public/**/*.html'
