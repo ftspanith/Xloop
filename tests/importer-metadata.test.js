@@ -219,3 +219,40 @@ test('supports decimal-comma sizes, TB/KB conversion and generic-title detection
   assert.equal(isGenericTitleCandidate('Movie'), true);
   assert.equal(isGenericTitleCandidate('The Real Film'), false);
 });
+
+
+test('recovers size values posted after a URL and supports spaced thousands', () => {
+  const parsed = parseMessageBlock([
+    'Size Recovery Film (2024)',
+    'Size.Recovery.Film.2024.1080p.WEB-DL.mkv',
+    'new5.gdflix.xyz/file/size-after-url',
+    'File Size: 1 234.5 MB',
+    'Size.Recovery.Film.2024.720p.WEB-DL.mkv',
+    'mirror.hubcloud.app/file/second-size-after-url',
+    '💾 Size - 2,5 GiB',
+  ].join('\n'), 79, '2024-08-02');
+
+  assert.ok(parsed);
+  assert.equal(parsed.downloads.length, 2);
+  assert.equal(parsed.downloads[0].size, '1234.5MB');
+  assert.equal(parsed.downloads[1].size, '2.5GB');
+  assert.equal(parsed.downloads[0].links[0].url, 'https://gdflix.dev/file/size-after-url');
+  assert.equal(parsed.downloads[1].links[0].url, 'https://hubcloud.one/file/second-size-after-url');
+});
+
+test('normalizes regional provider suffixes without trusting lookalike hosts', () => {
+  assert.equal(
+    normalizeGdflixUrl('https://edge.gdflix.co.in/file/abc'),
+    'https://gdflix.dev/file/abc'
+  );
+  assert.equal(
+    normalizeGdflixUrl('https://gdflix.attacker.example/file/abc'),
+    'https://gdflix.attacker.example/file/abc'
+  );
+});
+
+test('pipeline retries TMDB and OMDb with per-file release title candidates', () => {
+  assert.match(pipelineSource, /\.\.\.group\.items\.map\(item => item && item\.filename\)/);
+  assert.ok(pipelineSource.includes('[TMDB] Filename/title fallback matched:'));
+  assert.match(pipelineSource, /for \(const candidate of tmdbSearchCandidates\.slice\(0, 4\)\)/);
+});

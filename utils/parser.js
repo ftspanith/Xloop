@@ -41,12 +41,12 @@ function normalizeQuality(str) {
 // ─── SIZE ────────────────────────────────────────────────────────────────────
 function extractSize(str) {
   if (str == null) return '';
-  const value = String(str);
-  // Accept labelled, bracketed, bare and filename-embedded sizes. Telegram
-  // posts commonly mix decimal/binary unit spellings.
-  const match = value.match(/(?:^|[^\d])((?:\d{1,3}(?:,\d{3})+|\d+)(?:[.,]\d+)?)\s*(TB|GB|MB|KB|TiB|GiB|MiB|KiB)\b/i);
+  const value = String(str).replace(/[\u00a0]/g, ' ');
+  // Decimal/binary units, comma decimals, grouped thousands, and spaced
+  // thousands (some Telegram captions use "1 200 MB").
+  const match = value.match(/(?:^|[^\d])((?:\d{1,3}(?:[ ,]\d{3})+|\d+)(?:[.,]\d+)?)\s*(TB|GB|MB|KB|TiB|GiB|MiB|KiB)\b/i);
   if (!match) return '';
-  let amount = match[1];
+  let amount = match[1].replace(/\s/g, '');
   if (amount.includes(',')) {
     if (!amount.includes('.') && /,\d{1,2}$/.test(amount)) amount = amount.replace(',', '.');
     else amount = amount.replace(/,/g, '');
@@ -55,7 +55,7 @@ function extractSize(str) {
   return amount + unit;
 }
 
-// ─── STREAMING URL → TITLE SLUG ──────────────────────────────────────────────
+// ─── STREAMING URL// ─── STREAMING URL// ─── STREAMING URL → TITLE SLUG ──────────────────────────────────────────────
 function extractTitleFromStreamingUrl(url) {
   if (!url) return '';
   const patterns = [
@@ -95,10 +95,20 @@ function getProviderDomain(value) {
       : raw.split(/[\/:?#]/, 1)[0]).toLowerCase().replace(/^www\./, '');
     const labels = hostname.split('.').filter(Boolean);
     if (labels.length < 2) return null;
-    const brand = labels[labels.length - 2];
+    // Explicit regional suffixes only; don't trust lookalike domains.
+    const compoundSuffixes = new Set([
+      'co.in', 'com.in', 'net.in', 'co.uk', 'org.uk', 'com.au', 'net.au',
+      'co.nz', 'com.sg', 'com.my', 'com.ph', 'com.pk', 'com.bd', 'com.ng',
+      'co.za', 'com.br', 'com.mx', 'com.tr', 'com.tw', 'com.hk', 'co.id',
+      'com.vn', 'co.kr',
+    ]);
+    const compound = compoundSuffixes.has(labels.slice(-2).join('.'));
+    const brandIndex = labels.length - (compound ? 3 : 2);
+    if (brandIndex < 0) return null;
+    const brand = labels[brandIndex];
     const category = PROVIDER_FAMILIES[brand];
     if (!category) return null;
-    return { brand, category, domain: labels.slice(-2).join('.') };
+    return { brand, category, domain: labels.slice(brandIndex).join('.') };
   } catch (_) {
     return null;
   }
@@ -983,14 +993,15 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   // Normalize bare URLs
   const normalized=emojiStripped
     .replace(/^[A-Z0-9 _\-]{1,15}:\s*(https?:\/\/)/gim,'$1')
-    .replace(/(?<![:/])\b(hubcloud\.(?:foo|lol|work|in|to|club|me|best|one)[^\/]*\/\S+)/gi,'https://$1')
-    .replace(/(?<![:/])\b(gdflix\.(?:dev|to|one|link)\/\S+)/gi,'https://$1')
-    .replace(/(?<![:/])\b(new5\.gdflix\.io\/\S+)/gi,'https://$1')
+    // Telegram exports often omit schemes; provider subdomains and TLDs rotate.
+    .replace(
+      /(?<![A-Z0-9/:@.-])((?:[A-Z0-9-]+\.)*(?:gdflix|gdlink|gdtot|extralink|neolinks|gtlinks|hubcloud|drivehub|tmbcloud)\.[A-Z]{2,}(?:\.[A-Z]{2,})?)(?::\d+)?(\/[^\s<>"']*)?/gi,
+      (match, host, path = '') => 'https://' + host + path
+    )
     .replace(/(?<![:/])\b(dtflix\.ink\/\S*)/gi,'https://$1')
-    .replace(/(?<![:/])\b(filepress\.in\/\S+)/gi,'https://$1')
-    .replace(/(?<![:/])\b(drivehub\.(?:dev|to|in)\/\S+)/gi,'https://$1');
+    .replace(/(?<![:/])\b(filepress\.in\/\S+)/gi,'https://$1');
 
-  // Expand inline markdown hyperlinks: [Label](URL) → URL (discard host-name labels)
+  // Expand inline markdown hyperlinks  // Expand inline markdown hyperlinks: [Label](URL) → URL (discard host-name labels)
   // Telegram sends hyperlinks in this format when exported/forwarded.
   // If label is a known download host (GDFlix, HubCloud…) → discard label, keep URL only.
   // If label looks like a real title/filename → keep label, then URL on next line.
@@ -1049,8 +1060,9 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   const extractSizeFromMeta = l => extractSize(l || '');
   const isSizeLine = line => {
     const value = String(line || '').trim();
-    return /^(?:File\s*)?Size\s*[:=\-]/i.test(value) ||
-      /^\[?\s*\d+(?:[.,]\d+|,\d{3})?\s*(?:TB|GB|MB|KB|TiB|GiB|MiB|KiB)\s*\]?$/i.test(value);
+    if (/^(?:File\s*)?Size\s*[:=\-]/i.test(value)) return true;
+    if (!extractSize(value)) return false;
+    return /^[\s\[\](){}|,:;=\-]*(?:File\s*)?(?:Size\s*[:=\-]?\s*)?\d[\d.,\s]*\s*(?:TB|GB|MB|KB|TiB|GiB|MiB|KiB)[\s\[\](){}|,:;=\-]*$/i.test(value);
   };
 
   // ── Build URL+filename pairs ──────────────────────────────────────────────
@@ -1063,6 +1075,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   //   Also look forward: consecutive URLs after this one share the same filename slot.
   const pairs=[];
   const processedUrlIdx=new Set(); // avoid double-processing URLs in forward scan
+  const consumedSizeLineIdx=new Set(); // post-URL sizes belong to the preceding file
 
   for (let i=0;i<lines.length;i++) {
     if (processedUrlIdx.has(i)) continue;
@@ -1079,10 +1092,10 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 
     // Search a bounded context window. Size labels and descriptive metadata
     // often sit between the filename and its download URL.
-    const scanStart = Math.max(0, j - 8);
+    const scanStart = Math.max(0, j - 14);
     for (let scan=j; scan>=scanStart; scan--) {
       const candidate = lines[scan];
-      if (!fsz && isSizeLine(candidate)) fsz = extractSizeFromMeta(candidate);
+      if (!fsz && isSizeLine(candidate) && !consumedSizeLineIdx.has(scan)) fsz = extractSizeFromMeta(candidate);
       // A standalone size line also satisfies the broad "file descriptor"
       // heuristic (because it contains GB/MB); never let it replace filename.
       if (isSizeLine(candidate)) continue;
@@ -1105,17 +1118,32 @@ function parseMessageBlock(rawText, messageId, msgDate) {
       const fnLineIdx = lines.lastIndexOf(fc, i - 1);
       if (fnLineIdx >= 0) {
         // Some channels place the size label just before the filename.
-        for (let scan=fnLineIdx - 1; scan >= Math.max(0, fnLineIdx - 3); scan--) {
+        for (let scan=fnLineIdx - 1; scan >= Math.max(0, fnLineIdx - 8); scan--) {
+          if (isUrl(lines[scan]) || isFileDesc(lines[scan])) break;
+          if (consumedSizeLineIdx.has(scan)) continue;
           if (isSizeLine(lines[scan])) { fsz = extractSizeFromMeta(lines[scan]); if (fsz) break; }
           if (!isMetadataLine(lines[scan])) break;
         }
         // Other channels place it after the filename and before the URL.
         if (!fsz) {
           for (let scan=fnLineIdx + 1; scan < i; scan++) {
-            if (isSizeLine(lines[scan])) { fsz = extractSizeFromMeta(lines[scan]); if (fsz) break; }
             if (isUrl(lines[scan])) break;
+            if (consumedSizeLineIdx.has(scan)) continue;
+            if (isSizeLine(lines[scan])) { fsz = extractSizeFromMeta(lines[scan]); if (fsz) break; }
           }
         }
+      }
+    }
+    // Some Telegram posts put the size after the URL button/link. Stop at the
+    // next filename so one quality variant cannot inherit another's size.
+    if (!fsz) {
+      for (let scan=i + 1; scan < Math.min(lines.length, i + 10); scan++) {
+        if (isSizeLine(lines[scan])) {
+          fsz = extractSizeFromMeta(lines[scan]);
+          if (fsz) consumedSizeLineIdx.add(scan);
+          if (fsz) break;
+        }
+        if (isFileDesc(lines[scan])) break;
       }
     }
     // Reject junk as filenames
