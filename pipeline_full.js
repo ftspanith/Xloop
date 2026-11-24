@@ -386,26 +386,16 @@ function recomputeAggregates(doc) {
   const dls = doc.downloads || [];
   const QUALITY_ORDER = ['8K', '4K', '1440p', '1080p', '720p', '576p', '540p', '480p', '360p', '240p', 'SD', 'HD'];
 
-  // Preserve the catalogue's quality-first order. Inside each quality group,
-  // use cross-account variant intelligence to rank close-size encodes by
-  // source, codec, HDR, audio and metadata completeness. No link is removed.
-  const qualityKeys = [...new Set(dls.map(download => download.quality || ''))]
-    .sort((a, b) => {
-      const ai = QUALITY_ORDER.indexOf(a);
-      const bi = QUALITY_ORDER.indexOf(b);
-      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
-    });
-  const sortedDownloads = [];
-  for (const quality of qualityKeys) {
-    const group = dls.filter(download => (download.quality || '') === quality);
-    const ranked = rankVariantsForDisplay(group.map((download, index) => ({
-      ...(typeof download.toObject === 'function' ? download.toObject() : download),
-      title: doc.title || '',
-      year: doc.year || null,
-      _rankIndex: index,
-    })), { sizeTolerance: 0.08 });
-    sortedDownloads.push(...ranked.map(item => group[item._rankIndex]).filter(Boolean));
-  }
+  // Repacks are presented before all main/original versions. Quality remains
+  // first within each release class, followed by close-size format scoring.
+  // Ranking is display-only: every original and repack download is retained.
+  const ranked = rankVariantsForDisplay(dls.map((download, index) => ({
+    ...(typeof download.toObject === 'function' ? download.toObject() : download),
+    title: doc.title || '',
+    year: doc.year || null,
+    _rankIndex: index,
+  })), { sizeTolerance: 0.08 });
+  const sortedDownloads = ranked.map(item => dls[item._rankIndex]).filter(Boolean);
   // Keep original Mongoose subdocuments; only change their display order.
   dls.splice(0, dls.length, ...sortedDownloads);
 
