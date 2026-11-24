@@ -12,6 +12,7 @@ const fs       = require('fs');
 const auth     = require('../middleware/auth');
 const { analyzeVariantSet, rankVariantsForDisplay } = require('../utils/variant-intelligence');
 const { isAllowedTelegramDownloadUrl } = require('../utils/telegram-ingestion');
+const { buildMissingMetadataUpdate } = require('../utils/extractedLinkMerge');
 
 const ROOT          = path.join(__dirname, '..');
 const SCRAPE_SCRIPT = path.join(ROOT, 'scrape_api.js');
@@ -729,37 +730,56 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
       e.audioTracks = audioTracks.length >= 2 ? audioTracks : [];
       if (sourceAccount) e.sourceAccount = sourceAccount;
     });
+    let insertedThisRequest = 0;
+    let enrichedThisRequest = 0;
     if (links.length > 0) {
       const CHUNK = 500;
       for (let i = 0; i < links.length; i += CHUNK) {
         const slice = links.slice(i, i + CHUNK);
-        if (mergeMode) {
-          // Merge mode: skip URLs that already exist in the database
-          const incomingUrls = slice.map(l => l.url);
-          const existing = await ExtractedLink.find({ url: { $in: incomingUrls } }).select('url').lean();
-          const existingUrls = new Set(existing.map(e => e.url));
-          const uniqueLinks = slice.filter(l => !existingUrls.has(l.url));
-          if (uniqueLinks.length > 0) {
-            await ExtractedLink.insertMany(uniqueLinks, { ordered: false });
+        const incomingUrls = [...new Set(slice.map(link => link.url).filter(Boolean))];
+        const existingFilter = { url: { $in: incomingUrls } };
+        // In replace mode, only de-duplicate/enrich records already written to this upload batch.
+        // In merge mode, match every existing account/batch so the source URL remains unique.
+        if (!mergeMode) existingFilter.uploadBatch = batchId;
+        const existingDocs = await ExtractedLink.find(existingFilter).lean();
+        const existingByUrl = new Map();
+        for (const doc of existingDocs) {
+          const group = existingByUrl.get(doc.url) || [];
+          group.push(doc);
+          existingByUrl.set(doc.url, group);
+        }
+
+        const seenInChunk = new Set();
+        const inserts = [];
+        const updates = [];
+        for (const link of slice) {
+          if (!link.url || seenInChunk.has(link.url)) continue;
+          seenInChunk.add(link.url);
+          const matchingDocs = existingByUrl.get(link.url) || [];
+          if (!matchingDocs.length) {
+            inserts.push(link);
+            continue;
           }
-          // A merge upload may enrich old URLs with newly parsed explicit audio
-          // tracks. Never replace an already complete two-or-more-track record.
-          const trackUpdates = slice
-            .filter(l => Array.isArray(l.audioTracks) && l.audioTracks.length >= 2)
-            .map(l => ({
-              updateOne: {
-                filter: { url: l.url, 'audioTracks.1': { $exists: false } },
-                update: { $set: { audioTracks: l.audioTracks.slice(0, 8) } },
-              },
-            }));
-          if (trackUpdates.length) await ExtractedLink.bulkWrite(trackUpdates, { ordered: false });
-        } else {
-          // Replace mode: insert everything
-          await ExtractedLink.insertMany(slice, { ordered: false });
+
+          // Fill missing metadata only. Never replace a complete value with a weaker parse.
+          for (const existingDoc of matchingDocs) {
+            const set = buildMissingMetadataUpdate(existingDoc, link);
+            if (Object.keys(set).length) {
+              updates.push({ updateOne: { filter: { _id: existingDoc._id }, update: { $set: set } } });
+            }
+          }
+        }
+
+        if (inserts.length) {
+          await ExtractedLink.insertMany(inserts, { ordered: false });
+          insertedThisRequest += inserts.length;
+        }
+        if (updates.length) {
+          await ExtractedLink.bulkWrite(updates, { ordered: false });
+          enrichedThisRequest += updates.length;
         }
       }
     }
-
     // Only finalize on the last chunk
     if (isFinal) {
       if (!mergeMode) {
@@ -795,7 +815,7 @@ router.post('/save-extracted', auth, express.json({ limit: '4mb' }), async (req,
     }
 
     // Intermediate chunk — return batchId so client reuses it
-    return res.json({ batchId, inserted: links.length });
+    return res.json({ batchId, inserted: insertedThisRequest, enriched: enrichedThisRequest });
   } catch (err) {
     res.status(500).json({ message: `Save failed: ${err.message}` });
   }
