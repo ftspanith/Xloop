@@ -91,7 +91,10 @@ function scoreVariant(item) {
   const hdr = add('HDR / Dolby Vision', hdrScore(item.hdr || item.filename));
   const audio = add('audio format', audioScore(item.audio || item.filename));
   const completeness = completenessScore(item);
-  return { ...item, qualityScore: source + resolution + codec + hdr + audio + completeness, scoreBreakdown: {source,resolution,codec,hdr,audio,completeness}, scoreReasons: reasons };
+  const isRepack = !!item?.isRepack || /repack/i.test(String(item?.releaseType || ''));
+  const repack = isRepack ? 100 : 0;
+  if (isRepack) reasons.unshift('repack priority');
+  return { ...item, isRepack, qualityScore: repack + source + resolution + codec + hdr + audio + completeness, scoreBreakdown: {repack,source,resolution,codec,hdr,audio,completeness}, scoreReasons: reasons };
 }
 
 function nearDuplicateGroups(items, tolerance = 0.01) {
@@ -99,7 +102,7 @@ function nearDuplicateGroups(items, tolerance = 0.01) {
   for (const item of items) {
     const bytes = sizeToBytes(item.size || item.sizeBytes);
     if (!bytes) continue;
-    const key = [titleKey(item), item.year || '', item.quality || '', item.codec || '', item.audio || '', item.language || ''].join('|');
+    const key = [titleKey(item), item.year || '', item.quality || '', item.codec || '', item.audio || '', item.language || '', item.isRepack || /repack/i.test(String(item.releaseType || '')) ? 'repack' : 'main'].join('|');
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key).push({item, bytes});
   }
@@ -159,28 +162,38 @@ function analyzeVariantSet(downloads = [], options = {}) {
 function rankVariantsForDisplay(items = [], options = {}) {
   const tolerance = Number.isFinite(options.sizeTolerance) ? options.sizeTolerance : 0.08;
   const ranked = (Array.isArray(items) ? items : []).map(scoreVariant);
-  const sized = ranked
-    .map(item => ({ item, bytes: sizeToBytes(item.size || item.sizeBytes) }))
-    .filter(entry => entry.bytes > 0)
-    .sort((a, b) => b.bytes - a.bytes);
-  const unsized = ranked
-    .filter(item => !(sizeToBytes(item.size || item.sizeBytes) > 0))
-    .sort((a, b) => b.qualityScore - a.qualityScore);
-  const ordered = [];
 
-  for (let i = 0; i < sized.length;) {
-    const anchor = sized[i].bytes;
-    const cluster = [sized[i]];
-    let j = i + 1;
-    while (j < sized.length && (anchor - sized[j].bytes) / anchor <= tolerance) {
-      cluster.push(sized[j]);
-      j++;
+  // Keep every original/main release, but put explicitly-labelled repacks first.
+  // Within each release class, retain the established size-first ordering and
+  // quality scoring for close-size encodes.
+  function rankReleaseClass(releases) {
+    const sized = releases
+      .map(item => ({ item, bytes: sizeToBytes(item.size || item.sizeBytes) }))
+      .filter(entry => entry.bytes > 0)
+      .sort((a, b) => b.bytes - a.bytes);
+    const unsized = releases
+      .filter(item => !(sizeToBytes(item.size || item.sizeBytes) > 0))
+      .sort((a, b) => b.qualityScore - a.qualityScore);
+    const ordered = [];
+
+    for (let i = 0; i < sized.length;) {
+      const anchor = sized[i].bytes;
+      const cluster = [sized[i]];
+      let j = i + 1;
+      while (j < sized.length && (anchor - sized[j].bytes) / anchor <= tolerance) {
+        cluster.push(sized[j]);
+        j++;
+      }
+      cluster.sort((a, b) => b.item.qualityScore - a.item.qualityScore || b.bytes - a.bytes);
+      ordered.push(...cluster.map(entry => entry.item));
+      i = j;
     }
-    cluster.sort((a, b) => b.item.qualityScore - a.item.qualityScore || b.bytes - a.bytes);
-    ordered.push(...cluster.map(entry => entry.item));
-    i = j;
+    return [...ordered, ...unsized];
   }
-  return [...ordered, ...unsized];
+
+  const repacks = ranked.filter(item => item.isRepack);
+  const originals = ranked.filter(item => !item.isRepack);
+  return [...rankReleaseClass(repacks), ...rankReleaseClass(originals)];
 }
 
 module.exports = { sizeToBytes, titleKey, scoreVariant, analyzeVariantSet, nearDuplicateGroups, rankVariantsForDisplay };
