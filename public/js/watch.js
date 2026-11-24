@@ -186,7 +186,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       { re: /मराठी/,              label: 'Marathi' },
       { re: /\bmulti\b/i,         label: 'Multi' },
     ];
-    const languageText = [fn, tags, dl.language || '', fallbackLang || ''].join(' ');
+    const languageText = [fn, tags, dl.language || fallbackLang || ''].join(' ');
     let detectedLangs = [];
     for (const { re, label } of LANG_MAP) {
       if (label === 'Multi') continue;
