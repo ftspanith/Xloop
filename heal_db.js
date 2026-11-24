@@ -89,9 +89,10 @@ async function fetchTMDB(rawTitle, isSeries, year, imdbId = null, knownTmdbId = 
     if (shared) {
       const genres = (shared.genre || []).map((g) => String(g || '').toLowerCase());
       const originalLanguage = String(shared.originalLanguage || '').toLowerCase();
-      const isAnime = shared.type === 'series' &&
-        (/(japanese|ja|korean|ko|chinese|zh)/.test(originalLanguage) &&
-          genres.some((g) => /animation|anime/.test(g)));
+      const isAnime = shared.type === 'series' && (
+        /^(japanese|ja)$/.test(originalLanguage) ||
+        (genres.some((g) => /animation|anime/.test(g)) && /^(korean|ko|chinese|zh)$/.test(originalLanguage))
+      );
       const meta = {
         ...shared,
         tmdbTitle: shared.title || rawTitle,
