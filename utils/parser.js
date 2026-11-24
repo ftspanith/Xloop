@@ -296,8 +296,8 @@ function normalizeLanguageList(values) {
 function classifyLanguages(values, markerText = '') {
   const languages = normalizeLanguageList(values);
   const text = String(markerText || (Array.isArray(values) ? values.join(' ') : values) || '');
-  const hasMultiMarker = /\b(?:multi(?:[.\s_-]?audio)?|tri[.\s_-]?audio|bilingual)\b/i.test(text);
-  const hasDualMarker = /\bdual(?:[.\s_-]?audio)?\b/i.test(text);
+  const hasMultiMarker = /\b(?:multi(?:[.\s_-]?audio)?|tri[.\s_-]?audio)\b/i.test(text);
+  const hasDualMarker = /\b(?:dual(?:[.\s_-]?audio)?|bilingual)\b/i.test(text);
   const languageType = hasMultiMarker || languages.length >= 3 ? 'Multi'
     : hasDualMarker || languages.length === 2 ? 'Dual'
     : languages.length === 1 ? 'Single' : '';
