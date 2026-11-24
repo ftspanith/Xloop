@@ -984,7 +984,7 @@ function extractYear(sources) {
   // P1: bracketed year — most reliable signal in Telegram posts like "Title (2023)"
   for (const s of sources) {
     if (!s) continue;
-    const m = s.match(/[\[({]\s*(19\d{2}|20\d)\s*[\])}]/);
+    const m = s.match(/[\[({]\s*(19\d{2}|20\d{2})\s*[\])}]/);
     if (m) return parseInt(m[1], 10);
   }
   // P2a: For dot-separated filenames, collect ALL separator-bounded years and
@@ -998,7 +998,7 @@ function extractYear(sources) {
     const searchIn = qualMatch ? s.substring(0, qualMatch.index) : s;
     // Find ALL years in the pre-quality section
     const allYears = [];
-    const yearRE = /[._\-\s](19\d{2}|20\d)[._\-\s]/g;
+    const yearRE = /[._\-\s](19\d{2}|20\d{2})[._\-\s]/g;
     let ym;
     while ((ym = yearRE.exec(searchIn)) !== null) {
       allYears.push(parseInt(ym[1], 10));
@@ -1012,19 +1012,19 @@ function extractYear(sources) {
   // P2b: year embedded between dots/underscores/dashes — single year case
   for (const s of sources) {
     if (!s) continue;
-    const m = s.match(/[._\-](19\d{2}|20\d)[._\-\s]/);
+    const m = s.match(/[._\-](19\d{2}|20\d{2})[._\-\s]/);
     if (m) return parseInt(m[1], 10);
   }
   // P3: year at tail, just before file extension or end of string
   for (const s of sources) {
     if (!s) continue;
-    const m = s.match(/(19\d{2}|20\d)\s*(?:$|\.(?:mkv|mp4|avi|mov|ts|zip|rar))/i);
+    const m = s.match(/(19\d{2}|20\d{2})\s*(?:$|\.(?:mkv|mp4|avi|mov|ts|zip|rar))/i);
     if (m) return parseInt(m[1], 10);
   }
   // P4: first year anywhere (last resort — may grab year from title name like "2001")
   for (const s of sources) {
     if (!s) continue;
-    const m = s.match(/\b(19\d{2}|20\d)\b/);
+    const m = s.match(/\b(19\d{2}|20\d{2})\b/);
     if (m) return parseInt(m[1], 10);
   }
   return null;
@@ -1644,7 +1644,7 @@ function parseManualInput(line) {
   const language = detectAllLanguages(raw).filter(l => l !== 'Multi').join(', ') || '';
 
   // Extract year  (4-digit between 1900-2099, not part of resolution like 1080)
-  const yearMatch = raw.match(/(?<!\d)(19\d{2}|20\d{2})(?!\d)/);
+  const yearMatch = raw.match(/(?<!\d)(19\d{2}|20\d{2}{2})(?!\d)/);
   const year = yearMatch ? parseInt(yearMatch[1]) : null;
 
   // Detect type from filename cues
@@ -1661,7 +1661,7 @@ function parseManualInput(line) {
     .replace(/\b(HDR10\+?|DOLBY[\s.]?VISION|HLG|SDR|HDR)\b/gi, '') // hdr
     .replace(/S\d{1,2}E\d{1,3}|Season\s*\d+|Episode\s*\d+/gi, '') // season/ep
     .replace(/\[(.*?)\]|\{(.*?)\}|\((.*?)\)/g, '')  // bracketed tags
-    .replace(/(?<!\d)(19\d{2}|20\d{2})(?!\d)/g, '') // year
+    .replace(/(?<!\d)(19\d{2}|20\d{2}{2})(?!\d)/g, '') // year
     .replace(/[._\-]+/g, ' ')                        // dots/underscores
     .replace(/\s{2,}/g, ' ')
     .trim();
