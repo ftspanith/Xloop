@@ -102,3 +102,14 @@ test('shared Telegram extraction retains approved providers and rejects all othe
   assert.equal(result.links.length, 3);
   assert.equal(result.stats.rejectedLinks, 2);
 });
+
+
+test('recognizes rotated provider TLDs and strips mirror subdomains safely', () => {
+  const rotated = normalizeTelegramUrl('https://new5.edge.gdflix.xyz/file/abc?token=one');
+  assert.equal(rotated, 'https://gdflix.xyz/file/abc?token=one');
+  assert.equal(isAllowedTelegramDownloadUrl(rotated), true);
+  assert.equal(isAllowedTelegramDownloadUrl('https://mirror.hubcloud.sbs/file/abc'), true);
+  assert.equal(isAllowedTelegramDownloadUrl('https://sub.tmbcloud.site/file/abc'), true);
+  assert.equal(isAllowedTelegramDownloadUrl('https://gdflix.dev.evil.example/file/abc'), false);
+  assert.equal(isAllowedTelegramDownloadUrl('https://notgdflix.dev/file/abc'), false);
+});
