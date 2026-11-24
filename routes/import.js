@@ -724,11 +724,21 @@ router.post('/preview', auth, async (req, res) => {
 // Used by both bulk import and the Fix Posters admin tool.
 // Returns full metadata including poster AND backdrop from TMDB + OMDB.
 router.post('/fetch-meta', auth, async (req, res) => {
-  const { title, year, isSeries } = req.body;
+  const { title, year, messageYear, yearCandidates = [], isSeries, season, filename, fileYear } = req.body;
   const { tmdbKey, omdbKey } = resolveKeys(req);
   if (!title) return res.status(400).json({ message: 'Title required' });
 
-  const parsed = { title, year: year ? parseInt(year) : null, isSeries: !!isSeries, contentType: isSeries ? 'series' : 'movie' };
+  const parsed = {
+    title,
+    year: year ? parseInt(year, 10) : null,
+    messageYear: messageYear ? parseInt(messageYear, 10) : (isSeries && year ? parseInt(year, 10) : null),
+    yearCandidates: [...new Set([...(yearCandidates || []), year, fileYear]
+      .map(Number).filter(value => Number.isInteger(value) && value >= 1900 && value <= 2099))],
+    isSeries: !!isSeries,
+    contentType: isSeries ? 'series' : 'movie',
+    season: season || null,
+    downloads: filename ? [{ filename, fileYear: Number(fileYear || extractYear([filename])) || null, season: season || null }] : [],
+  };
 
   let tmdb = null, omdb = null;
 
@@ -760,7 +770,9 @@ router.post('/fetch-meta', auth, async (req, res) => {
   // Merge: TMDB is primary (has backdrop), OMDB fills gaps
   const result = {
     title:       (tmdb?.title || omdb?.title || title),
-    year:        (tmdb?.year  || omdb?.year  || year || null),
+    year:        (tmdb?.year || omdb?.year || parsed.messageYear || (isSeries ? null : year) || null),
+    releaseDate: (tmdb?.releaseDate || ''),
+    seasonYear: (tmdb?.seasonYear || null),
     poster:      (tmdb?.poster    || omdb?.poster    || ''),
     backdrop:    (tmdb?.backdrop  || ''),                      // Only TMDB has backdrops
     rating:      (tmdb?.rating    || omdb?.rating    || 0),
@@ -1097,18 +1109,35 @@ router.post('/refetch-poster/:id', auth, async (req, res) => {
     }
 
     const { searchTMDB, searchOMDB, searchGoogleImage } = require('../pipeline_full');
+    const { extractYear } = require('../utils/parser');
     const isSer = movie.type === 'series' || movie.type === 'anime';
-    const tmdb = await searchTMDB(movie.title, movie.year, isSer, null, null, movie.imdbId || null, movie.tmdbId || null);
+    const downloads = movie.downloads || [];
+    const selectedSeason = downloads.find(download => download.season)?.season || null;
+    const yearHints = [...new Set([movie.year, ...downloads.map(download =>
+      download.fileYear || extractYear([download.filename])
+    )].filter(Boolean).map(Number))];
+    const seasonYearHints = downloads
+      .filter(download => !selectedSeason || Number(download.season) === Number(selectedSeason))
+      .map(download => download.fileYear || extractYear([download.filename]))
+      .filter(Boolean);
+    const tmdb = await searchTMDB(
+      movie.title, movie.year, isSer, selectedSeason, null,
+      movie.imdbId || null, movie.tmdbId || null, yearHints, seasonYearHints
+    );
     let poster = '', posterFallback = '', backdrop = '', tmdbId = movie.tmdbId, imdbId = movie.imdbId;
+    const seasonYears = { ...(movie.seasonYears || {}) };
 
     if (tmdb) {
       tmdbId = tmdb.tmdbId || tmdbId;
       backdrop = tmdb.backdrop || '';
+      if (tmdb.releaseDate) movie.releaseDate = tmdb.releaseDate;
+      if (tmdb.year && tmdb.releaseDate) movie.year = tmdb.year;
+      if (selectedSeason && tmdb.seasonYear) seasonYears['s' + selectedSeason] = Number(tmdb.seasonYear);
       const valid = await validatePoster(tmdb.poster);
       poster = valid || '';
     }
 
-    const omdb = await searchOMDB(movie.title, movie.year, isSer);
+    const omdb = await searchOMDB(movie.title, movie.year, isSer, yearHints);
     if (omdb) {
       imdbId = omdb.imdbId || imdbId;
       if (omdb.poster && omdb.poster !== poster) {
@@ -1121,14 +1150,13 @@ router.post('/refetch-poster/:id', auth, async (req, res) => {
       }
     }
 
-    // Last resort: Google image search for shows like Jabardasth with no TMDB/OMDB poster
     if (!poster) {
       const gImg = await searchGoogleImage(movie.title, movie.year, isSer);
       if (gImg) poster = gImg;
     }
 
     const updated = await Movie.findByIdAndUpdate(req.params.id, {
-      $set: { poster, posterFallback, backdrop, tmdbId, imdbId }
+      $set: { poster, posterFallback, backdrop, tmdbId, imdbId, releaseDate: movie.releaseDate || '', year: movie.year, seasonYears }
     }, { new: true });
     res.json({ message: 'Poster refetched', poster, posterFallback, movie: updated });
   } catch (e) { res.status(500).json({ message: e.message }); }
