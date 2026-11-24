@@ -8,6 +8,7 @@ const mongoose = require('mongoose');
 //   3. routes/orchestrator.js → reads from here for /import-batch
 const extractedLinkSchema = new mongoose.Schema({
   url:         { type: String, required: true },
+  messageId:   { type: Number, default: null },
   host:        { type: String, default: 'Other' },
   title:       { type: String, default: '' },
   year:        { type: Number, default: null },
