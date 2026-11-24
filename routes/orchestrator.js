@@ -494,7 +494,7 @@ router.post('/import-batch', auth, async (req, res) => {
         const yearHints = [...new Set([rep.messageYear, rep.year, ...(rep.yearCandidates || []),
           ...group.items.map(file => file.fileYear || extractYear([file.filename]))].filter(Boolean).map(Number))];
         const seasonYearHints = group.items.filter(file => !tmdbSeason || Number(file.season) === Number(tmdbSeason))
-          .map(file => file.fileYear || extractYear([file.filename])).filter(Boolean);
+          .map(file => file.fileYear || extractYear([file.filename]) || (!rep.messageYear ? file.year : null)).filter(Boolean);
         const titleYearHint = isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year);
         const tmdb = await searchTMDB(cleanTitle, titleYearHint, isSer, tmdbSeason, group.msgDate,
           rep.imdbId || null, rep.tmdbIdHint || null, yearHints, seasonYearHints);
