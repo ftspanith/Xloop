@@ -184,6 +184,7 @@ async function fetchTMDB(parsed, tmdbKey) {
     ...(parsed.downloads || []).map(file => file.fileYear || extractYear([file.filename])),
   ].map(Number).filter(value => Number.isInteger(value) && value >= 1900 && value <= 2099))];
   const seasonYearHints = (parsed.downloads || [])
+    .filter(file => !parsed.season || Number(file.season) === Number(parsed.season))
     .map(file => file.fileYear || extractYear([file.filename]))
     .filter(Boolean);
   const titleYearHint = isSeries ? (parsed.messageYear || null) : (parsed.messageYear || parsed.year || null);
