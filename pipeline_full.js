@@ -523,11 +523,16 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       posterFallback: existing.posterFallback || '', backdrop: existing.backdrop || '',
       rating: existing.rating || 0, year: existing.year || rep.year || null,
       genre: existing.genre || [], duration: existing.duration || '',
+      seasonPosters: existing.seasonPosters || {},
+      seasonPoster: rep.season && existing.seasonPosters?.[`s${rep.season}`]
+        ? existing.seasonPosters[`s${rep.season}`] : '',
     } : {};
 
     const needsMetadata = !existing || !existing.tmdbId || !existing.imdbId ||
       !existing.poster || !existing.backdrop || !existing.description ||
-      !existing.rating || !existing.genre?.length;
+      !existing.rating || !existing.genre?.length || !existing.year ||
+      !existing.duration || (isSer && !existing.totalSeasons) ||
+      (rep.season && !existing.seasonPosters?.[`s${rep.season}`]);
 
     if (cleanTitle && needsMetadata) {
       const tmdb = await searchTMDB(
@@ -718,7 +723,14 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         if (!dbRec.imdbId         && meta.imdbId)         metaSet.imdbId         = meta.imdbId;
         if (!dbRec.rating         && meta.rating)         metaSet.rating         = meta.rating;
         if (!dbRec.description    && meta.description)    metaSet.description    = meta.description;
-        if (finalType === 'anime' && dbRec.type === 'series') metaSet.type = 'anime';
+        if (!dbRec.year && meta.year) metaSet.year = meta.year;
+        if (!dbRec.duration && meta.duration) metaSet.duration = meta.duration;
+        if (!dbRec.totalSeasons && meta.totalSeasons) metaSet.totalSeasons = meta.totalSeasons;
+        if ((!dbRec.genre || !dbRec.genre.length) && meta.genre?.length) metaSet.genre = meta.genre;
+        if (dbRec.type !== finalType) metaSet.type = finalType;
+        if (rep.season && meta.seasonPoster && !dbRec.seasonPosters?.[`s${rep.season}`]) {
+          metaSet[`seasonPosters.s${rep.season}`] = meta.seasonPoster;
+        }
 
         if (matchedIdx >= 0) {
           const matchedDownload = dbRec.downloads[matchedIdx] || {};
@@ -806,6 +818,8 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           description: meta.description || '',
           poster: meta.poster || '', posterFallback: meta.posterFallback || '',
           backdrop: meta.backdrop || '',
+          seasonPosters: rep.season && meta.seasonPoster
+            ? { [`s${rep.season}`]: meta.seasonPoster } : {},
           rating: meta.rating || 0, year: meta.year || item.year || new Date().getFullYear(),
           genre: meta.genre || [], duration: meta.duration || '', quality, language: displayLang,
           formats: [quality].filter(Boolean), codecs: [codec].filter(c => c !== 'Other'),
