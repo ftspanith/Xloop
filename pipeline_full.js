@@ -14,6 +14,9 @@
 //   node pipeline_full.js --no-wipe        — skip DB wipe
 //   node pipeline_full.js --no-heal        — skip healer
 //   node pipeline_full.js --no-bypass      — skip bypass (import direct only)
+//   node pipeline_full.js --from-mongodb --clean-catalogue
+//                                          — clear Movie catalogue, then re-import from
+//                                            MongoDB ExtractedLink (source links are preserved)
 //   node pipeline_full.js --concurrency=4  — bypass concurrency (default 3)
 //   node pipeline_full.js --import-source=./bypassed_links.json
 // ═══════════════════════════════════════════════════════════════════════════
@@ -970,9 +973,12 @@ async function main(opts = {}) {
   if (opts.emitter) _emitter = opts.emitter;
 
   const FROM_MONGODB = opts.fromMongoDB !== undefined ? !!opts.fromMongoDB : _argv.includes('--from-mongodb');
-  // The dedicated MongoDB importer is deliberately read-only with respect to
-  // the source collection: it never wipes, scrapes, bypasses, or runs the healer.
-  const NO_WIPE     = FROM_MONGODB ? true : (opts.noWipe !== undefined ? opts.noWipe : _argv.includes('--no-wipe'));
+  // MongoDB stays the source of truth. By default this importer preserves the
+  // catalogue; --clean-catalogue explicitly clears Movie documents before
+  // rebuilding them, while never deleting the ExtractedLink source collection.
+  const CLEAN_CATALOGUE = FROM_MONGODB &&
+    (opts.cleanCatalogue !== undefined ? !!opts.cleanCatalogue : _argv.includes('--clean-catalogue'));
+  const NO_WIPE     = FROM_MONGODB ? !CLEAN_CATALOGUE : (opts.noWipe !== undefined ? opts.noWipe : _argv.includes('--no-wipe'));
   const NO_HEAL     = FROM_MONGODB ? true : (opts.noHeal !== undefined ? opts.noHeal : _argv.includes('--no-heal'));
   const NO_BYPASS   = FROM_MONGODB ? true : (opts.noBypass !== undefined ? opts.noBypass : _argv.includes('--no-bypass'));
   const RESUME      = opts.resume     !== undefined ? opts.resume     : _argv.includes('--resume');
@@ -1032,10 +1038,17 @@ async function main(opts = {}) {
   // STEP 0: Wipe
   sep();
   if (!NO_WIPE) {
-    log('STEP 0 — Wiping database...');
-    // Inline wipe — avoid spawning wipe_db.js (not available on Vercel serverless)
+    if (FROM_MONGODB) {
+      log('STEP 0 — Cleaning Movie catalogue; MongoDB ExtractedLink source will be preserved...');
+    } else {
+      log('STEP 0 — Wiping database...');
+    }
+    // Only the Movie catalogue is cleared. ExtractedLink is the input source
+    // for --from-mongodb and must remain untouched for the rebuild.
     const r = await Movie.deleteMany({});
-    ok(`Database wiped — removed ${r.deletedCount} entries`);
+    ok(FROM_MONGODB
+      ? `Movie catalogue cleared — removed ${r.deletedCount} entries; ExtractedLink source preserved`
+      : `Database wiped — removed ${r.deletedCount} entries`);
   } else {
     warn('STEP 0 — Skipping wipe (--no-wipe)');
   }
