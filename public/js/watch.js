@@ -44,7 +44,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       : '';
 
     const downloads = data.downloads || [];
-    const downloadHtml = buildDownloadSection(downloads, data.language, data.type);
+    const downloadHtml = buildDownloadSection(downloads, '', data.type);
+    const availableLanguageLabels = getAvailableLanguageLabels(downloads);
 
     let displayQuality = data.quality || '';
     if (!displayQuality || displayQuality === 'HD') {
@@ -101,7 +102,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <!-- ── Right: floating info panel ── -->
         <div class="wp-side-panel">
           ${[runtimeLabel ? `<div class="wp-side-row"><span class="wp-side-label">Runtime</span><span class="wp-side-val">${runtimeLabel}</span></div>` : '',
-             data.language ? `<div class="wp-side-row"><span class="wp-side-label">Language</span><span class="wp-side-val">${data.language.split(',').map(part => part.trim()).join(' + ')}${data.languageType ? ' (' + data.languageType + ')' : ''}</span></div>` : '',
+             availableLanguageLabels.length ? `<div class="wp-side-row"><span class="wp-side-label">Available Languages</span><span class="wp-side-val">${availableLanguageLabels.join(' · ')}</span></div>` : '',
              data.year ? `<div class="wp-side-row"><span class="wp-side-label">Release Year</span><span class="wp-side-val">${data.year}</span></div>` : '',
              displayQuality ? `<div class="wp-side-row"><span class="wp-side-label">Quality</span><span class="wp-side-val">${displayQuality}</span></div>` : '',
              data.rating ? `<div class="wp-side-row"><span class="wp-side-label">Rating</span><span class="wp-side-val">${data.rating} / 10</span></div>` : '',
@@ -122,7 +123,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── For series: show episodes ─────────────────────────────
     const actualType = (data.type || type).toLowerCase();
     if (actualType === 'series' || actualType === 'anime') {
-      loadEpisodes(downloads, bgUrl, data.language, actualType, data._id);
+      loadEpisodes(downloads, bgUrl, '', actualType, data._id);
     } else {
       // ── Show download links directly on the page for movies ───
       if (downloads.length > 0) {
@@ -146,6 +147,89 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
+// Detect languages from the actual Telegram download record only.
+// Never use TMDB/OMDb original-language metadata as an availability signal.
+const DOWNLOAD_LANGUAGE_MAP = [
+  { re: /\b(?:telugu|tel|tl)\b|తెలుగు/i, label: 'Telugu' },
+  { re: /\b(?:tamil|tam|tk)\b|தமிழ்/i, label: 'Tamil' },
+  { re: /\b(?:hindi|hin)\b|हिन्दी|हिंदी/i, label: 'Hindi' },
+  { re: /\b(?:malayalam|mal|ml)\b|മലയാളം/i, label: 'Malayalam' },
+  { re: /\b(?:kannada|kan|kn)\b|ಕನ್ನಡ/i, label: 'Kannada' },
+  { re: /\b(?:bengali|ben|bang|bn)\b|বাংলা/i, label: 'Bengali' },
+  { re: /\b(?:english|eng)\b/i, label: 'English' },
+  { re: /\b(?:marathi|mar)\b|मराठी/i, label: 'Marathi' },
+  { re: /\b(?:punjabi|pun|pan)\b|ਪੰਜਾਬੀ/i, label: 'Punjabi' },
+  { re: /\b(?:japanese|jpn|jap)\b/i, label: 'Japanese' },
+  { re: /\b(?:korean|kor)\b/i, label: 'Korean' },
+  { re: /\b(?:chinese|chi|zho|mandarin|cantonese)\b/i, label: 'Chinese' },
+  { re: /\b(?:arabic|ara)\b|عربي|عربى/i, label: 'Arabic' },
+  { re: /\b(?:turkish|tur)\b/i, label: 'Turkish' },
+  { re: /\b(?:spanish|spa)\b/i, label: 'Spanish' },
+  { re: /\b(?:french|fre|fra)\b/i, label: 'French' },
+  { re: /\b(?:german|ger|deu)\b/i, label: 'German' },
+  { re: /\b(?:portuguese|por)\b/i, label: 'Portuguese' },
+  { re: /\b(?:russian|rus)\b/i, label: 'Russian' },
+  { re: /\b(?:italian|ita)\b/i, label: 'Italian' },
+  { re: /\b(?:dutch|nld|dut)\b/i, label: 'Dutch' },
+  { re: /\b(?:polish|pol)\b/i, label: 'Polish' },
+  { re: /\b(?:thai|tha)\b/i, label: 'Thai' },
+  { re: /\b(?:vietnamese|vie)\b/i, label: 'Vietnamese' },
+  { re: /\b(?:indonesian|ind|bahasa)\b/i, label: 'Indonesian' },
+  { re: /\b(?:malay|msa)\b/i, label: 'Malay' },
+  { re: /\b(?:filipino|tagalog|tgl)\b/i, label: 'Filipino' },
+  { re: /\b(?:persian|farsi|fas|per)\b/i, label: 'Persian' },
+  { re: /\b(?:hebrew|heb)\b/i, label: 'Hebrew' },
+  { re: /\b(?:greek|ell|gre)\b/i, label: 'Greek' },
+  { re: /\b(?:ukrainian|ukr)\b/i, label: 'Ukrainian' },
+  { re: /\b(?:urdu|urd)\b|اردو/i, label: 'Urdu' },
+  { re: /\b(?:nepali|nep)\b/i, label: 'Nepali' },
+  { re: /\b(?:sinhala|sin)\b/i, label: 'Sinhala' },
+  { re: /\b(?:gujarati|guj)\b|ગુજરાતી/i, label: 'Gujarati' },
+  { re: /\b(?:odia|oriya|ori)\b|ଓଡ଼ିଆ/i, label: 'Odia' },
+  { re: /\b(?:assamese|asm)\b|অসমীয়া/i, label: 'Assamese' },
+  { re: /\b(?:bhojpuri|bho)\b/i, label: 'Bhojpuri' },
+  { re: /\b(?:swedish|swe)\b/i, label: 'Swedish' },
+  { re: /\b(?:norwegian|nor)\b/i, label: 'Norwegian' },
+  { re: /\b(?:danish|dan)\b/i, label: 'Danish' },
+  { re: /\b(?:finnish|fin)\b/i, label: 'Finnish' },
+  { re: /\b(?:czech|ces|cze)\b/i, label: 'Czech' },
+  { re: /\b(?:hungarian|hun)\b/i, label: 'Hungarian' },
+  { re: /\b(?:romanian|ron|rum)\b/i, label: 'Romanian' },
+  { re: /\b(?:bulgarian|bul)\b/i, label: 'Bulgarian' },
+  { re: /\b(?:croatian|hrv)\b/i, label: 'Croatian' },
+  { re: /\b(?:serbian|srp)\b/i, label: 'Serbian' },
+  { re: /\b(?:swahili|swa)\b/i, label: 'Swahili' },
+];
+
+function detectDownloadLanguageInfo(dl) {
+  const languageText = [dl.filename || '', dl.tags || '', dl.language || ''].join(' ');
+  const languages = [];
+  for (const { re, label } of DOWNLOAD_LANGUAGE_MAP) {
+    if (re.test(languageText) && !languages.includes(label)) languages.push(label);
+  }
+  const hasMultiMarker = /\b(?:multi(?:[.\s_-]?audio)?|tri[.\s_-]?audio)\b/i.test(languageText);
+  const hasDualMarker = /\b(?:dual(?:[.\s_-]?audio)?|bilingual)\b/i.test(languageText);
+  const storedType = ['Single', 'Dual', 'Multi'].includes(dl.languageType) ? dl.languageType : '';
+  const languageType = hasMultiMarker || languages.length >= 3 ? 'Multi'
+    : hasDualMarker || languages.length === 2 ? 'Dual'
+    : languages.length === 1 ? 'Single' : storedType;
+  return { languages, languageType };
+}
+
+function getAvailableLanguageLabels(downloads) {
+  const labels = new Set();
+  for (const dl of downloads || []) {
+    const info = detectDownloadLanguageInfo(dl || {});
+    const names = info.languages.join(' + ');
+    if (info.languageType === 'Multi') labels.add(names ? 'MULTI (' + names + ')' : 'MULTI');
+    else if (info.languageType === 'Dual') labels.add(names ? 'DUAL (' + names + ')' : 'DUAL');
+    else if (info.languages.length === 1) labels.add(info.languages[0]);
+    else if (info.languages.length === 2) labels.add('DUAL (' + names + ')');
+    else if (info.languages.length >= 3) labels.add('MULTI (' + names + ')');
+  }
+  return [...labels];
+}
+
 // ── Flat-list download section ─────────────────────────────────────────────────
 function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
   if (!rawDownloads || rawDownloads.length === 0) return '';
@@ -157,48 +241,14 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
     const fn   = dl.filename || '';
     const tags = (dl.tags || '').toLowerCase();
 
-    const LANG_MAP = [
-      { re: /\btelugu\b/i,       label: 'Telugu' },
-      { re: /\btamil\b/i,        label: 'Tamil' },
-      { re: /\bhindi\b/i,        label: 'Hindi' },
-      { re: /\bmalayalam\b/i,    label: 'Malayalam' },
-      { re: /\bkannada\b/i,      label: 'Kannada' },
-      { re: /\benglis[h]?\b/i,   label: 'English' },
-      { re: /\bmarathi\b/i,      label: 'Marathi' },
-      { re: /\bbengali\b/i,      label: 'Bengali' },
-      { re: /\bpunjabi\b/i,      label: 'Punjabi' },
-      { re: /\b(Tel|TEL)\b/,     label: 'Telugu' },
-      { re: /\b(Tam|TAM)\b/,     label: 'Tamil' },
-      { re: /\b(Hin|HIN)\b/,     label: 'Hindi' },
-      { re: /\b(Mal|MAL|ML)\b/,  label: 'Malayalam' },
-      { re: /\b(Kan|KAN)\b/,     label: 'Kannada' },
-      { re: /\b(Eng|ENG)\b/,     label: 'English' },
-      { re: /\b(Mar|MAR)\b/,     label: 'Marathi' },
-      { re: /\b(Ben|BEN)\b/,     label: 'Bengali' },
-      { re: /\b(Pun|PUN|Pa)\b/,  label: 'Punjabi' },
-      { re: /తెలుగు/,            label: 'Telugu' },
-      { re: /தமிழ்/,             label: 'Tamil' },
-      { re: /हिन्दी|हिंदी/,     label: 'Hindi' },
-      { re: /മലയാളം/,            label: 'Malayalam' },
-      { re: /ಕನ್ನಡ/,             label: 'Kannada' },
-      { re: /বাংলা/,              label: 'Bengali' },
-      { re: /ਪੰਜਾਬੀ/,             label: 'Punjabi' },
-      { re: /मराठी/,              label: 'Marathi' },
-      { re: /\bmulti\b/i,         label: 'Multi' },
-    ];
-    const languageText = [fn, tags, dl.language || fallbackLang || ''].join(' ');
-    let detectedLangs = [];
-    for (const { re, label } of LANG_MAP) {
-      if (label === 'Multi') continue;
-      if (re.test(languageText) && !detectedLangs.includes(label)) detectedLangs.push(label);
-    }
-    const hasMultiMarker = /\b(?:multi(?:[.\s_-]?audio)?|tri[.\s_-]?audio)\b/i.test(languageText);
-    const hasDualMarker = /\b(?:dual(?:[.\s_-]?audio)?|bilingual)\b/i.test(languageText);
-    const languageType = hasMultiMarker || detectedLangs.length >= 3 ? 'Multi'
-      : hasDualMarker || detectedLangs.length === 2 ? 'Dual'
-      : detectedLangs.length === 1 ? 'Single' : (dl.languageType || '');
+
+    const languageInfo = detectDownloadLanguageInfo(dl);
+    const detectedLangs = languageInfo.languages;
+    const languageType = languageInfo.languageType;
     const isMulti = languageType === 'Multi';
-    const langLabel = detectedLangs.length ? detectedLangs.join(' + ') : languageType;
+    const langLabel = detectedLangs.length
+      ? detectedLangs.join(' + ')
+      : (languageType === 'Dual' ? 'DUAL' : languageType === 'Multi' ? 'MULTI' : '');
 
     let res = dl.quality || 'HD';
     // Override from filename if filename has explicit quality token
@@ -476,7 +526,7 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       ? `<span class="dl-row-se">${row.season?'S'+String(row.season).padStart(2,'0'):''}${row.episode?'E'+String(row.episode).padStart(2,'0'):''}</span>`
       : '';
 
-    const langText = row.languageType && row.lang && row.lang !== row.languageType
+    const langText = ['Dual', 'Multi'].includes(row.languageType) && row.lang && row.lang !== row.languageType.toUpperCase()
       ? `${row.languageType.toUpperCase()} · ${row.lang}` : row.lang;
     const langBadge = langText
       ? `<span class="dl-row-lang">${langText}</span>`

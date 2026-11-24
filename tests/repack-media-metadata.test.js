@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const {
   parseMessageBlock,
   classifyLanguages,
+  detectAllLanguages,
   detectReleaseMetadata,
   extractMediaMetadata,
 } = require('../utils/parser');
@@ -21,6 +22,15 @@ test('classifies one, two, and three-or-more named audio languages correctly', (
   assert.equal(classifyLanguages([], 'DUAL AUDIO').languageType, 'Dual');
   assert.equal(classifyLanguages([], 'MULTI AUDIO').languageType, 'Multi');
   assert.equal(classifyLanguages([], 'BILINGUAL').languageType, 'Dual');
+  const detectedDual = detectAllLanguages('Film.SPANISH.KOREAN.DUAL.AUDIO.mkv');
+  assert.equal(classifyLanguages(detectedDual).languageType, 'Dual');
+  assert.equal(classifyLanguages(detectAllLanguages('Film.SPANISH.KOREAN.MULTI.AUDIO.mkv')).languageType, 'Multi');
+});
+
+test('recognizes additional international download languages', () => {
+  assert.deepEqual(detectAllLanguages('Film.SPANISH.KOREAN.1080p.mkv').filter(l => l !== 'Multi').sort(), ['Korean', 'Spanish']);
+  assert.deepEqual(detectAllLanguages('Film.PORTUGUESE.RUSSIAN.THAI.mkv').filter(l => l !== 'Multi').sort(), ['Portuguese', 'Russian', 'Thai']);
+  assert.deepEqual(detectAllLanguages('Film.VIETNAMESE.INDONESIAN.1080p.mkv').filter(l => l !== 'Multi').sort(), ['Indonesian', 'Vietnamese']);
 });
 
 test('detects repacks and keeps proper releases distinct', () => {
@@ -152,5 +162,9 @@ test('import matching keeps repack and main releases in separate download groups
   assert.match(extractedSchema, /runtimeMinutes:\s+\{ type: Number/);
   assert.match(pipeline, /isRepack: !!dl\.isRepack/);
   assert.match(watch, /title="Repack release">REPACK/);
+  assert.match(watch, /Available Languages/);
+  assert.ok(watch.includes('getAvailableLanguageLabels(downloads)'));
+  assert.ok(pipeline.includes("doc.language = doc.languages.join(', ');"));
+  assert.doesNotMatch(pipeline, /origLang2/);
   assert.match(watch, /Telegram message date/);
 });
