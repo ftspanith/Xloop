@@ -121,3 +121,13 @@ test('series and anime classification variants with the same TMDB id still produ
   assert.equal(grouped[0].type, 'anime');
   assert.equal(grouped[0].downloads.length, 2);
 });
+
+
+test('search route groups season-specific Series and Anime candidates before ranking', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'routes', 'search.js'), 'utf8');
+  assert.match(source, /require\(['"]\.\.\/utils\/seriesGrouping['"]\)/);
+  assert.match(source, /dedupeSeriesDocuments\(/);
+  assert.match(source, /const uniqueCandidates = \[\.\.\.movieCandidates, \.\.\.seriesCandidates\]/);
+});
