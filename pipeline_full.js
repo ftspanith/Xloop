@@ -386,16 +386,32 @@ function recomputeAggregates(doc) {
   const dls = doc.downloads || [];
   const QUALITY_ORDER = ['8K', '4K', '1440p', '1080p', '720p', '576p', '540p', '480p', '360p', '240p', 'SD', 'HD'];
 
-  // Repacks are presented before all main/original versions. Quality remains
-  // first within each release class, followed by close-size format scoring.
-  // Ranking is display-only: every original and repack download is retained.
-  const ranked = rankVariantsForDisplay(dls.map((download, index) => ({
-    ...(typeof download.toObject === 'function' ? download.toObject() : download),
-    title: doc.title || '',
-    year: doc.year || null,
-    _rankIndex: index,
-  })), { sizeTolerance: 0.08 });
-  const sortedDownloads = ranked.map(item => dls[item._rankIndex]).filter(Boolean);
+  // Repack releases are shown before all main/original versions. Within
+  // each class, preserve the established quality-first groups and close-size
+  // cross-account ranking. This changes display order only; no link is removed.
+  const rankReleaseClass = entries => {
+    const qualityKeys = [...new Set(entries.map(download => download.quality || ''))]
+      .sort((a, b) => {
+        const ai = QUALITY_ORDER.indexOf(a);
+        const bi = QUALITY_ORDER.indexOf(b);
+        return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+      });
+    const ordered = [];
+    for (const quality of qualityKeys) {
+      const group = entries.filter(download => (download.quality || '') === quality);
+      const rankedGroup = rankVariantsForDisplay(group.map((download, index) => ({
+        ...(typeof download.toObject === 'function' ? download.toObject() : download),
+        title: doc.title || '',
+        year: doc.year || null,
+        _rankIndex: index,
+      })), { sizeTolerance: 0.08 });
+      ordered.push(...rankedGroup.map(item => group[item._rankIndex]).filter(Boolean));
+    }
+    return ordered;
+  };
+  const repacks = dls.filter(download => download.isRepack || download.releaseType === 'repack');
+  const mainReleases = dls.filter(download => !download.isRepack && download.releaseType !== 'repack');
+  const sortedDownloads = [...rankReleaseClass(repacks), ...rankReleaseClass(mainReleases)];
   // Keep original Mongoose subdocuments; only change their display order.
   dls.splice(0, dls.length, ...sortedDownloads);
 
