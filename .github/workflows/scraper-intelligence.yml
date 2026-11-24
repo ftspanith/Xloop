@@ -15,6 +15,8 @@ on:
       - 'tests/scraper-intelligence.test.js'
       - 'tests/importer-metadata.test.js'
       - 'tests/telegram-ingestion-metadata.test.js'
+      - 'public/js/watch.js'
+      - 'public/css/watch.css'
       - 'test/variant-intelligence.test.js'
       - 'package.json'
       - '.github/workflows/scraper-intelligence.yml'
@@ -29,6 +31,8 @@ on:
       - 'routes/scrape.js'
       - 'tests/importer-metadata.test.js'
       - 'tests/telegram-ingestion-metadata.test.js'
+      - 'public/js/watch.js'
+      - 'public/css/watch.css'
       - 'package.json'
       - '.github/workflows/scraper-intelligence.yml'
 jobs:
@@ -41,6 +45,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: node --check public/js/watch.js
+      - run: node --check routes/scrape.js
       - run: npm run test:scraper-intelligence
       - run: npm run test:video-formats
       - run: npm run test:importer-metadata
