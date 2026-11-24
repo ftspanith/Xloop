@@ -423,11 +423,11 @@ function buildDownloadSection(rawDownloads, fallbackLang, mediaType) {
       const seB = (b.season||0)*1000 + (b.episode||0);
       if (seA !== seB) return seA - seB;
     }
-    // 2. Keep resolution tiers intact: 4K > 1080p > 720p ...
+    // 2. Surface every repack before main/original releases for this episode.
+    if (a.isRepack !== b.isRepack) return a.isRepack ? -1 : 1;
+    // 3. Keep resolution tiers intact inside each release class.
     const qa = Q_ORDER[a.quality]??9, qb = Q_ORDER[b.quality]??9;
     if (qa !== qb) return qa - qb;
-    // 3. Repack variants are surfaced before main/older releases within a tier.
-    if (a.isRepack !== b.isRepack) return a.isRepack ? -1 : 1;
     // 4. Compare actual byte counts first within a resolution, largest first.
     const sa = sizeToBytes(a.size), sb = sizeToBytes(b.size);
     if (sb !== sa) return sb - sa;
