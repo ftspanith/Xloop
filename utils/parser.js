@@ -613,8 +613,8 @@ function extractAudio(fn) {
   // Prefer the most specific codec spelling before matching its family.
   if (/TRUEHD/.test(s)) codec = 'TrueHD';
   else if (/DTS[.\s_-]?X\b/.test(s)) codec = 'DTS:X';
-  else if (/DTS[.\\s_-]?HD[.\\s_-]?(?:MA|MASTER[.\\s_-]*AUDIO)\\b/.test(s)) codec = 'DTS-HD MA';
-  else if (/DTS[.\\s_-]?HD[.\\s_-]?(?:HRA|HR|HIGH[.\\s_-]*RESOLUTION[.\\s_-]*AUDIO)\\b/.test(s)) codec = 'DTS-HD HRA';
+  else if (/DTS[.\s_-]?HD[.\s_-]?(?:MA|MASTER[.\s_-]*AUDIO)\\b/.test(s)) codec = 'DTS-HD MA';
+  else if (/DTS[.\s_-]?HD[.\s_-]?(?:HRA|HR|HIGH[.\s_-]*RESOLUTION[.\s_-]*AUDIO)\\b/.test(s)) codec = 'DTS-HD HRA';
   else if (/DTS[.\s_-]?HD\b/.test(s)) codec = 'DTS-HD';
   else if (/DTS[.\s_-]?ES\b/.test(s)) codec = 'DTS-ES';
   else if (/DTS[.\s_-]?96[./\s_-]?24\b/.test(s)) codec = 'DTS 96/24';
