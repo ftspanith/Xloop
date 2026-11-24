@@ -185,3 +185,16 @@ test('a later upload date alone does not turn an otherwise equal encode into a r
   const newer = {...old,uploadDate:'2024-02-01'};
   assert.equal(inferRepackStatus(newer,[old]).isRepack,false);
 });
+
+test('bit-depth and audio-channel upgrades contribute to repack inference', () => {
+  const old = {
+    quality:'1080p', source:'WEB-DL', codec:'HEVC', audio:'AAC',
+    bitDepth:'8-bit', audioChannels:'2.0', size:'2 GB',
+    uploadDate:'2024-01-01',
+  };
+  const newer = {
+    ...old, bitDepth:'10-bit', audioChannels:'5.1',
+    uploadDate:'2024-02-01',
+  };
+  assert.equal(inferRepackStatus(newer,[old]).isRepack,true);
+});
