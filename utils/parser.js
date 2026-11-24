@@ -44,9 +44,13 @@ function extractSize(str) {
   const value = String(str);
   // Accept labelled, bracketed, bare and filename-embedded sizes. Telegram
   // posts commonly mix decimal/binary unit spellings.
-  const match = value.match(/(?:^|[^\d])((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(TB|GB|MB|KB|TiB|GiB|MiB|KiB)\b/i);
+  const match = value.match(/(?:^|[^\d])((?:\d{1,3}(?:,\d{3})+|\d+)(?:[.,]\d+)?)\s*(TB|GB|MB|KB|TiB|GiB|MiB|KiB)\b/i);
   if (!match) return '';
-  const amount = match[1].replace(/,/g, '');
+  let amount = match[1];
+  if (amount.includes(',')) {
+    if (!amount.includes('.') && /,\d{1,2}$/.test(amount)) amount = amount.replace(',', '.');
+    else amount = amount.replace(/,/g, '');
+  }
   const unit = match[2].toUpperCase().replace(/IB$/, 'B');
   return amount + unit;
 }
@@ -596,8 +600,15 @@ function extractAudio(fn) {
 // Converts a size string like "1.5 GB" or "800MB" to a float in MB.
 function toMB(s) {
   if (!s) return 0;
-  const n = parseFloat(s);
-  return /GB/i.test(s) ? n * 1024 : (n || 0);
+  const match = String(s).trim().match(/([\d,.]+)\s*(TB|GB|MB|KB)\b/i);
+  if (!match) return parseFloat(s) || 0;
+  let amount = match[1];
+  if (amount.includes(',')) {
+    if (!amount.includes('.') && /,\d{1,2}$/.test(amount)) amount = amount.replace(',', '.');
+    else amount = amount.replace(/,/g, '');
+  }
+  const factors = { TB: 1024 * 1024, GB: 1024, MB: 1, KB: 1 / 1024 };
+  return Number(amount) * factors[match[2].toUpperCase()];
 }
 
 // ─── CONTENT TYPE ────────────────────────────────────────────────────────────
@@ -873,6 +884,13 @@ function isJunkTitle(title) {
   return JUNK_PATTERNS.some(re => re.test(c));
 }
 
+// Generic leftovers from Telegram headings should never outrank a descriptive
+// filename. Keep this separate from isJunkTitle so catalogue titles containing
+// these words (for example "The Movie") remain valid.
+function isGenericTitleCandidate(value) {
+  return /^(?:movie|film|video|clip|show|series|episode|season|trailer|teaser|sample|test|unknown|untitled|hd|fhd|uhd|4k|8k|1080p|720p|480p)$/i
+    .test(stripEmojis(String(value || '')).trim());
+}
 
 // ─── AUDIO TRACKS ────────────────────────────────────────────────────────────
 function extractAudioTracks(text) {
@@ -1032,7 +1050,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   const isSizeLine = line => {
     const value = String(line || '').trim();
     return /^(?:File\s*)?Size\s*[:=\-]/i.test(value) ||
-      /^\[?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:TB|GB|MB|KB|TiB|GiB|MiB|KiB)\s*\]?$/i.test(value);
+      /^\[?\s*\d+(?:[.,]\d+|,\d{3})?\s*(?:TB|GB|MB|KB|TiB|GiB|MiB|KiB)\s*\]?$/i.test(value);
   };
 
   // ── Build URL+filename pairs ──────────────────────────────────────────────
@@ -1457,7 +1475,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 module.exports = {
   parseMessageBlock,classifyUrl,stripEmojis,cleanTitleForApi,normalizeQuality,
   extractSize,toMB,detectHost,detectLanguage,detectAllLanguages,detectContentType,
-  extractSeasonEpisode,detectCodec,detectContainer,detectHDR,detectBitDepth,detectAudioChannels,extractAudio,detectSource,isJunkTitle,isMetadataLine,
+  extractSeasonEpisode,detectCodec,detectContainer,detectHDR,detectBitDepth,detectAudioChannels,extractAudio,detectSource,isJunkTitle,isGenericTitleCandidate,isMetadataLine,
   normalizeLanguageList,classifyLanguages,detectReleaseMetadata,extractAspectRatio,extractRuntime,extractCertification,extractMediaMetadata,
   extractTitleFromStreamingUrl, normalizeGdflixUrl, isKnownProviderHost,
   parseManualInput,
