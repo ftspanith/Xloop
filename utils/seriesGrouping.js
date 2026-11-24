@@ -3,7 +3,7 @@
 const SERIES_TYPES = ['series', 'anime'];
 
 function seriesTypeFamily(value) {
-  return String(value || '').toLowerCase() === 'anime' ? 'anime' : 'series';
+  return ['series', 'anime'].includes(String(value || '').toLowerCase()) ? 'tv' : String(value || '').toLowerCase();
 }
 
 function normalizeSeriesTitle(value) {
@@ -111,6 +111,7 @@ function mergeSeriesDocuments(input) {
     if (!primary.totalSeasons && doc.totalSeasons) primary.totalSeasons = doc.totalSeasons;
   }
 
+  if (sorted.some(doc => doc.type === 'anime')) primary.type = 'anime';
   primary.seasonPosters = Object.assign({}, ...sorted.slice().reverse().map(doc => doc.seasonPosters || {}));
   primary.seasonYears = Object.assign({}, ...sorted.slice().reverse().map(doc => doc.seasonYears || {}));
   primary.downloads = mergeDownloads(sorted);
