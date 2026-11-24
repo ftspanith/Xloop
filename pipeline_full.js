@@ -413,7 +413,12 @@ function recomputeAggregates(doc) {
   doc.codecs  = [...new Set(dls.map(d => d.codec || detectCodecLocal(d.filename)))].filter(c => c && c !== 'Other');
   const allLangs = [];
   dls.forEach(d => { if (d.language) d.language.split(',').forEach(l => { const c = l.trim(); allLangs.push(c.charAt(0).toUpperCase() + c.slice(1).toLowerCase()); }); });
-  doc.languages = [...new Set(allLangs)].filter(Boolean);
+  doc.languages = [...new Set(allLangs)].filter(lang => Boolean(lang) && !/^multi$/i.test(lang));
+  const primaryDownload = dls.find(download => download.languageType || download.language);
+  const primaryLanguageInfo = primaryDownload
+    ? classifyLanguages(primaryDownload.language || '', primaryDownload.filename || '')
+    : classifyLanguages(doc.languages || [], doc.language || '');
+  doc.languageType = primaryDownload?.languageType || primaryLanguageInfo.languageType || '';
   const best = QUALITY_ORDER.find(q => doc.formats.includes(q));
   if (best) doc.quality = best;
 }
