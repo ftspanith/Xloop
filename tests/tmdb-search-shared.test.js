@@ -29,3 +29,12 @@ test('shared metadata scorer exposes normalized string similarity', () => {
   assert.ok(stringSimilarity('Sample Movie', 'Sample Film') > 0);
   assert.ok(stringSimilarity('Sample Movie', 'Unrelated Title') < 0.5);
 });
+
+
+test('TMDB candidates and similarity normalize accents and punctuation', () => {
+  const amelie = buildTitleCandidates('Amélie: A New Tale', 'Amélie: A New Tale', 2024);
+  assert.ok(amelie.includes('Amelie: A New Tale'));
+  assert.ok(amelie.includes('Amelie A New Tale'));
+  assert.equal(stringSimilarity('Amélie: A New Tale', 'Amelie A New Tale'), 1);
+  assert.equal(stringSimilarity('Spider-Man', 'Spider Man'), 1);
+});
