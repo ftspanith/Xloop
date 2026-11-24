@@ -535,7 +535,7 @@ function extractAudio(fn) {
   else if (/DTS[.\s_-]?HD[.\s_-]?HRA\b/.test(s)) codec = 'DTS-HD HRA';
   else if (/DTS[.\s_-]?HD\b/.test(s)) codec = 'DTS-HD';
   else if (/\bDTS\b/.test(s)) codec = 'DTS';
-  else if (/EAC[.\s_-]?3|\bDDP(?:\+|\d+(?:\.\d+)?)?|\bDD\+|DOLBY[.\s_-]*DIGITAL[.\s_-]*PLUS/.test(s)) codec = 'EAC3';
+  else if (/E[.\s_-]?AC[.\s_-]?3|\bDDP(?:\+|\d+(?:\.\d+)?)?|\bDD\+|DOLBY[.\s_-]*DIGITAL[.\s_-]*PLUS/.test(s)) codec = 'EAC3';
   else if (/\bAC[.\s_-]?3\b|\bDD(?=\d|[.\s_-]|$)|\bDOLBY[.\s_-]*DIGITAL\b/.test(s)) codec = 'DD';
   else if (/\bAC[.\s_-]?4\b/.test(s)) codec = 'AC4';
   else if (/\b(?:HE[.\s_-]?)?AAC(?:[.\s_-]?LC)?\b/.test(s)) codec = 'AAC';
