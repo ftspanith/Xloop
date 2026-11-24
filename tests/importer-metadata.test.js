@@ -1,0 +1,92 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const {
+  parseMessageBlock,
+  cleanTitleForApi,
+  detectAudioChannels,
+} = require('../utils/parser');
+const { buildTitleCandidates } = require('../utils/tmdbSearch');
+
+const pipelineSource = fs.readFileSync(path.join(__dirname, '..', 'pipeline_full.js'), 'utf8');
+
+test('shared TMDB candidate engine produces sequel, subtitle and Roman numeral variants', () => {
+  const dune = buildTitleCandidates('Dune: Part Two', cleanTitleForApi('Dune: Part Two'), 2024);
+  assert.ok(dune.includes('Dune Part 2'));
+
+  const pushpa = buildTitleCandidates('Pushpa 2 The Rule', cleanTitleForApi('Pushpa 2 The Rule'), 2024);
+  assert.ok(pushpa.includes('Pushpa The Rule'));
+
+  const baahubali = buildTitleCandidates(
+    'Baahubali II The Conclusion',
+    cleanTitleForApi('Baahubali II The Conclusion'),
+    2017
+  );
+  assert.ok(baahubali.includes('Baahubali 2 The Conclusion'));
+});
+
+test('Telegram parser preserves IDs and all rich filename metadata for DB importer', () => {
+  const message = [
+    'Pushpa 2 The Rule (2024)',
+    'Pushpa.2.The.Rule.2024.1080p.WEB-DL.HEVC.10bit.DDP5.1.Telugu.2.19GB.mkv',
+    'https://gdflix.dev/file/abc123',
+    'tt12345678 tmdb:123456',
+  ].join('\n');
+
+  const parsed = parseMessageBlock(message, 11, '2024-12-01');
+  assert.ok(parsed);
+  assert.equal(parsed.year, 2024);
+  assert.equal(parsed.imdbId, 'tt12345678');
+  assert.equal(parsed.tmdbIdHint, '123456');
+
+  const download = parsed.downloads[0];
+  assert.equal(download.quality, '1080p');
+  assert.equal(download.size, '2.19GB');
+  assert.equal(download.language, 'Telugu');
+  assert.equal(download.codec, 'HEVC');
+  assert.equal(download.hdr, null);
+  assert.equal(download.source, 'WEB-DL');
+  assert.equal(download.container, 'MKV');
+  assert.equal(download.bitDepth, '10-bit');
+  assert.equal(download.audioChannels, '5.1');
+  assert.equal(download.audio, 'EAC3');
+  assert.equal(download.links[0].host, 'GDFlix');
+});
+
+test('MongoDB-only importer calls the shared TMDB/OMDb engine and poster fallback chain', () => {
+  assert.match(pipelineSource, /sharedMetadataSearch\.searchTMDB\(/);
+  assert.match(pipelineSource, /sharedMetadataSearch\.searchOMDB\(/);
+  assert.match(pipelineSource, /searchGoogleImage\(rep\.title, rep\.year, isSer\)/);
+  assert.match(pipelineSource, /validatePoster\(meta\.poster\)/);
+  assert.match(pipelineSource, /rep\.imdbId \|\| null, rep\.tmdbIdHint \|\| null/);
+  assert.match(pipelineSource, /const needsMetadata = !existing/);
+});
+
+test('download importer infers missing technical metadata from filenames', () => {
+  for (const field of [
+    'normalizeQuality(filename)',
+    'extractSize(filename)',
+    'detectAllLanguages(filename)',
+    'detectCodec(filename)',
+    'detectHDR(filename)',
+    'extractAudio(filename)',
+    'detectSource(filename)',
+    'detectContainer(filename)',
+    'detectBitDepth(filename)',
+    'detectAudioChannels(filename)',
+    'extractSeasonEpisode(filename)',
+  ]) {
+    assert.ok(pipelineSource.includes(field), field);
+  }
+  assert.match(pipelineSource, /const correctEpisode = item\.episode \?\? fileTags\.episode \?\? null/);
+});
+
+test('compact audio channel labels are recognized', () => {
+  assert.equal(detectAudioChannels('Movie.DDP5.1.1080p.mkv'), '5.1');
+  assert.equal(detectAudioChannels('Movie.DTS-HD7.1.2160p.mkv'), '7.1');
+  assert.equal(detectAudioChannels('Movie.2.0.AAC.mkv'), '2.0');
+});
