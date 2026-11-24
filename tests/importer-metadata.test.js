@@ -64,6 +64,46 @@ test('Telegram parser preserves IDs and all rich filename metadata for DB import
   assert.equal(download.links[0].host, 'GDFlix');
 });
 
+test('Telegram parser stores multiple audio tracks only when two explicit track rows match the file', () => {
+  const message = [
+    'Multi Audio Sample Film (2024)',
+    'Audio Tracks:',
+    '1. DDP | 5.1 | 640 kb/s | Telugu',
+    '2. AAC | 2.0 | 128 kb/s | Hindi',
+    'Multi.Audio.Sample.Film.2024.1080p.WEB-DL.HEVC.2GB.mkv',
+    'https://gdflix.dev/file/multi-audio-sample',
+  ].join('\\n');
+
+  const parsed = parseMessageBlock(message, 12, '2024-12-02');
+  assert.ok(parsed);
+  assert.equal(parsed._isBatchList, false, 'numbered audio tracks must not be treated as a numbered movie list');
+  assert.deepEqual(parsed.downloads[0].audioTracks, [
+    { codec: 'EAC3', channels: '5.1', language: 'Telugu' },
+    { codec: 'AAC', channels: '2.0', language: 'Hindi' },
+  ]);
+});
+
+test('a single audio row or a DUAL/MULTI marker does not create guessed multi-audio tracks', () => {
+  const singleTrackMessage = [
+    'Single Track Sample Film (2024)',
+    'Audio Tracks:',
+    '1. DDP | 5.1 | 640 kb/s | Telugu',
+    'Single.Track.Sample.Film.2024.1080p.WEB-DL.HEVC.2GB.mkv',
+    'https://gdflix.dev/file/single-audio-track',
+  ].join('\\n');
+  const single = parseMessageBlock(singleTrackMessage, 13, '2024-12-03');
+  assert.deepEqual(single.downloads[0].audioTracks, []);
+
+  const markerOnlyMessage = [
+    'Marker Only Sample Film (2024)',
+    '#DUAL_AUDIO #MULTI_AUDIO',
+    'Marker.Only.Sample.Film.2024.1080p.WEB-DL.HEVC.DDP5.1.2GB.mkv',
+    'https://gdflix.dev/file/marker-only-audio',
+  ].join('\\n');
+  const markerOnly = parseMessageBlock(markerOnlyMessage, 14, '2024-12-04');
+  assert.deepEqual(markerOnly.downloads[0].audioTracks, []);
+});
+
 test('MongoDB-only importer calls the shared TMDB/OMDb engine and poster fallback chain', () => {
   assert.match(pipelineSource, /sharedMetadataSearch\.searchTMDB\(/);
   assert.match(pipelineSource, /sharedMetadataSearch\.searchOMDB\(/);
