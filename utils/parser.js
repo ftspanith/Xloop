@@ -231,7 +231,7 @@ const LANG_MAP = [
   { name:'Tamil',     re:/(?:\b|(?<=\W|^))(tam(?:il)?|tk|தமிழ்)(?:\b|(?=\W|$))/i },
   { name:'Hindi',     re:/(?:\b|(?<=\W|^))(hin(?:di)?|हिन्दी|हिंदी)(?:\b|(?=\W|$))/i },
   { name:'Malayalam', re:/(?:\b|(?<=\W|^))(mal(?:ayalam)?|ml|മലയാളം)(?:\b|(?=\W|$))/i },
-  { name:'Kannada',   re:/(?:\b|(?<=\W|^))(kan(?:nada)?|kn|ಕನ್ನಡ)(?:\b|(?=\W|$))/i },
+  { name:'Kannada',   re:/(?:\b|(?<=\W|^))(kan(?:n?ada)?|kn|ಕನ್ನಡ)(?:\b|(?=\W|$))/i },
   { name:'Bengali',   re:/(?:\b|(?<=\W|^))(ben(?:gali)?|bang|বাংলা)(?:\b|(?=\W|$))/i },
   { name:'English',   re:/(?:\b|(?<=\W|^))(eng(?:lish)?)(?:\b|(?=\W|$))/i },
   { name:'Marathi',   re:/(?:\b|(?<=\W|^))(mar(?:athi)?|मराठी)(?:\b|(?=\W|$))/i },
@@ -1315,6 +1315,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     languageType:languageInfo.languageType, languageCount:languageInfo.languageCount,
     quality:bestQuality,contentType,isSeries,season,episode,downloads,messageId,
     date:msgDate||null,imdbId,tmdbIdHint,_isBatchList,
+    isRepack:mediaMetadata.isRepack, releaseType:mediaMetadata.releaseType,
     isIMAX:mediaMetadata.isIMAX, aspectRatio:mediaMetadata.aspectRatio,
     runtimeMinutes:mediaMetadata.runtimeMinutes, duration:mediaMetadata.duration,
     certification:mediaMetadata.certification
