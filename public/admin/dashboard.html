@@ -11,6 +11,7 @@
       from { opacity: 0; transform: translateY(22px); }
       to   { opacity: 1; transform: translateY(0); }
     }
+    @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes fadeIn {
       from { opacity: 0; }
       to   { opacity: 1; }
@@ -558,6 +559,10 @@
       <button onclick="healDatabaseOnly()" style="display:flex; align-items:center; gap:6px; padding:8px 14px; background:rgba(99,179,237,0.08); border:1px solid rgba(99,179,237,0.25); border-radius:8px; color:#63b3ed; font-size:0.78rem; font-weight:600; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='rgba(99,179,237,0.15)'" onmouseout="this.style.background='rgba(99,179,237,0.08)'">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         Heal DB Only
+      </button>
+      <button onclick="showNormalizeLinksModal()" id="normLinksBtn" style="display:flex; align-items:center; gap:6px; padding:8px 14px; background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.25); border-radius:8px; color:#a78bfa; font-size:0.78rem; font-weight:600; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='rgba(167,139,250,0.15)'" onmouseout="this.style.background='rgba(167,139,250,0.08)'">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        Normalize Links
       </button>
       <a href="/" target="_blank" style="text-decoration:none; display:flex; align-items:center; gap:6px; padding:8px 14px; background:rgba(34,197,94,0.07); border:1px solid rgba(34,197,94,0.2); border-radius:8px; color:#22c55e; font-size:0.78rem; font-weight:600; transition:all 0.2s;" onmouseover="this.style.background='rgba(34,197,94,0.14)'" onmouseout="this.style.background='rgba(34,197,94,0.07)'">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -1644,6 +1649,151 @@
     }
   }
 
+  // ── Normalize Links ─────────────────────────────────────────────────────────
+  let _nlRunning = false;
+  let _nlAbort   = false;
+
+  function showNormalizeLinksModal() {
+    // Reset to initial state each time the modal is opened
+    _nlAbort = false;
+    document.getElementById('nlProgressWrap').style.display = 'none';
+    document.getElementById('nlResultMsg').style.display    = 'none';
+    document.getElementById('nlProgressBar').style.width    = '0%';
+    document.getElementById('nlProgressPct').textContent    = '0%';
+    document.getElementById('nlProgressLabel').textContent  = 'Starting…';
+    document.getElementById('nlStatScanned').textContent    = '0';
+    document.getElementById('nlStatMovies').textContent     = '0';
+    document.getElementById('nlStatLinks').textContent      = '0';
+    document.getElementById('nlRunBtn').disabled            = false;
+    document.getElementById('nlRunBtn').textContent         = '';
+    document.getElementById('nlRunBtn').innerHTML           =
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Start Normalization';
+    document.getElementById('nlCancelBtn').textContent      = 'Cancel';
+    document.getElementById('normLinksModal').classList.add('visible');
+  }
+
+  function closeNormalizeLinksModal() {
+    _nlAbort = true; // signal any running loop to stop
+    document.getElementById('normLinksModal').classList.remove('visible');
+  }
+
+  async function runNormalizeLinks() {
+    if (_nlRunning) return;
+    _nlRunning = true;
+    _nlAbort   = false;
+
+    const runBtn      = document.getElementById('nlRunBtn');
+    const cancelBtn   = document.getElementById('nlCancelBtn');
+    const progressWrap = document.getElementById('nlProgressWrap');
+    const progressBar  = document.getElementById('nlProgressBar');
+    const progressPct  = document.getElementById('nlProgressPct');
+    const progressLbl  = document.getElementById('nlProgressLabel');
+    const statScanned  = document.getElementById('nlStatScanned');
+    const statMovies   = document.getElementById('nlStatMovies');
+    const statLinks    = document.getElementById('nlStatLinks');
+    const resultMsg    = document.getElementById('nlResultMsg');
+
+    // Update button to "running" state
+    runBtn.disabled   = true;
+    runBtn.innerHTML  = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" opacity=".25"/><path d="M12 3a9 9 0 0 1 9 9"/></svg> Running…';
+    cancelBtn.textContent = 'Stop';
+    progressWrap.style.display = 'block';
+    resultMsg.style.display    = 'none';
+
+    let cursor          = null;
+    let totalScanned    = 0;
+    let totalChangedMovies = 0;
+    let totalChangedLinks  = 0;
+    let dbTotal         = 0;
+    const BATCH_SIZE    = 15;
+
+    try {
+      while (true) {
+        if (_nlAbort) break;
+
+        const payload = { batchSize: BATCH_SIZE };
+        if (cursor) payload.lastId = cursor;
+
+        const res = await fetch('/api/import/normalize-links-batch', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+          body:    JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || `HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (!dbTotal && data.total) dbTotal = data.total;
+
+        totalScanned       += data.scanned       || 0;
+        totalChangedMovies += data.changedMovies  || 0;
+        totalChangedLinks  += data.changedLinks   || 0;
+        cursor = data.nextCursor || cursor;
+
+        // Update live stats
+        statScanned.textContent = totalScanned.toLocaleString();
+        statMovies.textContent  = totalChangedMovies.toLocaleString();
+        statLinks.textContent   = totalChangedLinks.toLocaleString();
+
+        // Update progress bar
+        if (dbTotal > 0) {
+          const pct = Math.min(100, Math.round((totalScanned / dbTotal) * 100));
+          progressBar.style.width   = pct + '%';
+          progressPct.textContent   = pct + '%';
+          progressLbl.textContent   = `Scanned ${totalScanned.toLocaleString()} of ${dbTotal.toLocaleString()} records…`;
+        } else {
+          progressLbl.textContent = `Scanned ${totalScanned.toLocaleString()} records…`;
+        }
+
+        if (data.done) break; // server says no more records
+      }
+
+      // ── Done ──
+      progressBar.style.width = '100%';
+      progressPct.textContent = '100%';
+      progressLbl.textContent = _nlAbort ? 'Stopped by user.' : 'Complete!';
+
+      resultMsg.style.display = 'block';
+      if (_nlAbort) {
+        resultMsg.style.background = 'rgba(245,158,11,0.1)';
+        resultMsg.style.border     = '1px solid rgba(245,158,11,0.3)';
+        resultMsg.style.color      = '#fbbf24';
+        resultMsg.textContent      = `Stopped. Fixed ${totalChangedLinks} link(s) across ${totalChangedMovies} record(s) so far.`;
+      } else if (totalChangedLinks === 0) {
+        resultMsg.style.background = 'rgba(52,211,153,0.07)';
+        resultMsg.style.border     = '1px solid rgba(52,211,153,0.2)';
+        resultMsg.style.color      = '#34d399';
+        resultMsg.textContent      = `✓ All ${totalScanned.toLocaleString()} records already have canonical URLs — nothing to change.`;
+      } else {
+        resultMsg.style.background = 'rgba(52,211,153,0.07)';
+        resultMsg.style.border     = '1px solid rgba(52,211,153,0.2)';
+        resultMsg.style.color      = '#34d399';
+        resultMsg.textContent      = `✓ Done! Fixed ${totalChangedLinks} link(s) in ${totalChangedMovies} record(s) across ${totalScanned.toLocaleString()} scanned.`;
+      }
+
+      cancelBtn.textContent   = 'Close';
+      runBtn.disabled         = false;
+      runBtn.innerHTML        = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Run Again';
+
+    } catch (err) {
+      progressLbl.textContent    = 'Error!';
+      resultMsg.style.display    = 'block';
+      resultMsg.style.background = 'rgba(239,68,68,0.08)';
+      resultMsg.style.border     = '1px solid rgba(239,68,68,0.25)';
+      resultMsg.style.color      = '#f87171';
+      resultMsg.textContent      = `Error: ${err.message}`;
+      cancelBtn.textContent      = 'Close';
+      runBtn.disabled            = false;
+      runBtn.innerHTML           = 'Retry';
+    } finally {
+      _nlRunning = false;
+    }
+  }
+  // ── End Normalize Links ──────────────────────────────────────────────────────
+
   async function startPipeline2(resume = false) {
     if (_isRunning2) return;
 
@@ -1951,6 +2101,67 @@
     <div class="modal-btns">
       <button class="modal-cancel" onclick="closeWipeConfirm2()">Cancel</button>
       <button class="modal-confirm-wipe" onclick="confirmWipe2()">Yes, Wipe DB</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Normalize Links Modal ── -->
+<div class="modal-overlay" id="normLinksModal" style="z-index:10000;">
+  <div class="modal-box" style="max-width:420px;width:92%;padding:28px 24px;">
+    <!-- Icon + Title -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+      <div style="width:40px;height:40px;border-radius:10px;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      </div>
+      <div>
+        <div style="font-size:1rem;font-weight:700;color:#fff;">Normalize Links</div>
+        <div style="font-size:0.72rem;color:rgba(255,255,255,0.4);margin-top:2px;">Canonicalize GDFlix &amp; HubCloud URLs across the entire DB</div>
+      </div>
+    </div>
+
+    <!-- Info box -->
+    <div style="background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.18);border-radius:8px;padding:12px 14px;font-size:0.74rem;color:rgba(255,255,255,0.55);line-height:1.6;margin-bottom:18px;">
+      Rewrites all GDFlix subdomains → <code style="color:#a78bfa;background:rgba(167,139,250,0.1);padding:1px 5px;border-radius:4px;">gdflix.dev</code><br>
+      Rewrites all HubCloud variants → <code style="color:#a78bfa;background:rgba(167,139,250,0.1);padding:1px 5px;border-radius:4px;">hubcloud.one</code><br>
+      Processes <strong style="color:rgba(255,255,255,0.7);">15 records per batch</strong> at a gentle pace. Safe to interrupt &amp; resume.
+    </div>
+
+    <!-- Progress bar area (hidden until running) -->
+    <div id="nlProgressWrap" style="display:none;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span id="nlProgressLabel" style="font-size:0.73rem;color:rgba(255,255,255,0.5);">Starting…</span>
+        <span id="nlProgressPct" style="font-size:0.73rem;color:#a78bfa;font-weight:600;">0%</span>
+      </div>
+      <div style="height:5px;background:rgba(255,255,255,0.07);border-radius:999px;overflow:hidden;">
+        <div id="nlProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#a78bfa);border-radius:999px;transition:width 0.4s ease;"></div>
+      </div>
+      <!-- Live stats row -->
+      <div style="display:flex;gap:16px;margin-top:10px;">
+        <div style="flex:1;text-align:center;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:7px;padding:8px 4px;">
+          <div id="nlStatScanned" style="font-size:1.1rem;font-weight:700;color:#fff;">0</div>
+          <div style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-top:1px;">Scanned</div>
+        </div>
+        <div style="flex:1;text-align:center;background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.2);border-radius:7px;padding:8px 4px;">
+          <div id="nlStatMovies" style="font-size:1.1rem;font-weight:700;color:#a78bfa;">0</div>
+          <div style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-top:1px;">Records Fixed</div>
+        </div>
+        <div style="flex:1;text-align:center;background:rgba(52,211,153,0.05);border:1px solid rgba(52,211,153,0.15);border-radius:7px;padding:8px 4px;">
+          <div id="nlStatLinks" style="font-size:1.1rem;font-weight:700;color:#34d399;">0</div>
+          <div style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-top:1px;">Links Fixed</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Result message (hidden until done) -->
+    <div id="nlResultMsg" style="display:none;padding:10px 14px;border-radius:8px;font-size:0.78rem;font-weight:600;text-align:center;margin-bottom:16px;"></div>
+
+    <!-- Action buttons -->
+    <div class="modal-btns" style="gap:10px;">
+      <button class="modal-cancel" id="nlCancelBtn" onclick="closeNormalizeLinksModal()" style="flex:1;">Cancel</button>
+      <button id="nlRunBtn" onclick="runNormalizeLinks()" style="flex:2;padding:10px 20px;border-radius:8px;border:none;font-weight:700;font-size:0.88rem;cursor:pointer;background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:7px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        Start Normalization
+      </button>
     </div>
   </div>
 </div>
