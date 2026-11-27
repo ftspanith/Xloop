@@ -387,15 +387,44 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     return compactLength > 4 && aliases.some(alias => stringSimilarity(cleanTitle, alias) >= 0.86);
   }
 
+  // ── Poster fallback: use TMDB's own image catalogue, never a random web image.
+  const imagePosterCache = new Map();
+  async function fetchPosterFromImages(tmdbId, isTv, originalLanguage) {
+    const cacheKey = (isTv ? 'tv:' : 'movie:') + String(tmdbId);
+    if (imagePosterCache.has(cacheKey)) return imagePosterCache.get(cacheKey);
+    const pending = (async () => {
+      const languages = [...new Set([String(originalLanguage || '').toLowerCase(), 'en', 'null'].filter(Boolean))].join(',');
+      const response = await fetchWithRetry(() =>
+        tmdbGet(`${BASE}/${isTv ? 'tv' : 'movie'}/${tmdbId}/images`,
+          { include_image_language: languages }, { timeout: 8000 })
+      );
+      const posters = (response?.data?.posters || []).filter(poster =>
+        poster?.file_path && Number(poster.height || 0) > Number(poster.width || 0) &&
+        (!poster.aspect_ratio || (poster.aspect_ratio >= 0.55 && poster.aspect_ratio <= 0.85))
+      );
+      const lang = String(originalLanguage || '').toLowerCase();
+      const priority = value => value === lang ? 3 : value === 'en' ? 2 : value == null ? 1 : 0;
+      posters.sort((a, b) =>
+        priority(b.iso_639_1) - priority(a.iso_639_1) ||
+        Number(b.vote_average || 0) - Number(a.vote_average || 0) ||
+        Number(b.width || 0) - Number(a.width || 0)
+      );
+      return posters[0]?.file_path || '';
+    })();
+    imagePosterCache.set(cacheKey, pending);
+    return pending;
+  }
+
   // ── Result builder ──────────────────────────────────────────────────────────
-  function buildResult(d, isTv, extra = {}, confidence = 100, algo = 'direct') {
+  async function buildResult(d, isTv, extra = {}, confidence = 100, algo = 'direct') {
+    const posterPath = d.poster_path || await fetchPosterFromImages(d.id, isTv, d.original_language);
     return {
       tmdbId:           String(d.id),
       type:             isTv ? 'series' : 'movie',
       totalSeasons:     d.number_of_seasons || 0,
       title:            d.title || d.name || title,
       description:      d.overview || extra.seasonOverview || '',
-      poster:           d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : '',
+      poster:           posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : '',
       seasonPoster:     extra.seasonPoster || '',
       seasonAirDate:    extra.seasonAirDate || '',
       seasonYear:       extra.seasonYear || null,
@@ -424,7 +453,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       if (r?.data && (r.data.title || r.data.name) && yearCompatible(r.data.release_date || r.data.first_air_date)) {
         const tv = mt === 'tv';
         if (await verifiedTitleMatch(r.data, tv)) {
-          return buildResult(r.data, tv, await fetchSeasonData(r.data.id, season, tv), 100, 'tmdb-id');
+          return await buildResult(r.data, tv, await fetchSeasonData(r.data.id, season, tv), 100, 'tmdb-id');
         }
       }
     }
@@ -445,7 +474,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
         if (r?.data && (r.data.title || r.data.name) && yearCompatible(r.data.release_date || r.data.first_air_date)) {
           const tv = mt === 'tv';
           if (await verifiedTitleMatch(r.data, tv)) {
-            return buildResult(r.data, tv, await fetchSeasonData(r.data.id, season, tv), 100, 'imdb-id');
+            return await buildResult(r.data, tv, await fetchSeasonData(r.data.id, season, tv), 100, 'imdb-id');
           }
         }
       }
@@ -584,7 +613,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       const displayTitle = (titleSim >= 0.5 || best.exactTitle)
         ? (best.exactDirect || titleSim >= 0.5 ? tmdbTitle : (cleanTitleForApi(title) || title))
         : (cleanTitleForApi(title) || title);
-      return buildResult(
+      return await buildResult(
         { ...d, title: displayTitle, name: displayTitle },
         isTv, sd, Math.round(best.score), params._algo || 'A1'
       );
