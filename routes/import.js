@@ -32,7 +32,7 @@ function resolveKeys(req) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function escapeRegex(value) {
-  return String(value || '').replace(/[.*+?^$()|[\\]{}]/g, '\\function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }');
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // Quality normalizer
