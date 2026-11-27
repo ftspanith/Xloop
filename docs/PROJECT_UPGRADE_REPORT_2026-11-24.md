@@ -233,3 +233,207 @@ This report is based on GitHub repository state and PR descriptions available on
 - [PR #22 — Catalogue variant ranking](https://github.com/ftspanith/Xloop/pull/22)
 
 **Interpretation note:** “Merged” means code was merged to a Git branch. “Vercel success” means the commit's Vercel check reported success. Neither one alone proves a live MongoDB catalogue import has completed successfully.
+
+
+---
+
+# 9. Project update — 27 November 2026
+
+**This section supplements the original 24 November report.** It records work completed on `main`, the production deployment checked on 27 November, the catalogue state reported/audited after the database clean, and the recovery work still pending. Where the exact cause or result is not proven, it is labelled as unverified.
+
+## 9.1 Latest production code and deployment
+
+Repository: `ftspanith/Xloop`  
+Branch: `main`  
+Latest checked production commit: `372860452b40c100b08a3596d93a99dec907615a`  
+Commit message: `Test safe relocation of misassigned source links`  
+Vercel deployment: `dpl_HoKuA3MwmtKBfUXd4aVbwu6Gw9CC`  
+Deployment state when checked: `READY`  
+Production domain checked: `https://xloop-rose.vercel.app` (also aliased to `xloop-fintech25.vercel.app`)
+
+### Commits added after the 24 November report
+
+| Commit | Change |
+|---|---|
+| `267d0d2a3e6888f6997e188530dbbe28d4169a9d` | Corrected regex escaping in the multi-title parser helper. |
+| `65cde4b4b765eda23c97232363117405f6d73ac7` | Telegram ingestion now splits multi-title messages into separate title blocks before associating download URLs. |
+| `f7e3db0e206317450c627ef9999bafb06dfd5e0f` | Added regression tests for multi-title BluRay ISO Telegram messages and separate editions of the same movie. |
+| `5262af96ceba061b981bf5675e85530c31a03fe8` | Applied the same multi-title splitting to the manual/bulk import route. |
+| `47a08bc96a0aeefa763be77934d749b915aea4d3` | Applied the same splitting to the local JSON fallback in `pipeline_full.js`. |
+| `2a0eb18cb8747b541f0cdc4d1101d749c9c949e5` | Merge upload refreshes metadata for an existing URL instead of leaving its old, potentially misassigned title; merge-mode pipeline sidecar uses all available links. |
+| `3bd2c53dcafa83e41d5bccdcf4d7c421a980ef1e` | Added exact-URL relocation when a strong TMDB-verified identity proves that a link is stored under the wrong movie record. |
+| `372860452b40c100b08a3596d93a99dec907615a` | Added regression coverage confirming exact-URL relocation does not remove other mirrors or sibling variants. |
+
+### Multi-title Telegram message fix
+
+Previously, one Telegram message could contain many blank-line-separated movie filenames and individual download URLs. The ingestion path parsed the entire message once, so all extracted URLs could inherit the first movie title.
+
+The shared `splitMultiTitleMessage` helper in `utils/parser.js` now separates a message when it detects at least two distinct movie title/year identities among file-descriptor lines. The Telegram ingestion path, bulk import route and local pipeline JSON fallback use the same splitter.
+
+Supported descriptor/container examples include `.iso`, `.mkv`, `.mp4`, `.avi`, `.m2ts`, `.mov`, `.ts`, `.zip` and `.rar`, as well as BluRay/BD50/BD25 descriptors. Distinct editions of the same movie remain separate link entries under that movie; they are not treated as separate movies solely because they are different files.
+
+The fix is covered by Telegram ingestion and importer regression tests. It does not retroactively correct already-stored records by itself; the merge metadata-refresh and strong-identity relocation paths address those cases when the source data is reprocessed and verified.
+
+### Safe link metadata reconciliation
+
+- Merge uploads look up existing records by exact URL.
+- Incoming non-empty parsed metadata can refresh title, year, filename, quality, size, language, season/episode and technical fields.
+- Exact duplicate URLs are not inserted a second time.
+- Strong TMDB identity verification is required before moving an exact URL away from a wrong catalogue record.
+- Relocation removes only that exact URL from the incorrect record; other mirrors and variants are preserved.
+- Regression test added for mirror/variant preservation.
+
+This is intentionally conservative. A fuzzy title mismatch by itself is not enough to move or delete a download.
+
+## 9.2 Scraper and sync workflow
+
+The script `scrape-and-upload.js` supports:
+
+- `--mode=3 --days=N` for a recent date window.
+- `--account=both` for sequential Account 1 then Account 2 processing.
+- `--merge` to retain earlier extracted-link batches rather than replace them.
+- `--upload-only` to reuse existing local Telegram export JSON files without calling the Telegram scraper.
+- `--no-pipeline` to upload without automatically triggering the pipeline.
+
+The `account=both` parent workflow launches Account 1 and then Account 2 as child workflows, and the root merge flag is propagated to both children. With merge enabled, the script triggers the Skip Scraper/import-only route after uploads; that route passes `noWipe: true` and reads MongoDB `ExtractedLink` as its source.
+
+### Weekly update command that was discussed
+
+```bash
+cd ~/Xloop
+node scrape-and-upload.js --mode=3 --days=6 --account=both --merge
+```
+
+**Intended effect:** process only the recent six-day window from both Telegram accounts and merge those links into the existing extracted-link source. This is not intended to clear the existing catalogue.
+
+**Execution status:** no successful terminal output proving that this command was run is present in the project handover at the time this report was updated. Do not treat the command as completed merely because it was recommended.
+
+### Existing-export recovery command that was proposed
+
+```bash
+cd ~/Xloop
+node scrape-and-upload.js --upload-only --account=both --merge
+```
+
+**Intended effect:** read the existing local Account 1 and Account 2 export JSON files, re-extract their links, merge them into MongoDB `ExtractedLink`, then run the MongoDB-only importer without wiping the catalogue.
+
+**Status: NOT RUN / NOT VERIFIED.** Preserve the two original export files before any operation. Do not run this command concurrently with another scraper, upload or import session. The result must be checked against counts and sample titles before another weekly incremental update is started.
+
+## 9.3 Existing export files
+
+The two Telegram export files previously reported in the Termux project directory were:
+
+| File | Messages | Approximate size |
+|---|---:|---:|
+| `telegram_export.json` (Account 1) | 39,925 | 147.9 MB |
+| `telegram_export_2.json` (Account 2) | 48,032 | 177.7 MB |
+| **Combined** | **87,957** | **325.6 MB** |
+
+These are local source exports, not the same thing as the live MongoDB catalogue. Keep them unchanged as recovery inputs. Their current presence and integrity should be rechecked locally before recovery; the counts above are the last reported values, not a fresh filesystem check.
+
+## 9.4 Catalogue count before clean and database state after clean
+
+The user supplied a screenshot of the website Admin Dashboard showing the catalogue totals before the clean:
+
+| Dashboard metric | Count before clean |
+|---|---:|
+| Total Movies | 7,701 |
+| Total Series | 1,542 |
+| Total Anime | 193 |
+| **Total Items** | **9,436** |
+
+The total reconciles: 7,701 + 1,542 + 193 = 9,436.
+
+After the clean, a read-only audit of the production MongoDB database and the Termux `.env` URI showed the same Atlas host and database name:
+
+- MongoDB host: `xloop-cluster.5wb5qj3.mongodb.net`
+- Database: `xloop`
+- The Termux `.env` URI and Vercel production `MONGODB_URI` were confirmed to point to this same host/database.
+- Catalogue collections reported by the audit: `movies = 0`, `series = 0`, `episodes = 0`.
+- Current `ExtractedLink` collection: **1,759** documents.
+- Staging collection `extractedlinks_stage_direct_1795420691013`: **26,500** documents.
+
+**Important:** the 9,436 figure is the pre-clean website dashboard count. The zero counts are the post-clean live catalogue state at the time of the audit. The audit did not establish that the original 9,436 catalogue documents still exist in another live collection.
+
+### What the database clean route does
+
+The current `routes/orchestrator.js` `POST /wipe` route runs deletes against:
+
+- `Movie.deleteMany({})`
+- `Series.deleteMany({})`
+- `Episode.deleteMany({})`
+
+It also clears selected pipeline-state cache records and temporary pipeline files. Its code comment explicitly preserves the `extracted_links` and `telegram_export` cache keys; the route does not delete the MongoDB `ExtractedLink` source collection.
+
+The current `pipeline_full.js` full-replacement path also has a catalogue deletion step (`Movie.deleteMany({})`) when `NO_WIPE` is false. The MongoDB-only path has a separate explicit `--clean-catalogue` opt-in and otherwise preserves the catalogue. The `routes/import.js` `DELETE /wipe-all` route deletes Movie records.
+
+**Exact incident cause:** the available read-only evidence confirms the catalogue is empty and identifies the destructive code paths, but it does not conclusively identify which exact UI action, endpoint or pipeline invocation caused this clean. Vercel Hobby runtime-log retention did not provide the older request logs needed to prove the exact triggering request. Do not state that the six-day `--merge` command itself caused the clean: the current script source propagates merge mode to both account children and uses the no-wipe importer path for that mode.
+
+### Remaining staging data and mismatch audit
+
+A read-only audit of the 26,500-document staging collection reported:
+
+- 26,500 records with parseable filenames.
+- 5,944 unique filename-derived movie identities (heuristic).
+- 1,762 title-mismatch candidates at the audit's matching threshold.
+- 1,032 strong-mismatch candidates within that candidate set.
+- 484 year-mismatch candidates.
+
+These are **heuristic audit candidates**, not confirmed missing movies, not confirmed wrong records, and not a count of lost catalogue titles. Some entries may be bundles, filmographies, alternate-language titles or parser false positives. The current 1,759-document `ExtractedLink` collection also had title-mismatch candidates, including parser false positives. Do not automatically rewrite titles or move links based only on these candidate counts.
+
+A cache record named `bypassed_links` had a reported count of 66,141; it is a count/cache record, not proof that 66,141 complete source documents are available for restoration.
+
+## 9.5 Recovery plan — not yet executed
+
+The safest recovery order is:
+
+1. Preserve both local Telegram export JSON files unchanged and verify their file sizes/message counts.
+2. Preserve and snapshot the existing `ExtractedLink` and `extractedlinks_stage_direct_1795420691013` source data before any replacement or import attempt.
+3. Confirm no scrape/upload/import pipeline is currently running.
+4. Rebuild extracted source links from the existing Account 1 and Account 2 export files using the upload-only merge workflow, or build a separately verified restore set from the preserved staging collection.
+5. Run the MongoDB-only importer in its no-wipe mode. Do not use the admin Wipe button, `--clean-catalogue`, `/api/import/wipe-all`, or a full replacement run for this recovery.
+6. Verify the restored Movie/Series/Anime dashboard totals, representative titles from each type, download links, seasons/episodes, language and file metadata, before considering the recovery complete.
+7. Only after recovery has been validated, run the six-day Account 1 + Account 2 merge update.
+
+**No catalogue restore has been executed by the audit.** The earlier database inspection was read-only. Do not interpret the suggested upload-only command as already run or as a verified restoration.
+
+## 9.6 Other active product issues / requirements raised during this work
+
+These are requirements or open investigations, not all verified fixes:
+
+- **BluRay quality classification:** BD50 and BD25 should classify as BluRay; 1080p BluRay should remain BluRay, not be downgraded to generic HD. BluRay Remux remains its own higher-specificity format/category.
+- **Audio display:** show the audio format (for example DD or DDP) and channel layout (2.0, 5.1, 7.1) as separate useful information. Do not invent a channel layout when it is absent.
+- **Video metadata:** only show codec/HDR/bit-depth and related technical values when actually detected. Language and file size are common download metadata; missing optional video/audio metadata should remain blank rather than display guessed values.
+- **TMDB matching:** a reported example involved “Robo (2010)”/Telugu title metadata being incorrectly matched to an unrelated English film rather than the intended Tamil film `Enthiran` (released in Telugu as `Robo`). Correct regional/alternate-title identity and year validation are important. The exact matching fix for this example is not confirmed in this report.
+- **TV/anime downloads:** a reported issue was that show, season, anime pack and individual episode download links were not appearing in some views. This remains an item to verify end-to-end after catalogue recovery.
+- **Admin portal responsiveness:** the user reported delayed UI application of clean/add actions and a slow admin portal. No completed fix is confirmed here.
+- **Download sorting:** a local `public/js/watch.js` size-sorting change was reported as applied with a successful JavaScript syntax check and a backup file. Its merge/deployment status was not independently confirmed in this handover.
+
+## 9.7 Regression and deployment validation after recent commits
+
+The latest Scraper Intelligence Regression run checked in this session was run `46006242058` for commit `372860452b40c100b08a3596d93a99dec907615a`. All eight listed workflow steps completed successfully:
+
+1. `npm ci`
+2. Pipeline safety tests
+3. Extracted-link merge tests
+4. Scraper intelligence tests
+5. Video format tests
+6. Importer metadata tests
+7. Telegram ingestion tests
+8. Metadata search tests
+
+The associated production Vercel deployment was reported as `READY`. This validates the code checks and deployment state; it does **not** prove that the database catalogue was restored or that a fresh live import completed.
+
+A Vercel runtime error group was also observed: `UnhandledRejection: Cannot set headers after they are sent to the client`, route `/server.js`, two occurrences, most recent reported at `2026-11-27T13:26:14Z`. This is a separate runtime issue and is not evidence of the database clean cause.
+
+## 9.8 Operational safety notes
+
+- Never run a full replacement scrape/import when the intention is a small weekly update.
+- For weekly changes, use Account 1 + Account 2 with `--merge`.
+- For an export-based rebuild, use `--upload-only --account=both --merge` only after preserving/validating both export files and ensuring no other import session is active.
+- For catalogue recovery, use MongoDB-only/no-wipe import behavior; do not use destructive wipe/reset endpoints.
+- Keep Telegram source links (`ExtractedLink`), staging collections, raw Telegram exports and the Movie/Series/Anime catalogue conceptually separate. A count in one stage is not the count of items in another stage.
+- Do not treat filename/title mismatch heuristics as confirmed metadata errors; require stronger identity evidence (TMDB/IMDb/year/alternate title) before moving a download.
+
+**Last updated:** 27 November 2026.  
+**This update records the known state at that date; catalogue recovery remains pending and unverified.**
