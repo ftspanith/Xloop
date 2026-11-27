@@ -529,9 +529,921 @@ router.post('/bulk', auth, async (req, res) => {
     }
     if (!existing && finalTitle !== title) {
       existing = await Movie.findOne({
-        title: new RegExp('^' + escapeRegex(title) + '$', 'i'),
+        title: new RegExp('^' + escapeRegex(title) + '
+      // A Telegram message may contain several file variants. Do not skip the
+      // remaining variants just because this message ID was already processed.
+
+      let updated = false;
+      for (const newDl of downloads) {
+        // 1. Check if the URL already exists anywhere in this movie
+        newDl.links = (newDl.links || []).map(link => ({ ...link, url: normalizeGdflixUrl(link.url) }));
+        const newUrl = newDl.links[0]?.url;
+        const hasUrl = hasDownloadUrl(existing.downloads, newUrl);
+        
+        if (hasUrl) {
+          // Link already exists, skip it entirely
+          continue;
+        }
+
+        // 2. If it's a new URL, try to group it with an existing download by filename/size
+        // Never merge distinct file variants merely because quality/language match.
+        // Prefer exact filename identity; only use a strict metadata signature when
+        // one or both legacy records have no filename.
+        const existingDl = existing.downloads.find(d => {
+          const oldName = String(d.filename || '').trim().toLowerCase();
+          const newName = String(newDl.filename || '').trim().toLowerCase();
+          if (oldName && newName) return oldName === newName;
+          return (
+            d.quality === newDl.quality &&
+            String(d.size || '') === String(newDl.size || '') &&
+            String(d.codec || '') === String(newDl.codec || '') &&
+            String(d.hdr || '') === String(newDl.hdr || '') &&
+            String(d.audio || '') === String(newDl.audio || '') &&
+            String(d.language || '') === String(newDl.language || '') &&
+            (d.season ?? null) === (newDl.season ?? null) &&
+            (d.episode ?? null) === (newDl.episode ?? null)
+          );
+        });
+
+        if (existingDl) {
+          for (const link of newDl.links) {
+            if (!hasDownloadUrl([{ links: existingDl.links }], link.url)) {
+              existingDl.links.push(link);
+              updated = true;
+            }
+          }
+        } else {
+          existing.downloads.push(newDl);
+          updated = true;
+        }
+      }
+      if (msgObj.id && !existing.telegramMessageIds?.includes(msgObj.id)) {
+        if (!existing.telegramMessageIds) existing.telegramMessageIds = [];
+        existing.telegramMessageIds.push(msgObj.id);
+        updated = true;
+      }
+      // Enrich existing rows even when every download URL was already present.
+      if (meta.tmdbId && Number(meta.confidence || 0) >= 65) {
+        if (!existing.tmdbId) existing.tmdbId = String(meta.tmdbId);
+        const trustedFields = buildTrustedMetadataUpdate(
+          existing, meta, parsed.season || downloads.find(file => file.season)?.season || null
+        );
+        for (const [field, value] of Object.entries(trustedFields)) existing.set(field, value);
+        if (Object.keys(trustedFields).length) updated = true;
+      }
+      if (updated) {
+        // Keep per-season release years separate from the parent's premiere year.
+        for (const file of downloads) {
+          if (file.season && file.fileYear && !existing.seasonYears?.[`s${file.season}`]) {
+            existing.set(`seasonYears.s${file.season}`, Number(file.fileYear));
+          }
+        }
+        const importedSeason = parsed.season || downloads.find(file => file.season)?.season;
+        if (importedSeason && meta.seasonYear) {
+          existing.set(`seasonYears.s${importedSeason}`, Number(meta.seasonYear));
+        }
+        if (meta.tmdbId && meta.releaseDate && String(existing.tmdbId || '') === String(meta.tmdbId) && meta.year) {
+          existing.year = meta.year;
+          existing.releaseDate = meta.releaseDate;
+        }
+        // Keep movie-level aggregate fields in sync with newly added variants.
+        const { recomputeAggregates } = require('../pipeline_full');
+        recomputeAggregates(existing);
+        await existing.save();
+        updatedCount++;
+      } else {
+        const duplicateMessageId = msgObj.id != null ? String(msgObj.id) : null;
+        if (!duplicateMessageId || !countedDuplicateMessageIds.has(duplicateMessageId)) {
+          duplicateCount++;
+        }
+        if (duplicateMessageId) countedDuplicateMessageIds.add(duplicateMessageId);
+        skippedCount++;
+      }
+      continue;
+    }
+
+    // ── Resolve final language ────────────────────────────
+    const finalLanguage = language || '';
+
+    const movieData = {
+      title:              finalTitle,
+      tmdbId:             meta.tmdbId   || '',
+      imdbId:             meta.imdbId   || '',
+      type:               finalType,
+      totalSeasons:       meta.totalSeasons || 0,
+      originalLanguage:    meta.originalLanguage || '',
+      description:        meta.description  || '',
+      poster:             meta.poster        || '',
+      backdrop:           meta.backdrop      || '',
+      rating:             meta.rating        || 0,
+      year:               meta.year || parsed.messageYear || (isSeries ? null : (year || null)),
+      releaseDate:        meta.releaseDate || '',
+      seasonYears:        Object.fromEntries(downloads.filter(file => file.season && file.fileYear)
+        .map(file => [`s${file.season}`, Number(file.fileYear)])),
+      genre:              meta.genre   || [],
+      duration:           meta.duration || '',
+      quality:            quality || 'HD',
+      language:           finalLanguage,
+      languages:           [...new Set(downloads.flatMap(download => String(download.language || '').split(',').map(value => value.trim()).filter(Boolean)))],
+      downloads,
+      telegramMessageIds: msgObj.id ? [msgObj.id] : [],
+      _importMeta: {
+        confidence:        meta.confidence || 100,
+        confidenceReasons: meta.confidenceReasons || [],
+        contentType:       parsed.contentType,
+      }
+    };
+
+    try {
+      await Movie.create(movieData);
+      successCount++;
+      lastAddedTitle = finalTitle;
+    } catch (dbErr) {
+      errors.push(`DB Error for "${title}": ${dbErr.message}`);
+    }
+  }
+
+  res.json({
+    message: `Added ${successCount} new | Updated ${updatedCount} existing | Skipped ${skippedCount} (${lowConfidence} low confidence)`,
+    successCount, updatedCount, skippedCount, lowConfidence, duplicateCount,
+    addedTitle: lastAddedTitle,
+    detectedFiles: processedItems.filter(item => !item.skip && item.parsed).flatMap(item =>
+      (item.parsed.downloads || []).map(file => ({
+        title: item.meta?.title || item.parsed.title,
+        filename: file.filename || '',
+        quality: file.quality || 'HD',
+        size: file.size || '',
+        season: file.season ?? null,
+        episode: file.episode ?? null,
+        language: file.language || '',
+        codec: file.codec || '',
+        hdr: file.hdr || '',
+        audio: file.audio || '',
+        source: file.source || '',
+        urls: (file.links || []).map(link => link.url)
+      }))
+    ),
+    errors: errors.slice(0, 20),
+  });
+});
+
+// ── POST /api/import/preview ──────────────────────────────
+router.post('/preview', auth, async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message) return res.status(400).json({ error: 'Message required' });
+
+    // Ensure TMDB key is available, else abort
+    const tmdbKey = process.env.TMDB_API_KEY;
+    if (!tmdbKey) return res.status(500).json({ error: 'TMDB_API_KEY missing in .env' });
+
+    // Use central parser!
+    const parsed = parseMessageBlock(message);
+    if (!parsed) return res.status(400).json({ error: 'Could not parse message' }); 
+    res.json(parsed);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/import/fetch-meta ──────────────────────────────
+// Used by both bulk import and the Fix Posters admin tool.
+// Returns full metadata including poster AND backdrop from TMDB + OMDB.
+router.post('/fetch-meta', auth, async (req, res) => {
+  const { title, year, messageYear, yearCandidates = [], isSeries, season, filename, fileYear } = req.body;
+  const { tmdbKey, omdbKey } = resolveKeys(req);
+  if (!title) return res.status(400).json({ message: 'Title required' });
+
+  const parsed = {
+    title,
+    year: year ? parseInt(year, 10) : null,
+    messageYear: messageYear ? parseInt(messageYear, 10) : (isSeries && year ? parseInt(year, 10) : null),
+    yearCandidates: [...new Set([...(yearCandidates || []), year, fileYear]
+      .map(Number).filter(value => Number.isInteger(value) && value >= 1900 && value <= 2099))],
+    isSeries: !!isSeries,
+    contentType: isSeries ? 'series' : 'movie',
+    season: season || null,
+    downloads: filename ? [{ filename, fileYear: Number(fileYear || extractYear([filename])) || null, season: season || null }] : [],
+  };
+
+  let tmdb = null, omdb = null;
+
+  // Run both in parallel for speed
+  const [tmdbResult, omdbResult] = await Promise.all([
+    tmdbKey ? fetchTMDB(parsed, tmdbKey) : Promise.resolve(null),
+    omdbKey ? fetchOMDB(parsed, omdbKey) : Promise.resolve(null),
+  ]);
+
+  tmdb = tmdbResult;
+  omdb = omdbResult;
+
+  // Do not discard an explicit release-year hint after a failed match.
+  // A false negative is safer than attaching a same-name movie from another year.
+
+  // 3-Tier Fallback for manual poster fix
+  let imdbFallback = null;
+  if (!(tmdb && tmdb.poster) && !(omdb && omdb.poster)) {
+    imdbFallback = await fetchIMDB(parsed);
+  }
+
+  // Build the best combined result
+  if (!tmdb && !omdb && !imdbFallback) {
+    return res.status(404).json({ message: `No results found for "${title}" on TMDB, OMDB, or IMDB` });
+  }
+
+  // Merge: TMDB is primary (has backdrop), OMDB fills gaps
+  const result = {
+    title:       (tmdb?.title || omdb?.title || title),
+    year:        (tmdb?.year || omdb?.year || parsed.messageYear || (isSeries ? null : year) || null),
+    releaseDate: (tmdb?.releaseDate || ''),
+    seasonYear: (tmdb?.seasonYear || null),
+    originalLanguage: (tmdb?.originalLanguage || ''),
+    poster:      (tmdb?.poster    || omdb?.poster    || ''),
+    backdrop:    (tmdb?.backdrop  || ''),                      // Only TMDB has backdrops
+    rating:      (tmdb?.rating    || omdb?.rating    || 0),
+    description: (tmdb?.description || omdb?.description || ''),
+    genre:       (tmdb?.genre?.length ? tmdb.genre : (omdb?.genre || [])),
+    duration:    (tmdb?.duration  || omdb?.duration  || ''),
+    tmdbId:      (tmdb?.tmdbId    || ''),
+    imdbId:      (omdb?.imdbId    || ''),
+    type:        (tmdb?.type      || omdb?.type      || 'movie'),
+    confidence:  (tmdb?.confidence || 0),
+    // If TMDB has no poster, try OMDB poster as backup, then IMDB fallback
+    posterSources: {
+      tmdb: tmdb?.poster   || '',
+      omdb: omdb?.poster   || '',
+      imdb: imdbFallback?.poster || '',
+    },
+    backdropSources: {
+      tmdb: tmdb?.backdrop || '',
+    },
+  };
+  
+  if (!result.poster) {
+    result.poster = imdbFallback?.poster || '';
+  }
+
+  res.json(result);
+});
+
+// ── POST /api/import/search-imdb ──────────────────────────────
+// Directly queries IMDB's suggestion API to get posters.
+// Supports direct IMDB IDs, IMDB URLs, or text search.
+router.post('/search-imdb', auth, async (req, res) => {
+  const { title, year } = req.body;
+  if (!title) return res.status(400).json({ message: 'Title required' });
+
+  try {
+    let url = '';
+    // Detect if user pasted an IMDB URL or ID (e.g. tt1305797)
+    const idMatch = title.match(/(tt\d{7,10})/);
+    if (idMatch) {
+      const imdbId = idMatch[1];
+      url = `https://v2.sg.media-imdb.com/suggestion/t/${imdbId}.json`;
+    } else {
+      const query = title.toLowerCase().trim().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, '+');
+      const firstLet = query[0] || 'a';
+      url = `https://v2.sg.media-imdb.com/suggestion/${firstLet}/${encodeURIComponent(query)}.json`;
+    }
+
+    const r = await axios.get(url, {
+      timeout: 30000,
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+
+    const results = (r.data.d || [])
+      .filter(item => item.qid === 'movie' || item.qid === 'tvSeries' || item.qid === 'tvMiniSeries' || idMatch)
+      .slice(0, 8)
+      .map(item => ({
+        imdbId:   item.id,
+        title:    item.l,
+        year:     item.y || null,
+        cast:     item.s || '',
+        poster:   item.i?.imageUrl
+          ? item.i.imageUrl.replace(/\._V1_.*$/, '._V1_SX1000.jpg') // Get max quality 1000px version
+          : '',
+        fullPoster: item.i?.imageUrl || '',
+      }));
+
+    // Sort: exact year match first (if we didn't search by exact ID)
+    if (year && !idMatch) {
+      results.sort((a, b) => {
+        const aDiff = a.year ? Math.abs(a.year - parseInt(year)) : 999;
+        const bDiff = b.year ? Math.abs(b.year - parseInt(year)) : 999;
+        return aDiff - bDiff;
+      });
+    }
+
+    if (results.length === 0) {
+      return res.status(404).json({ message: `No IMDB results found for "${title}"` });
+    }
+
+    res.json({ results });
+  } catch (err) {
+    res.status(500).json({ message: 'IMDB search failed: ' + err.message });
+  }
+});
+
+// ── POST /api/import/manual-add ─────────────────────────────
+router.post('/manual-add', auth, async (req, res) => {
+  try {
+    const {
+      title, year, messageYear, type, isSeries, season, episode,
+      duration, genre, rating, poster, backdrop, streamEmbed,
+      isFeatured, isTrending, links, overwrite,
+    } = req.body || {};
+    const { tmdbKey, omdbKey } = resolveKeys(req);
+    if (!title) return res.status(400).json({ message: 'Title required' });
+    if (!Array.isArray(links) || !links.length) {
+      return res.status(400).json({ message: 'At least one link required' });
+    }
+
+    const isTv = isSeries === true || type === 'series' || type === 'anime';
+    const finalInputType = type === 'anime' ? 'anime' : (isTv ? 'series' : 'movie');
+    const {
+      extractYear: getYear, extractSeasonEpisode,
+      detectCodec, detectHDR, extractAudio, extractSize, detectAllLanguages,
+    } = require('../utils/parser');
+
+    const parsedDownloads = links.map(link => {
+      const filename = String(link.filename || '').trim();
+      const se = filename ? extractSeasonEpisode(filename) : {};
+      return {
+        filename,
+        fileYear: Number(link.fileYear || getYear([filename])) || null,
+        season: link.season ?? se?.season ?? season ?? null,
+        episode: link.episode ?? se?.episode ?? episode ?? null,
+      };
+    });
+    const parsed = {
+      title,
+      rawTitle: title,
+      year: year ? parseInt(year, 10) : null,
+      messageYear: messageYear ? parseInt(messageYear, 10) : (isTv ? (year ? parseInt(year, 10) : null) : null),
+      yearCandidates: [...new Set([year, messageYear, ...parsedDownloads.map(file => file.fileYear)]
+        .map(Number).filter(value => Number.isInteger(value) && value >= 1900 && value <= 2099))],
+      isSeries: isTv,
+      contentType: finalInputType,
+      season: season || parsedDownloads.find(file => file.season)?.season || null,
+      downloads: parsedDownloads,
+    };
+    const meta = await fetchMeta(parsed, tmdbKey, omdbKey);
+    const finalTitle = meta.title || title;
+    const finalType = finalInputType === 'anime' || meta.isAnime
+      ? 'anime' : (isTv || meta.type === 'series' ? 'series' : 'movie');
+    const expectedTypes = finalType === 'movie' ? 'movie' : { $in: ['series', 'anime'] };
+
+    const downloads = links.map((link, index) => {
+      const fn = String(link.filename || '').trim();
+      const file = parsedDownloads[index] || {};
+      const parsedLanguages = fn ? detectAllLanguages(fn) : [];
+      const language = link.language || parsedLanguages.filter(value => value !== 'Multi').join(', ') ||
+        (parsedLanguages.includes('Multi') ? 'Multi' : '');
+      const url = normalizeGdflixUrl(link.url || '');
+      return {
+        quality: link.quality || 'HD',
+        size: link.size || (fn ? extractSize(fn) : '') || '',
+        filename: fn,
+        fileYear: file.fileYear || null,
+        language,
+        codec: link.codec || (fn ? detectCodec(fn) : '') || 'Other',
+        hdr: link.hdr || (fn ? detectHDR(fn) : '') || null,
+        audio: link.audio || (fn ? extractAudio(fn) : '') || null,
+        audioTracks: Array.isArray(link.audioTracks) && link.audioTracks.length >= 2 ? link.audioTracks.slice(0, 8) : [],
+        season: file.season,
+        episode: file.episode,
+        source: link.source || '',
+        container: link.container || '',
+        bitDepth: link.bitDepth || '',
+        audioChannels: link.audioChannels || '',
+        isRepack: !!link.isRepack,
+        releaseType: link.releaseType || (link.isRepack ? 'Repack' : 'Original'),
+        links: url ? [{ host: detectHost(url), url, isFast: /gdflix\.dev|hubcloud|gdlink/i.test(url) }] : [],
+      };
+    }).filter(download => download.links.length);
+
+    if (!downloads.length) return res.status(400).json({ message: 'No valid download URLs found' });
+
+    const tmdbId = meta.tmdbId || '';
+    let existing = tmdbId
+      ? await Movie.findOne({ tmdbId: String(tmdbId), type: expectedTypes })
+      : null;
+    const escapedTitle = [...finalTitle].map(char =>
+      '$^.*+?()[]{}|'.includes(char) || char === String.fromCharCode(92)
+        ? String.fromCharCode(92) + char : char
+    ).join('');
+    if (!existing) {
+      existing = await Movie.findOne({
+        title: new RegExp('^' + escapedTitle + '$', 'i'),
         type: expectedTypes,
       });
+    }
+
+    const seasonYearsFromDownloads = { ...(existing?.seasonYears || {}) };
+    for (const download of downloads) {
+      if (download.season && download.fileYear && !seasonYearsFromDownloads['s' + download.season]) {
+        seasonYearsFromDownloads['s' + download.season] = Number(download.fileYear);
+      }
+    }
+    const selectedSeason = season || parsed.season;
+    if (selectedSeason && meta.seasonYear) {
+      seasonYearsFromDownloads['s' + selectedSeason] = Number(meta.seasonYear);
+    }
+
+    if (existing && !overwrite) {
+      const knownUrls = new Set((existing.downloads || []).flatMap(download =>
+        (download.links || []).map(link => String(link.url || ''))
+      ));
+      let added = 0;
+      for (const download of downloads) {
+        const url = download.links[0]?.url;
+        if (!url || knownUrls.has(url)) continue;
+        existing.downloads.push(download);
+        knownUrls.add(url);
+        added++;
+      }
+      existing.seasonYears = seasonYearsFromDownloads;
+      if (finalType === 'anime') existing.type = 'anime';
+      if (!existing.tmdbId && meta.tmdbId) existing.tmdbId = String(meta.tmdbId);
+      if (!existing.imdbId && meta.imdbId) existing.imdbId = meta.imdbId;
+      if (!existing.originalLanguage && meta.originalLanguage) existing.originalLanguage = meta.originalLanguage;
+      if (meta.releaseDate && meta.year && meta.tmdbId &&
+          String(existing.tmdbId || '') === String(meta.tmdbId)) {
+        existing.releaseDate = meta.releaseDate;
+        existing.year = meta.year;
+      }
+      for (const field of ['poster', 'posterFallback', 'backdrop', 'description', 'rating', 'duration', 'totalSeasons']) {
+        if (!existing[field] && (meta[field] || (field === 'poster' && poster) || (field === 'backdrop' && backdrop))) {
+          existing[field] = meta[field] || (field === 'poster' ? poster : backdrop);
+        }
+      }
+      if ((!existing.genre || !existing.genre.length) && (genre?.length || meta.genre?.length)) {
+        existing.genre = genre?.length ? genre : meta.genre;
+      }
+      if (!existing.releaseDate && meta.releaseDate) existing.releaseDate = meta.releaseDate;
+      const { recomputeAggregates } = require('../pipeline_full');
+      recomputeAggregates(existing);
+      await existing.save();
+      return res.json({ message: 'Updated existing: ' + existing.title, movie: existing, added });
+    }
+
+    if (existing && overwrite) {
+      Object.assign(existing, {
+        title: title || meta.title || existing.title,
+        tmdbId: meta.tmdbId || existing.tmdbId,
+        imdbId: meta.imdbId || existing.imdbId,
+        type: finalType,
+        totalSeasons: meta.totalSeasons || existing.totalSeasons,
+        description: meta.description || existing.description,
+        poster: poster || meta.poster || existing.poster,
+        backdrop: backdrop || meta.backdrop || existing.backdrop,
+        posterFallback: meta.posterFallback || existing.posterFallback,
+        originalLanguage: meta.originalLanguage || existing.originalLanguage || '',
+        releaseDate: meta.releaseDate || existing.releaseDate,
+        seasonYears: seasonYearsFromDownloads,
+        rating: rating !== undefined ? rating : (meta.rating || existing.rating),
+        year: meta.year || parsed.messageYear || (isTv ? existing.year : (year || existing.year)),
+        genre: genre?.length ? genre : (meta.genre || existing.genre),
+        duration: duration || meta.duration || existing.duration,
+        streamEmbed: streamEmbed !== undefined ? streamEmbed : existing.streamEmbed,
+        isFeatured: isFeatured !== undefined ? isFeatured : existing.isFeatured,
+        isTrending: isTrending !== undefined ? isTrending : existing.isTrending,
+      });
+      existing.downloads.push(...downloads);
+      const { recomputeAggregates } = require('../pipeline_full');
+      recomputeAggregates(existing);
+      await existing.save();
+      return res.json({ message: 'Overwritten: ' + existing.title, movie: existing });
+    }
+
+    const seasonYears = Object.fromEntries(downloads
+      .filter(download => download.season && download.fileYear)
+      .map(download => ['s' + download.season, Number(download.fileYear)]));
+    if (selectedSeason && meta.seasonYear) seasonYears['s' + selectedSeason] = Number(meta.seasonYear);
+    const availableLanguages = [...new Set(downloads.flatMap(download =>
+      String(download.language || '').split(',').map(value => value.trim()).filter(Boolean)
+    ))];
+    const movie = await Movie.create({
+      title: title || finalTitle,
+      tmdbId: meta.tmdbId || '',
+      imdbId: meta.imdbId || '',
+      type: finalType,
+      totalSeasons: meta.totalSeasons || 0,
+      originalLanguage: meta.originalLanguage || '',
+      description: meta.description || '',
+      poster: poster || meta.poster || '',
+      posterFallback: meta.posterFallback || '',
+      backdrop: backdrop || meta.backdrop || '',
+      releaseDate: meta.releaseDate || '',
+      seasonYears,
+      rating: rating !== undefined ? rating : (meta.rating || 0),
+      year: meta.year || parsed.messageYear || (isTv ? null : (year || null)),
+      genre: genre?.length ? genre : (meta.genre || []),
+      duration: duration || meta.duration || '',
+      quality: downloads[0]?.quality || 'HD',
+      language: availableLanguages.join(', '),
+      languages: availableLanguages,
+      streamEmbed: streamEmbed || '',
+      isFeatured: !!isFeatured,
+      isTrending: !!isTrending,
+      downloads,
+    });
+    const { recomputeAggregates } = require('../pipeline_full');
+    recomputeAggregates(movie);
+    await movie.save();
+    res.json({ message: 'Created: ' + movie.title, movie });
+  } catch (error) {
+    res.status(500).json({ message: 'Manual add failed: ' + error.message });
+  }
+});
+
+// ── PATCH /api/import/update-movie/:id ──────────────────────
+router.patch('/update-movie/:id', auth, async (req, res) => {
+  try {
+    const movie = await Movie.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
+    if (!movie) return res.status(404).json({ message: 'Movie not found' });
+    res.json({ message: 'Updated', movie });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// ── DELETE /api/import/delete-movie/:id ─────────────────────
+router.delete('/delete-movie/:id', auth, async (req, res) => {
+  try {
+    const deleted = await Movie.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: 'Content not found' });
+    res.json({ success: true, message: 'Deleted' });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// ── DELETE /api/import/wipe-all ─── Wipe entire DB (fresh import) ──
+router.delete('/wipe-all', auth, async (req, res) => {
+  try {
+    const result = await Movie.deleteMany({});
+    res.json({ message: `Wiped ${result.deletedCount} records from database.`, deletedCount: result.deletedCount });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// ── POST /api/import/refetch-poster/:id ─────────────────────────────────────
+// Re-runs TMDB/OMDB search for a movie and saves best valid poster.
+router.post('/refetch-poster/:id', auth, async (req, res) => {
+  try {
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) return res.status(404).json({ message: 'Not found' });
+    const { tmdbKey, omdbKey } = resolveKeys(req);
+    const axios = require('axios');
+
+    async function validatePoster(url) {
+      if (!url) return null;
+      try { const r = await axios.head(url, { timeout: 5000 }); return r.status < 400 ? url : null; }
+      catch { return null; }
+    }
+
+    const { searchTMDB, searchOMDB, searchGoogleImage } = require('../pipeline_full');
+    const { extractYear } = require('../utils/parser');
+    const isSer = movie.type === 'series' || movie.type === 'anime';
+    const downloads = movie.downloads || [];
+    const selectedSeason = downloads.find(download => download.season)?.season || null;
+    const yearHints = [...new Set([movie.year, ...downloads.map(download =>
+      download.fileYear || extractYear([download.filename])
+    )].filter(Boolean).map(Number))];
+    const seasonYearHints = downloads
+      .filter(download => !selectedSeason || Number(download.season) === Number(selectedSeason))
+      .map(download => download.fileYear || extractYear([download.filename]))
+      .filter(Boolean);
+    const tmdb = await searchTMDB(
+      movie.title, movie.year, isSer, selectedSeason, null,
+      movie.imdbId || null, movie.tmdbId || null, yearHints, seasonYearHints
+    );
+    let poster = '', posterFallback = '', backdrop = '', tmdbId = movie.tmdbId, imdbId = movie.imdbId;
+    const seasonYears = { ...(movie.seasonYears || {}) };
+
+    if (tmdb) {
+      tmdbId = tmdb.tmdbId || tmdbId;
+      backdrop = tmdb.backdrop || '';
+      if (tmdb.releaseDate) movie.releaseDate = tmdb.releaseDate;
+      if (tmdb.year && tmdb.releaseDate) movie.year = tmdb.year;
+      if (selectedSeason && tmdb.seasonYear) seasonYears['s' + selectedSeason] = Number(tmdb.seasonYear);
+      const valid = await validatePoster(tmdb.poster);
+      poster = valid || '';
+    }
+
+    const omdb = await searchOMDB(movie.title, movie.year, isSer, yearHints);
+    if (omdb) {
+      imdbId = omdb.imdbId || imdbId;
+      if (omdb.poster && omdb.poster !== poster) {
+        if (!poster) {
+          const valid = await validatePoster(omdb.poster);
+          poster = valid || '';
+        } else {
+          posterFallback = omdb.poster;
+        }
+      }
+    }
+
+    // Never attach a random image-search result to a catalogue record.
+    // TMDB's verified image catalogue and title/year-checked OMDb are the only poster sources.
+
+    const updated = await Movie.findByIdAndUpdate(req.params.id, {
+      $set: { poster, posterFallback, backdrop, tmdbId, imdbId, releaseDate: movie.releaseDate || '', year: movie.year, seasonYears }
+    }, { new: true });
+    res.json({ message: 'Poster refetched', poster, posterFallback, movie: updated });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// ── POST /api/import/manual-batch ───────────────────────────────────────────
+// Accepts an array of pre-parsed manual entries and imports with full TMDB enrichment.
+// Entry shape: { title, year, quality, size, codec, hdr, audio, language, season, episode, type, links: [{url}] }
+router.post('/manual-batch', auth, async (req, res) => {
+  try {
+    const { entries = [] } = req.body || {};
+    if (!Array.isArray(entries) || !entries.length) {
+      return res.status(400).json({ message: 'No entries provided' });
+    }
+
+    const { searchTMDB, searchOMDB, recomputeAggregates } = require('../pipeline_full');
+    const {
+      detectCodec, detectHDR, extractAudio, extractSize, detectAllLanguages,
+      extractYear, extractSeasonEpisode,
+    } = require('../utils/parser');
+
+    const groups = new Map();
+    for (const entry of entries) {
+      const title = String(entry.title || entry.rawTitle || '').trim();
+      if (!title) continue;
+      const isSeries = entry.type === 'series' || entry.type === 'anime' ||
+        entry.isSeries === true || entry.contentType === 'series' || entry.contentType === 'anime';
+      const parentYear = isSeries
+        ? (entry.messageYear || entry.parentYear || '')
+        : (entry.messageYear || entry.year || '');
+      const key = title.toLowerCase() + '__' + (isSeries ? parentYear : parentYear) +
+        '__' + (isSeries ? 'tv' : 'movie');
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ ...entry, title, isSeries });
+    }
+
+    const results = [];
+    for (const items of groups.values()) {
+      const rep = items[0];
+      const isSeries = items.some(item => item.isSeries);
+      const isAnime = items.some(item => item.type === 'anime' || item.contentType === 'anime');
+      const finalType = isAnime ? 'anime' : (isSeries ? 'series' : 'movie');
+      const yearHints = [...new Set(items.flatMap(item => [
+        item.messageYear, item.year, item.fileYear, extractYear([item.filename]),
+      ]).filter(Boolean).map(Number).filter(year => Number.isInteger(year) && year >= 1900 && year <= 2099))];
+      const seasonYearHints = items
+        .filter(item => !rep.season || Number(item.season) === Number(rep.season))
+        .map(item => item.fileYear || extractYear([item.filename]) ||
+          (!item.messageYear && !item.parentYear && isSeries ? item.year : null))
+        .filter(Boolean);
+      const titleYearHint = isSeries ? (rep.messageYear || rep.parentYear || null) : (rep.messageYear || rep.year || null);
+
+      let meta = {};
+      const tmdb = await searchTMDB(
+        rep.title, titleYearHint, isSeries, rep.season || null, null,
+        rep.imdbId || null, rep.tmdbIdHint || null, yearHints, seasonYearHints
+      );
+      if (tmdb) Object.assign(meta, tmdb);
+
+      const omdb = await searchOMDB(rep.title, titleYearHint, isSeries, yearHints);
+      if (omdb) {
+        if (!meta.title) meta.title = omdb.title;
+        if (!meta.rating) meta.rating = omdb.rating;
+        if (!meta.description) meta.description = omdb.description;
+        if (!meta.duration) meta.duration = omdb.duration;
+        if (!meta.genre?.length && omdb.genre?.length) meta.genre = omdb.genre;
+        if (!meta.imdbId) meta.imdbId = omdb.imdbId;
+        if (!meta.poster) meta.poster = omdb.poster;
+        else if (omdb.poster && omdb.poster !== meta.poster) meta.posterFallback = omdb.poster;
+        if (!meta.type) meta.type = omdb.type;
+      }
+
+      const finalTitle = meta.title || rep.title;
+      const expectedTypes = isSeries ? { $in: ['series', 'anime'] } : 'movie';
+      const escapedTitle = [...finalTitle].map(char =>
+        '$^.*+?()[]{}|'.includes(char) || char === String.fromCharCode(92)
+          ? String.fromCharCode(92) + char : char
+      ).join('');
+      const titleRegex = new RegExp('^' + escapedTitle + '$', 'i');
+      let existing = meta.tmdbId
+        ? await Movie.findOne({ tmdbId: String(meta.tmdbId), type: expectedTypes })
+        : null;
+      if (!existing) existing = await Movie.findOne({ title: titleRegex, type: expectedTypes });
+      const { shouldSplitMetadataIdentity, buildTrustedMetadataUpdate } = require('../pipeline_full');
+      if (existing && shouldSplitMetadataIdentity(existing, meta, titleYearHint)) {
+        existing = null;
+      }
+
+      const downloads = [];
+      for (const item of items) {
+        const filename = String(item.filename || '').trim();
+        const parsedEpisode = filename ? extractSeasonEpisode(filename) : {};
+        const season = item.season ?? parsedEpisode?.season ?? null;
+        const episode = item.episode ?? parsedEpisode?.episode ?? null;
+        const fileYear = Number(item.fileYear || extractYear([filename]) ||
+          (!item.messageYear && !item.parentYear && isSeries ? item.year : null)) || null;
+        const parsedLanguages = filename ? detectAllLanguages(filename) : [];
+        const language = item.language || parsedLanguages.filter(value => value !== 'Multi').join(', ') ||
+          (parsedLanguages.includes('Multi') ? 'Multi' : '');
+        const size = item.size || (filename ? extractSize(filename) : '') || '';
+        const codec = item.codec || (filename ? detectCodec(filename) : '') || 'Other';
+        const hdr = item.hdr || (filename ? detectHDR(filename) : '') || null;
+        const audio = item.audio || (filename ? extractAudio(filename) : '') || null;
+        const audioTracks = Array.isArray(item.audioTracks) && item.audioTracks.length >= 2
+          ? item.audioTracks.slice(0, 8) : [];
+
+        for (const link of (item.links || [])) {
+          const url = normalizeGdflixUrl(link.url || '');
+          if (!url) continue;
+          downloads.push({
+            quality: item.quality || 'HD',
+            size,
+            filename,
+            fileYear,
+            language,
+            codec,
+            hdr,
+            audio,
+            audioTracks,
+            source: item.source || '',
+            container: item.container || '',
+            bitDepth: item.bitDepth || '',
+            audioChannels: item.audioChannels || '',
+            isRepack: !!item.isRepack,
+            releaseType: item.releaseType || (item.isRepack ? 'Repack' : 'Original'),
+            season,
+            episode,
+            links: [{ host: detectHost(url), url, isFast: /gdflix\.dev|hubcloud|gdlink/i.test(url) }],
+          });
+        }
+      }
+
+      if (!downloads.length) {
+        results.push({ title: finalTitle, action: 'skipped', added: 0, reason: 'No valid links' });
+        continue;
+      }
+
+      if (existing) {
+        const knownUrls = new Set((existing.downloads || []).flatMap(download =>
+          (download.links || []).map(link => String(link.url || ''))
+        ));
+        let added = 0;
+        for (const download of downloads) {
+          const url = download.links[0]?.url;
+          if (!url || knownUrls.has(url)) continue;
+          existing.downloads.push(download);
+          knownUrls.add(url);
+          added++;
+        }
+
+        const seasonYears = { ...(existing.seasonYears || {}) };
+        for (const download of downloads) {
+          if (download.season && download.fileYear && !seasonYears['s' + download.season]) {
+            seasonYears['s' + download.season] = download.fileYear;
+          }
+        }
+        if (rep.season && meta.seasonYear) seasonYears['s' + rep.season] = Number(meta.seasonYear);
+        existing.seasonYears = seasonYears;
+        if (meta.releaseDate && meta.year && meta.tmdbId &&
+            String(existing.tmdbId || '') === String(meta.tmdbId)) {
+          existing.releaseDate = meta.releaseDate;
+          existing.year = meta.year;
+        }
+        if (finalType === 'anime') existing.type = 'anime';
+        if (!existing.tmdbId && meta.tmdbId && Number(meta.confidence || 0) >= 65) existing.tmdbId = String(meta.tmdbId);
+        if (meta.tmdbId && Number(meta.confidence || 0) >= 65) {
+          const trustedFields = buildTrustedMetadataUpdate(existing, meta, rep.season || null);
+          for (const [field, value] of Object.entries(trustedFields)) existing.set(field, value);
+        }
+        if (!existing.imdbId && meta.imdbId) existing.imdbId = meta.imdbId;
+        if (!existing.originalLanguage && meta.originalLanguage) existing.originalLanguage = meta.originalLanguage;
+        for (const field of ['poster', 'posterFallback', 'backdrop', 'description', 'rating', 'duration', 'totalSeasons']) {
+          if (!existing[field] && meta[field]) existing[field] = meta[field];
+        }
+        if ((!existing.genre || !existing.genre.length) && meta.genre?.length) existing.genre = meta.genre;
+        if (!existing.releaseDate && meta.releaseDate) existing.releaseDate = meta.releaseDate;
+        if (!existing.year && meta.year && !isSeries) existing.year = meta.year;
+
+        if (added) {
+          recomputeAggregates(existing);
+          await existing.save();
+        } else {
+          await existing.save();
+        }
+        results.push({ title: existing.title, action: added ? 'updated' : 'skipped', added });
+      } else {
+        const seasonYears = Object.fromEntries(downloads
+          .filter(download => download.season && download.fileYear)
+          .map(download => ['s' + download.season, download.fileYear]));
+        if (rep.season && meta.seasonYear) seasonYears['s' + rep.season] = Number(meta.seasonYear);
+        const document = await Movie.create({
+          title: finalTitle,
+          tmdbId: meta.tmdbId || '',
+          imdbId: meta.imdbId || '',
+          type: finalType,
+          totalSeasons: meta.totalSeasons || 0,
+          originalLanguage: meta.originalLanguage || '',
+          description: meta.description || '',
+          poster: meta.poster || '',
+          posterFallback: meta.posterFallback || '',
+          backdrop: meta.backdrop || '',
+          releaseDate: meta.releaseDate || '',
+          seasonYears,
+          rating: meta.rating || 0,
+          year: meta.year || rep.messageYear || (isSeries ? null : rep.year || null),
+          genre: meta.genre || [],
+          duration: meta.duration || '',
+          quality: downloads[0].quality,
+          language: rep.language || '',
+          formats: [...new Set(downloads.map(download => download.quality))].filter(Boolean),
+          codecs: [...new Set(downloads.map(download => download.codec))].filter(codec => codec && codec !== 'Other'),
+          languages: [...new Set(downloads.map(download => download.language))].filter(Boolean),
+          downloads,
+        });
+        recomputeAggregates(document);
+        await document.save();
+        results.push({ title: document.title, action: 'created', id: document._id, added: downloads.length });
+      }
+    }
+
+    res.json({ message: 'Processed ' + results.length + ' title groups', results });
+  } catch (error) {
+    res.status(500).json({ message: 'Manual batch import failed: ' + error.message });
+  }
+});
+
+// ── POST /api/import/normalize-links-batch ──────────────────────────────────
+// Safely migrate existing GDFlix/HubCloud links in small resumable batches.
+router.post('/normalize-links-batch', auth, async (req, res) => {
+  try {
+    const batchSize = Math.min(50, Math.max(1, parseInt(req.body?.batchSize, 10) || 15));
+    const lastId = req.body?.lastId || null;
+    const filter = { downloads: { $exists: true, $ne: [] } };
+    const total = await Movie.countDocuments(filter);
+    const pageFilter = lastId
+      ? { ...filter, _id: { $gt: lastId } }
+      : filter;
+    const movies = await Movie.find(pageFilter)
+      .select('_id downloads')
+      .sort({ _id: 1 })
+      .limit(batchSize)
+      .lean();
+
+    let changedMovies = 0;
+    let changedLinks = 0;
+    for (const movie of movies) {
+      let movieChanged = false;
+      for (const download of (movie.downloads || [])) {
+        for (const link of (download.links || [])) {
+          const oldUrl = String(link.url || '');
+          const newUrl = normalizeGdflixUrl(oldUrl);
+          let newHost = link.host || 'Download';
+          if (/^https?:\/\/(?:[^/]+\.)?gdflix\.dev(?:[/:?#]|$)/i.test(newUrl)) newHost = 'GDFlix';
+          else if (/^https?:\/\/(?:[^/]+\.)?hubcloud\.one(?:[/:?#]|$)/i.test(newUrl)) newHost = 'HubCloud';
+          if (newUrl !== oldUrl || newHost !== (link.host || 'Download')) {
+            link.url = newUrl;
+            link.host = newHost;
+            if (newHost === 'GDFlix' || newHost === 'HubCloud') link.isFast = true;
+            changedLinks++;
+            movieChanged = true;
+          }
+        }
+      }
+      if (movieChanged) {
+        await Movie.updateOne(
+          { _id: movie._id },
+          { $set: { downloads: movie.downloads } }
+        );
+        changedMovies++;
+      }
+      // Yield between records so this migration stays gentle on the database.
+      await sleep(35);
+    }
+
+    const nextCursor = movies.length ? String(movies[movies.length - 1]._id) : lastId;
+    res.json({
+      success: true,
+      total,
+      scanned: movies.length,
+      changedMovies,
+      changedLinks,
+      nextCursor,
+      done: movies.length < batchSize
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Link normalization failed: ' + err.message });
+  }
+});
+
+module.exports = router;
+, 'i'),
+        type: expectedTypes,
+      });
+    }
+    const { shouldSplitMetadataIdentity, buildTrustedMetadataUpdate } = require('../pipeline_full');
+    if (existing && shouldSplitMetadataIdentity(existing, meta, parsed.messageYear || year)) {
+      existing = null;
     }
 
     if (existing) {
