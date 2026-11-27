@@ -315,6 +315,23 @@ function shouldSplitMetadataIdentity(existing, incoming, expectedYear = null) {
   const idConflict = !!(oldId && newId && oldId !== newId);
   return idConflict || yearConflict;
 }
+function removeExactDownloadUrlFromRecord(record, url) {
+  if (!record || !url || !Array.isArray(record.downloads)) return false;
+  let changed = false;
+  const keptDownloads = [];
+  for (const download of record.downloads) {
+    const links = Array.isArray(download.links) ? download.links : [];
+    const remainingLinks = links.filter(link => String(link && link.url || '') !== String(url));
+    if (remainingLinks.length !== links.length) {
+      download.links = remainingLinks;
+      changed = true;
+    }
+    if (remainingLinks.length || links.length === 0) keptDownloads.push(download);
+  }
+  if (changed) record.downloads = keptDownloads;
+  return changed;
+}
+
 function buildTrustedMetadataUpdate(existing, incoming, season = null) {
   if (!existing || !incoming || !incoming.tmdbId || !existing.tmdbId ||
       String(existing.tmdbId) !== String(incoming.tmdbId) || Number(incoming.confidence || 0) < 65) return {};
@@ -822,6 +839,28 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       if (!dbRec && meta.tmdbId) dbRec = await Movie.findOne({ tmdbId: String(meta.tmdbId), type: expectedTypes });
       // Last resort: same-type title match. Do not key TV records by a later season year.
       if (!dbRec && cleanTitle && !splitExistingIdentity) dbRec = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' }, type: expectedTypes });
+
+      // A multi-title message may already have been imported before the splitter existed.
+      // Move the exact URL off any wrong TMDB record once its intended identity is verified.
+      const verifiedIdentity = verifiedTmdbMeta && verifiedTmdbMeta.tmdbId &&
+        Number(verifiedTmdbMeta.confidence || meta.confidence || 0) >= 65
+        ? String(verifiedTmdbMeta.tmdbId) : '';
+      if (verifiedIdentity) {
+        const misplacedRecords = await Movie.find({
+          _id: { $ne: dbRec ? dbRec._id : null },
+          'downloads.links.url': finalUrl,
+          tmdbId: { $ne: verifiedIdentity },
+        });
+        for (const misplacedRecord of misplacedRecords) {
+          if (!removeExactDownloadUrlFromRecord(misplacedRecord, finalUrl)) continue;
+          recomputeAggregates(misplacedRecord);
+          await misplacedRecord.save();
+          _emitter('[MOVE] Removed misassigned source URL from "' + misplacedRecord.title +
+            '" (TMDB ' + (misplacedRecord.tmdbId || 'none') + ') for verified "' +
+            (meta.title || cleanTitle) + '" (TMDB ' + verifiedIdentity + ').');
+        }
+      }
+
 
       const newDl = {
         quality, size, filename, language, codec, hdr, audio, source, container, bitDepth, audioChannels, audioTracks,
@@ -1449,7 +1488,7 @@ if (IS_MAIN) {
 }
 
 // ── When require()'d by orchestrator route ────────────────────────────────────
-module.exports = { runPipeline: main, searchTMDB, searchOMDB, searchGoogleImage, fetchWithRetry, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates, shouldSplitMetadataIdentity, buildTrustedMetadataUpdate };
+module.exports = { runPipeline: main, searchTMDB, searchOMDB, searchGoogleImage, fetchWithRetry, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates, shouldSplitMetadataIdentity, buildTrustedMetadataUpdate, removeExactDownloadUrlFromRecord };
 // TMDB SEARCH  —  Multi-Algorithm Title-Candidate Cascade
 // ═════════════════════════════════════════════════════════════════════════
 // Each of the 12 algorithms produces a different title variant.
