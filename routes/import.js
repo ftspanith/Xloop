@@ -32,7 +32,7 @@ function resolveKeys(req) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function escapeRegex(value) {
-  return String(value || '').replace(/[.*+?^$()|[\\]{}]/g, '\\function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }');
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // Quality normalizer
@@ -533,6 +533,9 @@ router.post('/bulk', auth, async (req, res) => {
         type: expectedTypes,
       });
     }
+    const { shouldSplitMetadataIdentity, buildTrustedMetadataUpdate } = require('../pipeline_full');
+    if (existing && shouldSplitMetadataIdentity(existing, meta, parsed.messageYear || year)) existing = null;
+
 
     if (existing) {
       // A Telegram message may contain several file variants. Do not skip the
@@ -586,6 +589,12 @@ router.post('/bulk', auth, async (req, res) => {
         if (!existing.telegramMessageIds) existing.telegramMessageIds = [];
         existing.telegramMessageIds.push(msgObj.id);
         updated = true;
+      }
+      if (meta.tmdbId && Number(meta.confidence || 0) >= 65) {
+        if (!existing.tmdbId) existing.tmdbId = String(meta.tmdbId);
+        const trustedFields = buildTrustedMetadataUpdate(existing, meta, parsed.season || downloads.find(file => file.season)?.season || null);
+        for (const field of Object.keys(trustedFields)) existing.set(field, trustedFields[field]);
+        if (Object.keys(trustedFields).length) updated = true;
       }
       if (updated) {
         // Keep per-season release years separate from the parent's premiere year.
@@ -960,7 +969,11 @@ router.post('/manual-add', auth, async (req, res) => {
       }
       existing.seasonYears = seasonYearsFromDownloads;
       if (finalType === 'anime') existing.type = 'anime';
-      if (!existing.tmdbId && meta.tmdbId) existing.tmdbId = String(meta.tmdbId);
+        if (!existing.tmdbId && meta.tmdbId && Number(meta.confidence || 0) >= 65) existing.tmdbId = String(meta.tmdbId);
+        if (meta.tmdbId && Number(meta.confidence || 0) >= 65) {
+          const trustedFields = buildTrustedMetadataUpdate(existing, meta, rep.season || null);
+          for (const field of Object.keys(trustedFields)) existing.set(field, trustedFields[field]);
+        }
       if (!existing.imdbId && meta.imdbId) existing.imdbId = meta.imdbId;
       if (!existing.originalLanguage && meta.originalLanguage) existing.originalLanguage = meta.originalLanguage;
       if (meta.releaseDate && meta.year && meta.tmdbId &&
@@ -1092,11 +1105,12 @@ router.post('/refetch-poster/:id', auth, async (req, res) => {
 
     async function validatePoster(url) {
       if (!url) return null;
+      if (String(url).startsWith('https://image.tmdb.org/')) return url;
       try { const r = await axios.head(url, { timeout: 5000 }); return r.status < 400 ? url : null; }
       catch { return null; }
     }
 
-    const { searchTMDB, searchOMDB, searchGoogleImage } = require('../pipeline_full');
+    const { searchTMDB, searchOMDB } = require('../pipeline_full');
     const { extractYear } = require('../utils/parser');
     const isSer = movie.type === 'series' || movie.type === 'anime';
     const downloads = movie.downloads || [];
@@ -1115,6 +1129,13 @@ router.post('/refetch-poster/:id', auth, async (req, res) => {
     let poster = '', posterFallback = '', backdrop = '', tmdbId = movie.tmdbId, imdbId = movie.imdbId;
     const seasonYears = { ...(movie.seasonYears || {}) };
 
+    if (tmdb && movie.tmdbId && tmdb.tmdbId && String(movie.tmdbId) !== String(tmdb.tmdbId)) {
+      return res.status(409).json({
+        message: 'Verified TMDB identity differs from the saved record. Refusing to overwrite its poster/year; review the title identity first.',
+        savedTmdbId: String(movie.tmdbId),
+        verifiedTmdbId: String(tmdb.tmdbId),
+      });
+    }
     if (tmdb) {
       tmdbId = tmdb.tmdbId || tmdbId;
       backdrop = tmdb.backdrop || '';
@@ -1138,10 +1159,7 @@ router.post('/refetch-poster/:id', auth, async (req, res) => {
       }
     }
 
-    if (!poster) {
-      const gImg = await searchGoogleImage(movie.title, movie.year, isSer);
-      if (gImg) poster = gImg;
-    }
+    // Only TMDB's own verified image catalogue and title/year-checked OMDb supply posters.
 
     const updated = await Movie.findByIdAndUpdate(req.params.id, {
       $set: { poster, posterFallback, backdrop, tmdbId, imdbId, releaseDate: movie.releaseDate || '', year: movie.year, seasonYears }
@@ -1228,6 +1246,8 @@ router.post('/manual-batch', auth, async (req, res) => {
         ? await Movie.findOne({ tmdbId: String(meta.tmdbId), type: expectedTypes })
         : null;
       if (!existing) existing = await Movie.findOne({ title: titleRegex, type: expectedTypes });
+      const { shouldSplitMetadataIdentity, buildTrustedMetadataUpdate } = require('../pipeline_full');
+      if (existing && shouldSplitMetadataIdentity(existing, meta, titleYearHint)) existing = null;
 
       const downloads = [];
       for (const item of items) {
