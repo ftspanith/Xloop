@@ -311,7 +311,7 @@ function shouldSplitMetadataIdentity(existing, incoming, expectedYear = null) {
   const newId = String(incoming.tmdbId || '').trim();
   const oldYear = metadataYear(existing.year);
   const newYear = metadataYear(incoming.year) || metadataYear(expectedYear);
-  const yearConflict = !!(oldYear && newYear && Math.abs(oldYear - newYear) > 2);
+  const yearConflict = !!(oldYear && newYear && Math.abs(oldYear - newYear) > 2 && (!oldId || !newId || oldId !== newId));
   const idConflict = !!(oldId && newId && oldId !== newId);
   return idConflict || yearConflict;
 }
