@@ -1,6 +1,6 @@
 'use strict';
 const {
-  parseMessageBlock, classifyUrl, isJunkTitle, isGenericTitleCandidate,
+  parseMessageBlock, splitMultiTitleMessage, classifyUrl, isJunkTitle, isGenericTitleCandidate,
   cleanTitleForApi, normalizeGdflixUrl, isKnownProviderHost,
 } = require('./parser');
 
@@ -95,8 +95,12 @@ function extractTelegramLinks(inputMessages, account = '1') {
   for (const message of messages) {
     const rawText = telegramMessageText(message);
     if (!rawText) { skipped++; continue; }
+    // One Telegram post can contain a catalogue list of unrelated movie files.
+    // Parse each filename+URL block independently so titles cannot bleed across films.
+    const messageBlocks = splitMultiTitleMessage(rawText);
+    for (const blockText of messageBlocks) {
     let parsed;
-    try { parsed = parseMessageBlock(rawText, message.id, message.date || null); }
+    try { parsed = parseMessageBlock(blockText, message.id, message.date || null); }
     catch (_) { skipped++; continue; }
     if (!parsed || !Array.isArray(parsed.downloads) || !parsed.downloads.length) {
       skipped++;
@@ -182,6 +186,7 @@ function extractTelegramLinks(inputMessages, account = '1') {
         seenUrls.add(entry.url);
         links.push(entry);
       }
+    }
     }
   }
 
