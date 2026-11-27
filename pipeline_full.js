@@ -345,9 +345,15 @@ function buildTrustedMetadataUpdate(existing, incoming, season = null) {
   if (!existing.totalSeasons && incoming.totalSeasons) set.totalSeasons = incoming.totalSeasons;
   if (!existing.originalLanguage && incoming.originalLanguage) set.originalLanguage = incoming.originalLanguage;
   if (!existing.imdbId && incoming.imdbId) set.imdbId = incoming.imdbId;
-  if ((isJunkTitle(existing.title) || isGenericTitleCandidate(existing.title)) &&
-      incoming.title && !isJunkTitle(incoming.title) && !isGenericTitleCandidate(incoming.title)) {
-    set.title = incoming.title;
+  const currentCleanTitle = cleanTitleForApi(existing.title || '');
+  const incomingCleanTitle = cleanTitleForApi(incoming.title || '');
+  const titleCanBeCleaned = incomingCleanTitle &&
+    !isJunkTitle(incomingCleanTitle) && !isGenericTitleCandidate(incomingCleanTitle) &&
+    (isJunkTitle(existing.title) || isGenericTitleCandidate(existing.title) ||
+      (currentCleanTitle && incomingCleanTitle.length < currentCleanTitle.length &&
+        stringSimilarity(currentCleanTitle, incomingCleanTitle) >= 0.90));
+  if (titleCanBeCleaned && incomingCleanTitle !== existing.title) {
+    set.title = incomingCleanTitle;
   }
   const seasonNumber = Number(season);
   if (seasonNumber > 0 && incoming.seasonPoster &&
@@ -1678,6 +1684,14 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       if (dbRec) {
         const duplicateDownloadIndex = dbRec.downloads?.findIndex(d => d.links?.some(l => l.url === finalUrl)) ?? -1;
         if (duplicateDownloadIndex >= 0) {
+          // A duplicate URL can still carry better verified catalogue metadata.
+          const trustedSet = buildTrustedMetadataUpdate(dbRec, {
+            ...verifiedTmdbMeta,
+            imdbId: verifiedTmdbMeta?.imdbId || meta.imdbId || '',
+          }, correctSeason || rep.season || null);
+          if (Object.keys(trustedSet).length) {
+            await Movie.findByIdAndUpdate(dbRec._id, { $set: trustedSet });
+          }
           const savedTracks = dbRec.downloads[duplicateDownloadIndex]?.audioTracks;
           if (audioTracks.length >= 2 && (!Array.isArray(savedTracks) || savedTracks.length < 2)) {
             await Movie.findByIdAndUpdate(dbRec._id, {
