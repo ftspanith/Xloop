@@ -1,0 +1,72 @@
+name: CI — Full Test Suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }} — All Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node: [22]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Safety & correctness ───────────────────────────────────────────────
+      - name: Pipeline safety (scope + orchestrator)
+        run: npm run test:pipeline-safety
+
+      - name: Extracted-link merge
+        run: npm run test:extracted-link-merge
+
+      # ── Scraper & metadata engine ──────────────────────────────────────────
+      - name: Scraper + variant intelligence
+        run: npm run test:scraper-intelligence
+
+      - name: Video format detection
+        run: npm run test:video-formats
+
+      - name: Importer metadata (repack, IMAX, certification)
+        run: npm run test:importer-metadata
+
+      - name: Telegram ingestion (allowlist, metadata, BD-ISO splitting)
+        run: npm run test:telegram-ingestion
+
+      - name: TMDB / OMDb search engine + series year grouping
+        run: npm run test:metadata-search
+
+      # ── UI & display layer ─────────────────────────────────────────────────
+      - name: Media UI (audio codecs, responsive viewport, download display)
+        run: npm run test:media-ui
+
+      - name: Watch page download sort
+        run: node --test test/watch-download-sort.test.js
+
+      - name: Search UI regressions
+        run: npm run test:search-ui
+
+      - name: Quick-paste (parse + bulk route)
+        run: npm run test:quickpaste
+
+      # ── Infrastructure contracts ──────────────────────────────────────────
+      - name: Telegram sync contract (Termux upload endpoints)
+        run: npm run test:telegram-sync
+
+      - name: Analytics HTML (Vercel analytics on all pages)
+        run: npm run test:analytics-html
