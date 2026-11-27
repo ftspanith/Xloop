@@ -299,10 +299,7 @@ function levenshtein(a, b) {
   return dp[m][n];
 }
 function escapeRegex(value) {
-  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\function escapeRegex(value) {
-  return String(value || '').replace(/[.*+?^$()|[\\]{}]/g, '\\$&');
-}
-function stringSimilarity(a, b) {');
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 function metadataYear(value) {
   const year = Number(value);
