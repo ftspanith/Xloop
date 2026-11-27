@@ -49,11 +49,20 @@ app.use((_req, res, next) => {
 });
 
 // ── Request timeout — prevents hung requests tying up serverless slots ────────
-// Any API call that takes more than 12 seconds will get a 503 automatically
+// Any normal API call that takes more than 12 seconds gets a 503 cleanly.
+// Streaming/SSE, scrape, and batch import endpoints manage their own lifetime.
 app.use('/api/', (req, res, next) => {
+  if (
+    req.path.startsWith('/orchestrator') ||
+    req.path.startsWith('/scrape') ||
+    req.path.startsWith('/import') ||
+    req.path.includes('/stream')
+  ) {
+    return next();
+  }
   const TIMEOUT_MS = 12_000;
   const timer = setTimeout(() => {
-    if (!res.headersSent) {
+    if (!res.headersSent && !res.writableEnded) {
       res.status(503).json({ message: 'Request timed out. Please try again.' });
     }
   }, TIMEOUT_MS);
@@ -128,6 +137,7 @@ app.use(async (req, res, next) => {
   }
 
   if (mongoose.connection.readyState !== 1) {
+    if (res.headersSent || res.writableEnded) return;
     const state = mongoose.connection.readyState;
     const label = ['disconnected','connected','connecting','disconnecting'][state] || 'unknown';
     return res.status(503).json({
@@ -171,8 +181,9 @@ app.use((req, res, next) => {
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // ── Global error handler (MUST be last) ──────────────────────────────────────
-app.use((err, req, res, _next) => { // eslint-disable-line no-unused-vars
+app.use((err, req, res, next) => {
   console.error(`[Error] ${req.method} ${req.path} →`, err.message);
+  if (res.headersSent) return next(err);
   res.status(err.status || err.statusCode || 500).json({ message: err.message || 'Internal server error' });
 });
 
@@ -181,14 +192,16 @@ process.on('unhandledRejection', (reason) => console.error('[UnhandledRejection]
 process.on('uncaughtException',  (err)    => console.error('[UncaughtException]', err.message));
 
 // ── MongoDB ───────────────────────────────────────────────────────────────────
+const IS_VERCEL = !!process.env.VERCEL;
 const MONGO_OPTS = {
   serverSelectionTimeoutMS: 15_000,   // find a server (was 10s)
   connectTimeoutMS:         15_000,   // initial connect (was 10s)
   socketTimeoutMS:          120_000,  // per-op timeout — was 45s, need 120s for bulk insertMany
   heartbeatFrequencyMS:     10_000,
   family:                   4,        // IPv4 only — no IPv6 DNS hangs
-  maxPoolSize:              30,        // was 10 — pipeline + uploads run concurrently
-  minPoolSize:              3,         // keep 3 warm connections
+  maxPoolSize:              IS_VERCEL ? 10 : 30, // serverless lambdas must keep pools lean
+  minPoolSize:              IS_VERCEL ? 0 : 3,
+  maxIdleTimeMS:            30_000,
   waitQueueTimeoutMS:       30_000,   // max time to wait for a connection from the pool
 };
 

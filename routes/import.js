@@ -973,11 +973,12 @@ router.post('/manual-add', auth, async (req, res) => {
       }
       existing.seasonYears = seasonYearsFromDownloads;
       if (finalType === 'anime') existing.type = 'anime';
-        if (!existing.tmdbId && meta.tmdbId && Number(meta.confidence || 0) >= 65) existing.tmdbId = String(meta.tmdbId);
-        if (meta.tmdbId && Number(meta.confidence || 0) >= 65) {
-          const trustedFields = buildTrustedMetadataUpdate(existing, meta, rep.season || null);
-          for (const field of Object.keys(trustedFields)) existing.set(field, trustedFields[field]);
-        }
+      const { buildTrustedMetadataUpdate, recomputeAggregates } = require('../pipeline_full');
+      if (!existing.tmdbId && meta.tmdbId && Number(meta.confidence || 0) >= 65) existing.tmdbId = String(meta.tmdbId);
+      if (meta.tmdbId && Number(meta.confidence || 0) >= 65 && typeof buildTrustedMetadataUpdate === 'function') {
+        const trustedFields = buildTrustedMetadataUpdate(existing, meta, selectedSeason || null);
+        for (const field of Object.keys(trustedFields)) existing.set(field, trustedFields[field]);
+      }
       if (!existing.imdbId && meta.imdbId) existing.imdbId = meta.imdbId;
       if (!existing.originalLanguage && meta.originalLanguage) existing.originalLanguage = meta.originalLanguage;
       if (meta.releaseDate && meta.year && meta.tmdbId &&
@@ -994,7 +995,6 @@ router.post('/manual-add', auth, async (req, res) => {
         existing.genre = genre?.length ? genre : meta.genre;
       }
       if (!existing.releaseDate && meta.releaseDate) existing.releaseDate = meta.releaseDate;
-      const { recomputeAggregates } = require('../pipeline_full');
       recomputeAggregates(existing);
       await existing.save();
       return res.json({ message: 'Updated existing: ' + existing.title, movie: existing, added });

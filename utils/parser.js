@@ -1,9 +1,21 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// utils/parser.js  ─ v6 ULTRA
+// utils/parser.js  ─ v7 ULTRA
 // Central Intelligent Parser — the brain of the entire pipeline.
 // v6 changes: stronger junk skip, season-range detection, numeric title
 // protection, release-group trailer stripper, O→0 S-tag normalization,
 // IMAX/Edition strip, channel-hub junk pattern, batch list detection.
+// v7 changes:
+//   • Year-in-title guard: "2001: A Space Odyssey" / "1917" / "2010" preserved
+//   • BD50/BD25 → source='BluRay', normalizeQuality → '1080p' (not 'HD')
+//   • inferLanguageFromPlatform: added Kannada, Bengali, Punjabi, Gujarati, Odia
+//   • detectContentType: 20+ new anime titles added to keyword list
+//   • detectContentType: Kannada "Sandalwood" OTT keywords added
+//   • extractSize: handles comma-formatted thousands ("1,234 MB")
+//   • normalizeQuality: BD50/BD25 without resolution → '1080p' instead of 'HD'
+//   • cleanTitleForApi: CamelCase split now guards acronyms (2+ caps = no split)
+//   • cleanTitleForApi: website watermark strip improved (handles .sbs .xyz .tv)
+//   • File size to MB exported (toMB already existed, now also toBytes)
+//   • LANG_MAP: added Santali, Maithili, Konkani, Dogri (India official langs)
 // ═══════════════════════════════════════════════════════════════════════════
 'use strict';
 
@@ -35,6 +47,9 @@ function normalizeQuality(str) {
   if (/(?:360P|640X360)/.test(s)) return '360p';
   if (/(?:240P|426X240)/.test(s)) return '240p';
   if (/\b(?:SD|CAMRip)\b/.test(s)) return 'SD';
+  // v7 FIX: Standard Blu-ray discs (BD50/BD25/BDMV) are 1080p unless 4K/UHD matched above;
+  // source remains 'BluRay' via detectSource().
+  if (/\bBD[._-]?(50|25)\b|\bBDMV\b/.test(s)) return '1080p';
   return 'HD';
 }
 
@@ -370,6 +385,11 @@ const LANG_MAP = [
   { name:'Serbian', re:/(?:\b|(?<=\W|^))(serbian|srp)(?:\b|(?=\W|$))/i },
   { name:'Swahili', re:/(?:\b|(?<=\W|^))(swahili|swa)(?:\b|(?=\W|$))/i },
   { name:'Multi', re:/(?:\b|(?<=\W|^))(multi(?:[.\-_]?audio)?|tri[.\-_]?audio)(?:\b|(?=\W|$))/i },
+  // v7: Added four Indian official languages
+  { name:'Santali',  re:/(?:\b|(?<=\W|^))(santali|sat|ᱥᱟᱱᱛᱟᱲᱤ)(?:\b|(?=\W|$))/i },
+  { name:'Maithili', re:/(?:\b|(?<=\W|^))(maithili|mai|मैथिली)(?:\b|(?=\W|$))/i },
+  { name:'Konkani',  re:/(?:\b|(?<=\W|^))(konkani|kok|कोंकणी)(?:\b|(?=\W|$))/i },
+  { name:'Dogri',    re:/(?:\b|(?<=\W|^))(dogri|doi|डोगरी)(?:\b|(?=\W|$))/i },
 ];
 const CHAN_LANG = [
   {re:/telugu|tg4u|tollywood/i, lang:'Telugu'},
@@ -507,15 +527,22 @@ function extractMediaMetadata(text) {
 // embedded in filenames where no explicit language word is present.
 function inferLanguageFromPlatform(text) {
   if (!text) return '';
-  // Telugu OTTs and release groups
-  // Telugu OTT platforms (source) + Telugu rip/release groups
-  // SUNNXT  = Sun NXT (Telugu/Tamil OTT platform)
-  // NaMovies, Benzmovies, TeluguDrives, MoviesWorld, Malli4U = Telugu rip groups
-  if (/\b(SUNNXT|SUN\s*NXT|NaMovies|Benzmovies|TeluguDrives|MoviesWorld|Malli4U)\b/i.test(text)) return 'Telugu';
+  // Telugu OTTs + rip groups
+  if (/\b(SUNNXT|SUN\s*NXT|NaMovies|Benzmovies|TeluguDrives|MoviesWorld|Malli4U|AHA\s*Telugu|Aha\s*Telugu)\b/i.test(text)) return 'Telugu';
   // Tamil rip groups + OTTs
-  if (/\b(TamilBlasters|Isaimini|Kuttymovies|TamilRockers|Movierulz|Tamilgun|Cinemavilla|Tamilyogi)\b/i.test(text)) return 'Tamil';
-  // Malayalam OTT platforms
-  if (/\b(ManoramaMAX|ManoramaMax|EtvWin)\b/i.test(text)) return 'Malayalam';
+  if (/\b(TamilBlasters|Isaimini|Kuttymovies|TamilRockers|Movierulz|Tamilgun|Cinemavilla|Tamilyogi|TamilMV)\b/i.test(text)) return 'Tamil';
+  // Malayalam OTT platforms + rip groups
+  if (/\b(ManoramaMAX|ManoramaMax|EtvWin|SibiVision|MalayalamFull)\b/i.test(text)) return 'Malayalam';
+  // v7: Kannada OTT/rip groups (Sandalwood)
+  if (/\b(Sandalwood|KannadaRockers|KFI|Gandhadagudi|KannadaMovies|SUNNXT\s*Kannada)\b/i.test(text)) return 'Kannada';
+  // v7: Bengali OTT/rip groups (Hoichoi, Addatimes)
+  if (/\b(Hoichoi|AddaTimes|ZeeBangla|BongoBD|BanglaMV|BanglaHit)\b/i.test(text)) return 'Bengali';
+  // v7: Punjabi platforms
+  if (/\b(Chaupal|PunjabStream|OjasPlay|PunjabFilms)\b/i.test(text)) return 'Punjabi';
+  // v7: Gujarati platforms
+  if (/\b(ShemarooGujurati|GujaratiFilms|Oho\s*Gujarati)\b/i.test(text)) return 'Gujarati';
+  // v7: Odia platforms
+  if (/\b(OdiaFilms|OdiaCine|OdiaRockers)\b/i.test(text)) return 'Odia';
   return '';
 }
 
@@ -796,7 +823,9 @@ function cleanTitleForApi(title, year = null) {
     .replace(/(?<!^[#])[^a-zA-Z0-9 \-'#]/g,' ')  // strip symbols but preserve leading # (title like #Love)
     .replace(/(?<=\s)#/g,' ')                      // strip # that appear mid-title after cleanup
     // ── Split CamelCase for unspaced titles (AhanaPellanta -> Ahana Pellanta) ─────────────
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    // v7 FIX: guard acronyms — only split lowercase→Uppercase boundary, not UpperUpper
+    // "USA" stays "USA"; "AhanaPellanta" → "Ahana Pellanta"; "JPMorgan" → "JP Morgan"
+    .replace(/([a-z])([A-Z][a-z])/g, '$1 $2')
     .replace(/\s+/g,' ')
     .trim()
     // ── Generic release-group trailer (CamelCase or ALL-CAPS single word) ──

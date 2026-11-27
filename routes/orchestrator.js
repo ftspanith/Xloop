@@ -24,15 +24,25 @@ let logBuffer        = [];     // last 500 lines for replay
 let pipelineProgress = { offset: 0, total: 0, label: '' }; // live progress
 const MAX_LOG_HISTORY = 500;
 
+// Shared serverless-safe DB readiness helper: avoids redundant connect() calls when
+// connection is already connecting (readyState === 2).
+async function ensureDbConnected(timeoutMs = 5000) {
+  const mongoose = require('mongoose');
+  if (mongoose.connection.readyState === 1) return;
+  if (mongoose.connection.readyState === 2) {
+    await mongoose.connection.asPromise();
+    return;
+  }
+  await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: timeoutMs, family: 4 });
+}
+
 // ── Log persistence (MongoDB) — survives Vercel instance restarts ────────────
 let _logPersistTimer = null;
 async function persistLogs() {
   if (!logBuffer.length) return;
   try {
     const PipelineCache = require('../models/PipelineCache');
-    const mongoose = require('mongoose');
-    if (mongoose.connection.readyState !== 1)
-      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+    await ensureDbConnected(5000);
     await PipelineCache.findOneAndUpdate(
       { key: '_pipeline_logs' },
       { $set: { data: logBuffer.slice(-200), updatedAt: new Date() } },
@@ -80,9 +90,7 @@ router.get('/stream', auth, async (req, res) => {
     // Load persisted logs from MongoDB so the client sees the live history
     try {
       const PipelineCache = require('../models/PipelineCache');
-      const mongoose = require('mongoose');
-      if (mongoose.connection.readyState !== 1)
-        await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+      await ensureDbConnected(5000);
       const doc = await PipelineCache.findOne({ key: '_pipeline_logs' }).lean();
       if (doc?.data?.length) {
         replayLines = doc.data.slice(-150);
@@ -101,9 +109,7 @@ router.get('/stream', auth, async (req, res) => {
     // Also load pipeline status from MongoDB so phone knows if it's still running
     try {
       const PipelineCache = require('../models/PipelineCache');
-      const mongoose = require('mongoose');
-      if (mongoose.connection.readyState !== 1)
-        await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+      await ensureDbConnected(5000);
       const flag = await PipelineCache.findOne({ key: '_pipeline_running' }).lean();
       if (flag?.running) {
         res.write(`data: ${JSON.stringify({ text: '[INFO] Pipeline is currently running — logs will appear below.' })}\n\n`);
@@ -157,10 +163,7 @@ router.get('/status', async (req, res) => {
   if (pipelineRunning) return res.json({ running: true, ...pipelineProgress });
   try {
     const PipelineCache = require('../models/PipelineCache');
-    const mongoose = require('mongoose');
-    if (mongoose.connection.readyState !== 1) {
-      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
-    }
+    await ensureDbConnected(5000);
     const flag = await PipelineCache.findOne({ key: '_pipeline_running' }).lean();
     const isRunning = flag && flag.running === true &&
       (Date.now() - new Date(flag.updatedAt || 0).getTime() < 10 * 60 * 1000); // 10-min stale timeout
@@ -180,10 +183,7 @@ router.get('/status', async (req, res) => {
 async function setPipelineRunningFlag(running, progressData = null) {
   try {
     const PipelineCache = require('../models/PipelineCache');
-    const mongoose = require('mongoose');
-    if (mongoose.connection.readyState !== 1) {
-      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
-    }
+    await ensureDbConnected(5000);
     await PipelineCache.findOneAndUpdate(
       { key: '_pipeline_running' },
       { $set: { running, updatedAt: new Date() } },
@@ -208,10 +208,7 @@ router.get('/start', auth, async (req, res) => {  const scope = String(req.query
   // Check MongoDB flag first — catches stale flags from crashed/timed-out runs
   try {
     const PipelineCache = require('../models/PipelineCache');
-    const mongoose = require('mongoose');
-    if (mongoose.connection.readyState !== 1) {
-      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
-    }
+    await ensureDbConnected(5000);
     const flag = await PipelineCache.findOne({ key: '_pipeline_running' }).lean();
     const ageMs = Date.now() - new Date(flag?.updatedAt || 0).getTime();
     const STALE_MS = 10 * 60 * 1000;
@@ -337,10 +334,7 @@ router.post('/start', auth, async (req, res) => {  const body = req.body || {};
   // Check MongoDB flag first — catches stale flags from crashed/timed-out runs on ANY instance
   try {
     const PipelineCache = require('../models/PipelineCache');
-    const mongoose = require('mongoose');
-    if (mongoose.connection.readyState !== 1) {
-      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
-    }
+    await ensureDbConnected(5000);
     const flag = await PipelineCache.findOne({ key: '_pipeline_running' }).lean();
     const ageMs = Date.now() - new Date(flag?.updatedAt || 0).getTime();
     const STALE_MS = 10 * 60 * 1000; // 10 minutes — if older, treat as stale/crashed
@@ -420,9 +414,7 @@ router.post('/import-batch', auth, async (req, res) => {
   const { searchTMDB, searchOMDB, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates, searchGoogleImage } = require('../pipeline_full');
 
   try {
-    if (mongoose.connection.readyState !== 1) {
-      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
-    }
+    await ensureDbConnected(10000);
 
     const links = await ExtractedLinkM.find({}).lean();
     if (!links.length) {
@@ -761,9 +753,7 @@ router.post('/wipe', auth, async (req, res) => {
   const os       = require('os');
   const pathLib  = require('path');
 
-  if (mongoose.connection.readyState !== 1) {
-    await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
-  }
+  await ensureDbConnected(10000);
 
   try {
     // Wipe all collections in PARALLEL — much faster than sequential
@@ -816,9 +806,7 @@ router.post('/clear-logs', auth, async (req, res) => {
   // Also clear from MongoDB
   try {
     const PipelineCache = require('../models/PipelineCache');
-    const mongoose = require('mongoose');
-    if (mongoose.connection.readyState !== 1)
-      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+    await ensureDbConnected(5000);
     await PipelineCache.findOneAndUpdate(
       { key: '_pipeline_logs' },
       { $set: { data: [], updatedAt: new Date() } },
@@ -838,9 +826,7 @@ router.get('/logs', auth, async (req, res) => {
     }
     // Fallback: read from MongoDB (different Vercel instance / phone)
     const PipelineCache = require('../models/PipelineCache');
-    const mongoose = require('mongoose');
-    if (mongoose.connection.readyState !== 1)
-      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+    await ensureDbConnected(5000);
     const doc = await PipelineCache.findOne({ key: '_pipeline_logs' }).lean();
     res.json({ logs: (doc && doc.data) ? doc.data : [] });
   } catch (e) {
@@ -848,8 +834,6 @@ router.get('/logs', auth, async (req, res) => {
   }
 });
 
-
-module.exports = router;
 router.get('/start-local', auth, async (req, res) => {
   if (pipelineRunning) return res.status(400).json({ error: 'Pipeline is already running' });
 
@@ -900,3 +884,5 @@ router.get('/start-local', auth, async (req, res) => {
     }
   });
 });
+
+module.exports = router;

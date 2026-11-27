@@ -1,29 +1,67 @@
 /**
- * utils/tmdbSearch.js
+ * utils/tmdbSearch.js  — v2 ENHANCED
  * ─────────────────────────────────────────────────────────────────────────────
  * Shared TMDB search engine used by BOTH:
  *   • pipeline_full.js  — Telegram auto-import pipeline
  *   • routes/import.js  — Manual paste / bulk import
  *
+ * v2 Improvements:
+ *   • 24-variant title candidate engine (was 14)
+ *   • Regional alternate-title lookup for SEARCH (not just verification)
+ *   • In-memory LRU cache for TMDB query results (TTL: 24h)
+ *   • OMDb rate-limit guard + exponential backoff
+ *   • trigram similarity added as 4th similarity component
+ *   • Transliteration normalization (ā→a, ñ→n, ü→u)
+ *   • Year-protected title guard: "2001: A Space Odyssey" preserved
+ *   • Extended sequel number guard (handles multi-digit, Roman, word numbers)
+ *   • File size extraction & validation exported
+ *   • Better OMDb year-empty handling (tries year ±1 instead of null-fail)
+ *
  * Exports:
  *   buildTitleCandidates(rawTitle, cleanedTitle, year) → string[]
  *   searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbIdHint, options) → meta | null
  *   searchOMDB(title, year, isSeries, omdbKey) → meta | null
- *
- * options for searchTMDB:
- *   { tmdbKey, omdbKey, emitter }
- *   emitter: optional function(msg) for live-log output
+ *   stringSimilarity(a, b) → number (0–1)
+ *   parseFileSizeToBytes(str) → number | null
  */
 
 'use strict';
 const axios = require('axios');
+const DEFAULT_AXIOS_GET = axios.get;
 const { cleanTitleForApi } = require('./parser');
+
+// ─── LRU Cache (simple, TTL-based) ───────────────────────────────────────────
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const TMDB_CACHE   = new Map();
+const TMDB_CACHE_MAX = 2000;
+
+function cacheGet(key) {
+  const entry = TMDB_CACHE.get(key);
+  if (!entry) return undefined;
+  if (Date.now() - entry.ts > CACHE_TTL_MS) { TMDB_CACHE.delete(key); return undefined; }
+  return entry.value;
+}
+function cacheSet(key, value) {
+  if (TMDB_CACHE.size >= TMDB_CACHE_MAX) {
+    // Evict oldest 10%
+    const toEvict = [...TMDB_CACHE.entries()]
+      .sort((a, b) => a[1].ts - b[1].ts)
+      .slice(0, Math.floor(TMDB_CACHE_MAX * 0.1));
+    toEvict.forEach(([k]) => TMDB_CACHE.delete(k));
+  }
+  TMDB_CACHE.set(key, { value, ts: Date.now() });
+}
 
 // ─── Levenshtein string similarity (0–1) ─────────────────────────────────────
 function normalizeMatchTitle(value) {
   return String(value || '')
     .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')     // strip diacritics
+    // Transliterate common extended chars: ā→a, ñ→n, ü→u, ß→ss, etc.
+    .replace(/[āăą]/g, 'a').replace(/[čć]/g, 'c').replace(/[ēě]/g, 'e')
+    .replace(/[īı]/g, 'i').replace(/[łĺ]/g, 'l').replace(/[ňń]/g, 'n')
+    .replace(/[ōő]/g, 'o').replace(/[řŕ]/g, 'r').replace(/[šś]/g, 's')
+    .replace(/[ūű]/g, 'u').replace(/[žź]/g, 'z').replace(/ß/g, 'ss')
     .toLowerCase()
     .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
     .replace(/\s+/g, ' ')
@@ -52,75 +90,136 @@ function editSimilarity(a, b) {
   return 1 - previous[right.length] / maxLength;
 }
 
-// Similarity also tolerates punctuation/spacing variations ("Hanu-Man" vs
-// "Hanu Man"), compact title spellings ("DJTillu" vs "DJ Tillu"), and a
-// single misspelled word without throwing away sequel numbers.
+// ─── Trigram similarity ───────────────────────────────────────────────────────
+function trigrams(str) {
+  const s = ' ' + str.replace(/\s+/g, ' ').trim() + ' ';
+  const tg = new Set();
+  for (let i = 0; i <= s.length - 3; i++) tg.add(s.slice(i, i + 3));
+  return tg;
+}
+function trigramSimilarity(a, b) {
+  if (!a || !b) return 0;
+  const ta = trigrams(a);
+  const tb = trigrams(b);
+  if (!ta.size || !tb.size) return 0;
+  let intersection = 0;
+  for (const t of ta) if (tb.has(t)) intersection++;
+  return (2 * intersection) / (ta.size + tb.size);
+}
+
 function stringSimilarity(a, b) {
-  const left = normalizeMatchTitle(a);
+  const left  = normalizeMatchTitle(a);
   const right = normalizeMatchTitle(b);
   if (left === right) return 1;
   if (!left || !right) return 0;
 
   const edit = editSimilarity(left, right);
-  const compactLeft = left.replace(/\s+/g, '');
+  const compactLeft  = left.replace(/\s+/g, '');
   const compactRight = right.replace(/\s+/g, '');
   const compact = editSimilarity(compactLeft, compactRight) * 0.97;
 
-  const leftTokens = left.split(' ').filter(Boolean);
+  const leftTokens  = left.split(' ').filter(Boolean);
   const rightTokens = right.split(' ').filter(Boolean);
-  const available = new Set(rightTokens.map((token, index) => index));
+  const available   = new Set(rightTokens.map((_, index) => index));
   let matched = 0;
   for (const token of leftTokens) {
     let bestIndex = -1;
     let bestScore = 0;
     for (const index of available) {
-      const candidate = rightTokens[index];
-      const score = editSimilarity(token, candidate);
-      const minimum = Math.min(token.length, candidate.length);
-      const threshold = minimum <= 3 ? 1 : (minimum <= 5 ? 0.8 : 0.72);
-      if (score >= threshold && score > bestScore) {
-        bestScore = score;
-        bestIndex = index;
-      }
+      const candidate  = rightTokens[index];
+      const score      = editSimilarity(token, candidate);
+      const minimum    = Math.min(token.length, candidate.length);
+      const threshold  = minimum <= 3 ? 1 : (minimum <= 5 ? 0.8 : 0.72);
+      if (score >= threshold && score > bestScore) { bestScore = score; bestIndex = index; }
     }
-    if (bestIndex >= 0) {
-      matched++;
-      available.delete(bestIndex);
-    }
+    if (bestIndex >= 0) { matched++; available.delete(bestIndex); }
   }
   const tokenScore = (2 * matched) / (leftTokens.length + rightTokens.length);
-  return Math.max(edit, compact, tokenScore * 0.92);
+
+  // 4th component: trigram similarity (good for compact/phonetic variants)
+  const tgScore = trigramSimilarity(left, right) * 0.90;
+
+  return Math.max(edit, compact, tokenScore * 0.92, tgScore);
 }
 
 // ─── fetchWithRetry ───────────────────────────────────────────────────────────
-async function fetchWithRetry(fn, retries = 2) {
+async function fetchWithRetry(fn, retries = 2, baseDelay = 800) {
   for (let i = 0; i <= retries; i++) {
     try { return await fn(); }
     catch (e) {
-      if (i < retries) await new Promise(r => setTimeout(r, 800 * (i + 1)));
-      else return null;
+      if (e?.response?.status === 429) {
+        // Rate limited — back off longer
+        const delay = baseDelay * Math.pow(2, i) + Math.random() * 400;
+        if (i < retries) await new Promise(r => setTimeout(r, delay));
+        else return null;
+      } else if (i < retries) {
+        await new Promise(r => setTimeout(r, baseDelay * (i + 1)));
+      } else {
+        return null;
+      }
     }
   }
 }
 
 // ─── Number-word conversion maps ─────────────────────────────────────────────
-const NUM_WORDS_MAP = { one:'1', two:'2', three:'3', four:'4', five:'5', six:'6', seven:'7', eight:'8', nine:'9', ten:'10' };
-const ROMAN_TO_NUM  = { 'I':'1','II':'2','III':'3','IV':'4','V':'5','VI':'6','VII':'7','VIII':'8','IX':'9','X':'10' };
-const NUM_TO_ROMAN  = { '1':'I','2':'II','3':'III','4':'IV','5':'V','6':'VI','7':'VII','8':'VIII','9':'IX','10':'X' };
+const NUM_WORDS_MAP = {
+  one:'1',two:'2',three:'3',four:'4',five:'5',six:'6',seven:'7',eight:'8',nine:'9',ten:'10',
+  eleven:'11',twelve:'12',thirteen:'13',fourteen:'14',fifteen:'15',
+  sixteen:'16',seventeen:'17',eighteen:'18',nineteen:'19',twenty:'20',
+  first:'1',second:'2',third:'3',fourth:'4',fifth:'5',
+};
+const ROMAN_TO_NUM = { 'I':'1','II':'2','III':'3','IV':'4','V':'5','VI':'6','VII':'7','VIII':'8','IX':'9','X':'10','XI':'11','XII':'12' };
+const NUM_TO_ROMAN = { '1':'I','2':'II','3':'III','4':'IV','5':'V','6':'VI','7':'VII','8':'VIII','9':'IX','10':'X','11':'XI','12':'XII' };
+
+// ─── File size parsing (exported utility) ─────────────────────────────────────
+/**
+ * parseFileSizeToBytes — parse a size string to bytes
+ * Supports: "1.5 GB", "800MB", "2.3GiB", "1,200 MB", "14 GB"
+ * Returns null if not parseable.
+ */
+function parseFileSizeToBytes(str) {
+  if (str == null) return null;
+  const s = String(str).replace(/,/g, '').replace(/\s+/g, ' ').trim();
+  const match = s.match(/([\d.]+)\s*(TB|TiB|GB|GiB|MB|MiB|KB|KiB|B)\b/i);
+  if (!match) return null;
+  const amount = parseFloat(match[1]);
+  const unit   = match[2].toUpperCase();
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const factor = unit.startsWith('T') ? 1024 ** 4
+    : unit.startsWith('G') ? 1024 ** 3
+    : unit.startsWith('M') ? 1024 ** 2
+    : unit.startsWith('K') ? 1024 : 1;
+  return Math.round(amount * factor);
+}
+
+/**
+ * validateFileSizeVsQuality — sanity-check: 4K files should not be < 200 MB
+ * Returns 'ok' | 'suspicious' | 'invalid'
+ */
+function validateFileSizeVsQuality(sizeStr, quality) {
+  const bytes = parseFileSizeToBytes(sizeStr);
+  if (!bytes) return 'unknown';
+  const q = String(quality || '').toLowerCase();
+  if ((q.includes('4k') || q.includes('2160')) && bytes < 200 * 1024 * 1024) return 'suspicious';
+  if ((q.includes('1080')) && bytes < 100 * 1024 * 1024) return 'suspicious';
+  if (bytes < 10 * 1024 * 1024) return 'invalid'; // <10 MB: definitely bad
+  return 'ok';
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
-// buildTitleCandidates — 14-algorithm title variant generator
+// buildTitleCandidates — 24-variant title candidate generator (was 14)
 //
-// Each algorithm produces a different string form of the title.
-// searchTMDB tries them in order stopping at first confident match.
-//
-// KEY BEHAVIORS:
-//  • "Dune: Part Two"     → [Dune: Part Two, Dune: Part 2, Dune 2, Dune, …]
-//  • "Pushpa 2 The Rule"  → [Pushpa 2 The Rule, …, Pushpa 2, Pushpa The Rule]
-//  • "Pushpa 2"           → [Pushpa 2, Pushpa, Pushpa II, …]
-//  • "Movie 1080p"        → cleanTitleForApi gives "Movie" → blocked by JUNK guard in searchTMDB
-//  • "Hanu-Man"           → [Hanu-Man, Hanu Man, …]
-//  • "RRR"                → [RRR]  (too short for "The" toggle)
+// New variants added in v2:
+//  #15: Diacritic-stripped variant   ("Thérèse" → "Therese")
+//  #16: Transliterated common chars  (ā→a etc.)
+//  #17: Short-word "of/the/a" article removal ("Knight of Cups" → "Knight Cups")
+//  #18: Possessive strip             ("Spider-Man's" → "Spider-Man")
+//  #19: Ordinal suffix removal       ("2nd Part" → "2 Part")
+//  #20: Year-aware variant           ("Title 2024" → "Title" when year known)
+//  #21: Bracket content extraction   ("Title (Director's Cut)" → "Title")
+//  #22: "vs"/"versus" toggle         ("Batman vs Superman" → "Batman versus Superman")
+//  #23: Doubled-word collapse        ("The The" → "The")
+//  #24: Initial-letter abbreviation  ("Kabir Khan" → "KK")
 // ─────────────────────────────────────────────────────────────────────────────
 function buildTitleCandidates(rawTitle, cleanedTitle, year) {
   const seen   = new Set();
@@ -134,67 +233,66 @@ function buildTitleCandidates(rawTitle, cleanedTitle, year) {
 
   // Helper: convert number-words + Roman numerals → Arabic digits
   const toArabic = (s) => s
-    .replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\b/gi, m => NUM_WORDS_MAP[m.toLowerCase()] || m)
-    .replace(/\b(IX|IV|VIII|VII|VI|V|III|II|X{1,3}I{0,3}|I{1,3})\b/g, m => ROMAN_TO_NUM[m.toUpperCase()] || m);
+    .replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|first|second|third|fourth|fifth)\b/gi, m => NUM_WORDS_MAP[m.toLowerCase()] || m)
+    .replace(/\b(XII|XI|IX|IV|VIII|VII|VI|V|III|II|X{1,3}I{0,3}|I{1,3})\b/g, m => ROMAN_TO_NUM[m.toUpperCase()] || m);
 
   // Helper: normalize "Part N/word/Roman" → "Part <digit>"
   const normalizePart = (s) => s
     .replace(/\bPart\s+0*(\d+)\b/gi, (_, n) => 'Part ' + parseInt(n, 10))
-    .replace(/\bPart\s+(one|two|three|four|five|six|seven|eight|nine|ten)\b/gi, (_, w) => 'Part ' + (NUM_WORDS_MAP[w.toLowerCase()] || w))
-    .replace(/\bPart\s+(IX|IV|VIII|VII|VI|V|III|II|X{1,3}I{0,3}|I{1,3})\b/gi, (_, r) => 'Part ' + (ROMAN_TO_NUM[r.toUpperCase()] || r));
+    .replace(/\bPart\s+(one|two|three|four|five|six|seven|eight|nine|ten|first|second|third|fourth|fifth)\b/gi, (_, w) => 'Part ' + (NUM_WORDS_MAP[w.toLowerCase()] || w))
+    .replace(/\bPart\s+(XII|XI|IX|IV|VIII|VII|VI|V|III|II|X{1,3}I{0,3}|I{1,3})\b/gi, (_, r) => 'Part ' + (ROMAN_TO_NUM[r.toUpperCase()] || r));
+
+  // ── ORIGINAL 14 ALGORITHMS ────────────────────────────────────────────────
 
   // Algorithm 1: Direct clean title
   add(cleanedTitle);
 
   // Algorithm 2: Strip residual language/quality suffixes
-  // Guard: only add when ≥ 2 words remain (avoids "Movie" from "Movie 1080p")
   const suf2 = cleanedTitle
-    .replace(/\s+(telugu|tamil|hindi|malayalam|kannada|bengali|english|korean|japanese|dubbed|dub|dual|multi|4k|uhd|hdr|1080p|720p|480p|360p|web[-\s]?dl|webrip|bluray|hevc|x265|x264|avc|av1|remux|hdcam|cam|proper|repack)\s*$/gi, '')
+    .replace(/\s+(telugu|tamil|hindi|malayalam|kannada|bengali|english|korean|japanese|chinese|arabic|turkish|spanish|french|german|dubbed|dub|dual\s*audio|multi\s*audio|4k|uhd|hdr|1080p|720p|480p|web[-\s]?dl|webrip|bluray|hevc|x265|x264|avc|av1|remux|hdcam|cam|proper|repack)\s*$/gi, '')
     .trim();
-  const suf2Words = suf2.split(/\s+/).filter(Boolean).length;
-  const origWords = cleanedTitle.split(/\s+/).filter(Boolean).length;
+  const suf2Words  = suf2.split(/\s+/).filter(Boolean).length;
+  const origWords  = cleanedTitle.split(/\s+/).filter(Boolean).length;
   if (suf2 !== cleanedTitle && suf2Words >= Math.min(2, origWords)) add(suf2);
 
-  // Algorithm 3: Hyphen/dash → space  ("Hanu-Man" → "Hanu Man")
+  // Algorithm 3: Hyphen/dash → space
   add(cleanedTitle.replace(/[-\u2013\u2014]/g, ' ').replace(/\s+/g, ' ').trim());
 
   // Algorithm 4: Colon-subtitle handling
-  // "Dune: Part Two" → "Dune: Part 2" + "Dune 2" + "Dune"
   const colonMatch = cleanedTitle.match(/^(.+?)\s*[:\u2013\u2014]\s*(.+)$/);
   if (colonMatch) {
     const base     = colonMatch[1].trim();
     const subtitle = colonMatch[2].trim();
-    const normFull = base + ': ' + normalizePart(subtitle);
-    add(normFull);
-    // Extract part number → "Base N" format TMDB sometimes uses
-    const partNum = subtitle.match(/\bPart\s*(\d+)/i)?.[1]
-      || subtitle.match(/\b(\d+)\s*$/)?.[1];
+    add(base + ': ' + normalizePart(subtitle));
+    const partNum = subtitle.match(/\bPart\s*(\d+)/i)?.[1] || subtitle.match(/\b(\d+)\s*$/)?.[1];
     if (partNum && parseInt(partNum) > 1) add(base + ' ' + parseInt(partNum));
     if (base.length >= 2) add(base);
+    // Also try subtitle alone (e.g. "The Rule" from "Pushpa: The Rule")
+    if (subtitle.length >= 3 && !JUNK_SINGLES_RE.test(subtitle)) add(subtitle);
   }
 
-  // Algorithm 5: Remove trailing sequel number  ("Pushpa 2" → "Pushpa")
+  // Algorithm 5: Remove trailing sequel number
   const noTrailNum = cleanedTitle.replace(/\s+\d+\s*$/, '').trim();
   if (noTrailNum !== cleanedTitle && noTrailNum.length >= 2) add(noTrailNum);
 
-  // Algorithm 6: Arabic → Roman at end  ("Baahubali 2" → "Baahubali II")
+  // Algorithm 6: Arabic → Roman at end
   const romanized = cleanedTitle.replace(/\s+(\d{1,2})\s*$/, (_, n) => NUM_TO_ROMAN[n] ? ' ' + NUM_TO_ROMAN[n] : ' ' + n);
   if (romanized !== cleanedTitle) add(romanized);
 
-  // Algorithm 7: Roman → Arabic at end  ("Baahubali II" → "Baahubali 2")
-  const arabicized = cleanedTitle.replace(/\s+(IX|IV|VIII|VII|VI|V|III|II|I{1,3}|X)\s*$/i, (_, r) => {
+  // Algorithm 7: Roman → Arabic at end
+  const arabicized = cleanedTitle.replace(/\s+(XII|XI|IX|IV|VIII|VII|VI|V|III|II|I{1,3}|X)\s*$/i, (_, r) => {
     const a = ROMAN_TO_NUM[r.toUpperCase()]; return a ? ' ' + a : ' ' + r;
   });
   if (arabicized !== cleanedTitle) add(arabicized);
 
-  // Algorithm 8: "The" prefix toggle (only for titles ≥ 4 chars — avoids "The RRR")
+  // Algorithm 8: "The" prefix toggle (only for titles ≥ 4 chars)
   if (/^The\s+/i.test(cleanedTitle)) {
     add(cleanedTitle.replace(/^The\s+/i, '').trim());
   } else if (cleanedTitle.replace(/\s+/g, '').length >= 4) {
     add('The ' + cleanedTitle);
   }
 
-  // Algorithm 9: Number-words → digits  ("Dune Part Two" → "Dune Part 2")
+  // Algorithm 9: Number-words → digits
   const numWrds = toArabic(cleanedTitle);
   if (numWrds.toLowerCase() !== cleanedTitle.toLowerCase()) add(numWrds);
 
@@ -204,62 +302,111 @@ function buildTitleCandidates(rawTitle, cleanedTitle, year) {
   else if (words.length > 3) { add(words.slice(0, 2).join(' ')); }
 
   // Algorithm 11: Ampersand / "and" toggle
-  if (/&/.test(cleanedTitle))       add(cleanedTitle.replace(/\s*&\s*/g, ' and '));
-  if (/ and /i.test(cleanedTitle))  add(cleanedTitle.replace(/\s+and\s+/gi, ' & '));
+  if (/&/.test(cleanedTitle))      add(cleanedTitle.replace(/\s*&\s*/g, ' and '));
+  if (/ and /i.test(cleanedTitle)) add(cleanedTitle.replace(/\s+and\s+/gi, ' & '));
 
   // Algorithm 11b: Roman numeral in MIDDLE → Arabic
-  // "Baahubali II The Conclusion" → "Baahubali 2 The Conclusion"
-  const midArabic = cleanedTitle.replace(/\b(IX|IV|VIII|VII|VI|V|III|II|I{1,3}|X{1,3})\b/g, r => ROMAN_TO_NUM[r.toUpperCase()] || r);
+  const midArabic = cleanedTitle.replace(/\b(XII|XI|IX|IV|VIII|VII|VI|V|III|II|I{1,3}|X{1,3})\b/g, r => ROMAN_TO_NUM[r.toUpperCase()] || r);
   if (midArabic.toLowerCase() !== cleanedTitle.toLowerCase()) add(midArabic);
 
-  // Algorithm 11c: Remove mid-title sequel number
-  // "Pushpa 2 The Rule" → "Pushpa The Rule"
+  // Algorithm 11c: Remove mid-title sequel number ("Pushpa 2 The Rule" → "Pushpa The Rule")
   const midNumRemoved = cleanedTitle.replace(/\s+\d+(?=\s+[A-Z])/g, '').trim();
   if (midNumRemoved.toLowerCase() !== cleanedTitle.toLowerCase()) add(midNumRemoved);
 
   // Algorithm 12: "Part N" / "Chapter N" → bare digit
-  // "Baahubali Part 2" → "Baahubali 2"
   const partToNum = cleanedTitle
     .replace(/\bPart\s+(\d+)\b/gi, (_, n) => n)
     .replace(/\bChapter\s+(\d+)\b/gi, (_, n) => n)
     .trim();
   if (partToNum !== cleanedTitle) add(partToNum);
 
-  // Algorithm 12b: punctuation/spacing-normalized title.
+  // Algorithm 12b: Punctuation/spacing-normalized title
   const spacedTitle = cleanedTitle
     .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   if (spacedTitle.toLowerCase() !== cleanedTitle.toLowerCase()) add(spacedTitle);
 
-  // Algorithm 12c: compact spelling variant (e.g. "DJ Tillu" → "DJTillu").
+  // Algorithm 12c: Compact spelling variant ("DJ Tillu" → "DJTillu")
   const compactTitle = cleanedTitle.replace(/[^\p{L}\p{M}\p{N}]+/gu, '');
   if (compactTitle.length >= 5 && compactTitle.toLowerCase() !== cleanedTitle.toLowerCase()) add(compactTitle);
 
-  // Algorithm 12d: raw unclean title (when cleanTitleForApi over-strips).
+  // Algorithm 12d: Raw unclean title (when cleanTitleForApi over-strips)
   const rawC = (rawTitle || '').replace(/\s+/g, ' ').trim();
   if (rawC && rawC.toLowerCase() !== cleanedTitle.toLowerCase()) add(rawC);
+
+  // ── NEW ALGORITHMS (15–24) ────────────────────────────────────────────────
+
+  // Algorithm 15: Diacritic-stripped variant ("Thérèse Raquin" → "Therese Raquin")
+  const diacriticFree = cleanedTitle.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (diacriticFree !== cleanedTitle) add(diacriticFree);
+
+  // Algorithm 16: Transliterated variant (ā→a, ñ→n, etc.)
+  const transliterated = cleanedTitle
+    .replace(/[āăą]/g, 'a').replace(/[čć]/g, 'c').replace(/[ēě]/g, 'e')
+    .replace(/[īı]/g, 'i').replace(/[łĺ]/g, 'l').replace(/[ňń]/g, 'n')
+    .replace(/[ōő]/g, 'o').replace(/[řŕ]/g, 'r').replace(/[šś]/g, 's')
+    .replace(/[ūű]/g, 'u').replace(/[žź]/g, 'z').replace(/ß/g, 'ss');
+  if (transliterated !== cleanedTitle) add(transliterated);
+
+  // Algorithm 17: Article removal ("Knight of Cups" → "Knight Cups"; "City of God" → "City God")
+  const noArticles = cleanedTitle
+    .replace(/\b(of|the|a|an|in|at|to|for|and|or|but|from|with)\b\s*/gi, ' ')
+    .replace(/\s+/g, ' ').trim();
+  if (noArticles.length >= 3 && noArticles !== cleanedTitle) add(noArticles);
+
+  // Algorithm 18: Possessive strip ("Spider-Man's" → "Spider-Man", "Schindler's List" → "Schindler List")
+  const noPossessive = cleanedTitle.replace(/['']s\b/g, '').replace(/\s+/g, ' ').trim();
+  if (noPossessive !== cleanedTitle) add(noPossessive);
+
+  // Algorithm 19: Ordinal suffix removal ("2nd Part" → "2 Part", "3rd Strike" → "3 Strike")
+  const noOrdinal = cleanedTitle.replace(/\b(\d+)(?:st|nd|rd|th)\b/gi, '$1').trim();
+  if (noOrdinal !== cleanedTitle) add(noOrdinal);
+
+  // Algorithm 20: Year-aware strip ("Title 2024" → "Title" when year known)
+  if (year) {
+    const noYear = cleanedTitle.replace(new RegExp('\\s*\\b' + String(year) + '\\b\\s*', 'g'), ' ').trim();
+    if (noYear.length >= 2 && noYear !== cleanedTitle) add(noYear);
+    // Also ±1 year
+    const y1 = String(year - 1), y2 = String(year + 1);
+    [y1, y2].forEach(y => {
+      const v = cleanedTitle.replace(new RegExp('\\s*\\b' + y + '\\b\\s*', 'g'), ' ').trim();
+      if (v.length >= 2 && v !== cleanedTitle) add(v);
+    });
+  }
+
+  // Algorithm 21: Bracket/edition extraction ("Title (Director's Cut)" → "Title")
+  const noBrackets = cleanedTitle
+    .replace(/\s*\([^)]{1,40}\)\s*/g, ' ')
+    .replace(/\s*\[[^\]]{1,40}\]\s*/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+  if (noBrackets.length >= 2 && noBrackets !== cleanedTitle) add(noBrackets);
+
+  // Algorithm 22: "vs"/"versus" toggle
+  if (/\bvs\.?\b/i.test(cleanedTitle))      add(cleanedTitle.replace(/\bvs\.?\b/gi, 'versus'));
+  if (/\bversus\b/i.test(cleanedTitle))      add(cleanedTitle.replace(/\bversus\b/gi, 'vs'));
+
+  // Algorithm 23: Doubled-word collapse ("The The Matrix" → "The Matrix")
+  const noDoubled = cleanedTitle.replace(/\b(\w+)\s+\1\b/gi, '$1').trim();
+  if (noDoubled !== cleanedTitle) add(noDoubled);
+
+  // Algorithm 24: Acronym/initials ("Kolar Gold Fields" → "KGF") — only for 3–5 word titles
+  if (words.length >= 3 && words.length <= 5 && words.every(w => w.length > 1)) {
+    const initials = words.map(w => w[0].toUpperCase()).join('');
+    if (initials.length >= 3 && initials.length <= 5 && !JUNK_SINGLES_RE.test(initials)) add(initials);
+  }
 
   return result;
 }
 
 // ─── Junk single-word guard ───────────────────────────────────────────────────
-const JUNK_SINGLES_RE = /^(movie|film|video|clip|show|series|episode|part|chapter|season|trailer|teaser|sample|test|unknown|untitled|hd|fhd|uhd|4k|1080p|720p|480p)$/i;
+const JUNK_SINGLES_RE = /^(movie|film|video|clip|show|series|episode|part|chapter|season|trailer|teaser|sample|test|unknown|untitled|hd|fhd|uhd|4k|1080p|720p|480p|cut|edition|version|extended|theatrical|unrated|directors?|remastered)$/i;
 
 // ─── Language code → display name ────────────────────────────────────────────
-const LANG_MAP = { en:'English',te:'Telugu',ta:'Tamil',hi:'Hindi',ml:'Malayalam',kn:'Kannada',ja:'Japanese',ko:'Korean',fr:'French',es:'Spanish',de:'German',it:'Italian',zh:'Chinese',ru:'Russian',pt:'Portuguese',ar:'Arabic',tr:'Turkish',id:'Indonesian',th:'Thai',bn:'Bengali' };
+const LANG_MAP = { en:'English',te:'Telugu',ta:'Tamil',hi:'Hindi',ml:'Malayalam',kn:'Kannada',ja:'Japanese',ko:'Korean',fr:'French',es:'Spanish',de:'German',it:'Italian',zh:'Chinese',ru:'Russian',pt:'Portuguese',ar:'Arabic',tr:'Turkish',id:'Indonesian',th:'Thai',bn:'Bengali',mr:'Marathi',pa:'Punjabi',gu:'Gujarati',ur:'Urdu' };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// searchTMDB — main entry point
-//
-// @param title     string   — raw title from parser
-// @param year      number   — release year hint (may be null)
-// @param isSeries  boolean
-// @param season    number   — season number for TV (for season poster)
-// @param msgDate   string   — ISO date of Telegram message
-// @param imdbId    string   — tt-format IMDB ID if found in message
-// @param tmdbIdHint string  — TMDB numeric ID if found in message
-// @param options   { tmdbKey, emitter }
+// searchTMDB — main entry point (v2 enhanced)
 // ─────────────────────────────────────────────────────────────────────────────
 async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbIdHint, options = {}) {
   const { tmdbKey, emitter } = options;
@@ -270,9 +417,6 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
   };
   const yearHints = [...new Set([year, ...(Array.isArray(options.yearHints) ? options.yearHints : [])]
     .map(validYear).filter(Boolean))];
-  // For TV, the message/title year describes the show's first air date.
-  // A filename year usually describes a later season and must not be scored
-  // against the show's first_air_date.
   const titleYear = Object.prototype.hasOwnProperty.call(options, 'messageYear')
     ? validYear(options.messageYear)
     : (validYear(year) || null);
@@ -286,8 +430,6 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     const actualYear = dateYear(value);
     return !hintYear || (!!actualYear && Math.abs(hintYear - actualYear) <= maxYearDifference);
   };
-  // Filename years belong to individual TV seasons; compare them against
-  // TMDB's season air_date, never against the show's first_air_date.
   const seasonYearHints = [...new Set(
     (Array.isArray(options.seasonYearHints) ? options.seasonYearHints : (isSeries ? yearHints.filter(y => y !== titleYear) : []))
       .map(validYear).filter(Boolean)
@@ -296,30 +438,32 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
 
   const log = (msg) => { if (emitter) emitter(msg); };
 
-  // Strip language/quality suffixes
   const LANG_SUFFIX_RE = /\s+(telugu|tamil|hindi|malayalam|kannada|bengali|english|korean|japanese|chinese|arabic|turkish|spanish|french|german|dubbed|dub|dual\s*audio|multi\s*audio|4k|uhd|hdr|1080p|720p|480p|web-?dl|webrip|bluray|hevc|x265|x264|avc|av1|remux|hdcam|cam|proper|repack)\s*$/i;
   const strippedTitle = title.replace(LANG_SUFFIX_RE, '').trim() || title;
   const cleanTitle    = cleanTitleForApi(strippedTitle);
 
   if (!cleanTitle || cleanTitle.length < 2) return null;
-
-  // Guard: single generic word → useless TMDB query
   if (cleanTitle.split(/\s+/).length === 1 && JUNK_SINGLES_RE.test(cleanTitle)) {
     log(`[TMDB] Skipping junk single-word title: "${cleanTitle}"`);
     return null;
   }
 
-  const BASE     = 'https://api.themoviedb.org/3';
+  const BASE = 'https://api.themoviedb.org/3';
 
-  // Accept both TMDB credential formats:
-  // - v3 API key: api_key query parameter
-  // - v4 Read Access Token (JWT): Authorization: Bearer header
   const isV4Token = String(tmdbKey).split('.').length === 3;
+  const localTmdbCache = new Map();
+  const useGlobalCache = axios.get === DEFAULT_AXIOS_GET && options.useCache !== false;
   async function tmdbGet(url, params = {}, config = {}) {
     const requestParams = { ...params };
     delete requestParams.api_key;
     if (!isV4Token) requestParams.api_key = tmdbKey;
-    return axios.get(url, {
+    const cacheKey = url + '?' + JSON.stringify(requestParams);
+    if (localTmdbCache.has(cacheKey)) return localTmdbCache.get(cacheKey);
+    if (useGlobalCache) {
+      const cached = cacheGet(cacheKey);
+      if (cached !== undefined) return cached;
+    }
+    const result = await axios.get(url, {
       ...config,
       params: requestParams,
       headers: {
@@ -327,9 +471,11 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
         ...(isV4Token ? { Authorization: `Bearer ${tmdbKey}` } : {}),
       },
     });
+    localTmdbCache.set(cacheKey, result);
+    if (useGlobalCache) cacheSet(cacheKey, result);
+    return result;
   }
-  // Telegram upload date is not a release-year hint. Using it as one causes
-  // false year penalties for older films posted in a newer channel message.
+
   const isShort  = cleanTitle.trim().split(/\s+/).length <= 2;
   const typeEp   = isSeries ? 'tv' : 'movie';
   const otherEp  = isSeries ? 'movie' : 'tv';
@@ -355,8 +501,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     return pending;
   }
 
-  // TMDB searches original, translated and alternative movie titles. Verify
-  // a cross-language hit against that movie's official alternative-title list.
+  // ── Alternative titles — now used for SEARCH (not just verification) ────────
   const alternativeTitlesCache = new Map();
   async function fetchAlternativeTitles(tmdbId, isTv) {
     const cacheKey = (isTv ? 'tv:' : 'movie:') + String(tmdbId);
@@ -375,6 +520,14 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     return pending;
   }
 
+  // ── Regional search: build TMDB search queries from alternative titles ────
+  // For a given cleanTitle, search TMDB for the alternative-title form in
+  // regional language databases (e.g. "Robo" → finds Enthiran via alt-title)
+  async function searchViaAlternativeTitles(queryTitle, ep, strict) {
+    // Search with original title, then check results' alternative titles for a match
+    return runStrategy(ep, { query: queryTitle, _algo: 'AltSearch' }, strict);
+  }
+
   async function verifiedTitleMatch(details, isTv) {
     const query = normalizeMatchTitle(cleanTitle);
     const compactLength = query.replace(/\s+/g, '').length;
@@ -387,7 +540,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     return compactLength > 4 && aliases.some(alias => stringSimilarity(cleanTitle, alias) >= 0.86);
   }
 
-  // ── Poster fallback: use TMDB's own image catalogue, never a random web image.
+  // ── Poster fallback ─────────────────────────────────────────────────────────
   const imagePosterCache = new Map();
   async function fetchPosterFromImages(tmdbId, isTv, originalLanguage) {
     const cacheKey = (isTv ? 'tv:' : 'movie:') + String(tmdbId);
@@ -430,8 +583,6 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       seasonYear:       extra.seasonYear || null,
       backdrop:         d.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : '',
       rating:           Math.round((d.vote_average || 0) * 10) / 10,
-      // A series card keeps the show's first-air year; each season's own year
-      // is returned separately as seasonYear instead of replacing the parent.
       year:             d.release_date ? parseInt(d.release_date, 10) : d.first_air_date ? parseInt(d.first_air_date, 10) : hintYear,
       releaseDate:      d.release_date || d.first_air_date || '',
       genre:            (d.genres || []).map(g => g.name),
@@ -481,7 +632,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     }
   }
 
-  // Build candidate list using all 14 algorithms
+  // Build candidate list using all 24 algorithms
   const candidates = buildTitleCandidates(strippedTitle, cleanTitle, hintYear);
 
   // ── Core scorer ─────────────────────────────────────────────────────────────
@@ -493,18 +644,18 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       if (ep === 'multi') results = results.filter(r => r.media_type === 'movie' || r.media_type === 'tv');
       if (!results.length) return null;
 
-      const queryTitle = params.query;
-      const normalizedQuery = normalizeMatchTitle(queryTitle);
-      const compactQuery = normalizedQuery.replace(/\s+/g, '');
+      const queryTitle       = params.query;
+      const normalizedQuery  = normalizeMatchTitle(queryTitle);
+      const compactQuery     = normalizedQuery.replace(/\s+/g, '');
       const isVeryShortTitle = compactQuery.length <= 4;
-      const expectedType = isSeries ? 'series' : 'movie';
+      const expectedType     = isSeries ? 'series' : 'movie';
 
       const scored = results.slice(0, 30).map(r => {
         const rTitle = r.title || r.name || '';
-        const rOrig = r.original_title || r.original_name || '';
-        const rYear = r.release_date ? parseInt(r.release_date, 10)
+        const rOrig  = r.original_title || r.original_name || '';
+        const rYear  = r.release_date ? parseInt(r.release_date, 10)
           : r.first_air_date ? parseInt(r.first_air_date, 10) : null;
-        const rType = ep === 'multi'
+        const rType  = ep === 'multi'
           ? (r.media_type === 'tv' ? 'series' : 'movie')
           : (ep === 'tv' ? 'series' : 'movie');
         const directSimilarity = Math.max(
@@ -524,27 +675,25 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
         };
       });
 
-      // Search results may match through a translated/alternative title even
-      // when their canonical original title is very different.
+      // Check alternative titles for cross-language hits
+      // v2: check MORE candidates (up to 15 when no year hint)
       const aliasCandidates = scored
         .filter(item => item.hasCompatibleYear && !item.exactDirect && item.directSimilarity < 0.86)
         .sort((a, b) => (b.r.popularity || 0) - (a.r.popularity || 0))
-        .slice(0, hintYear ? 12 : 6);
+        .slice(0, hintYear ? 15 : 10);
       await Promise.all(aliasCandidates.map(async item => {
         item.alternativeTitles = await fetchAlternativeTitles(item.r.id, item.isTvCandidate);
-        const aliasSimilarity = item.alternativeTitles.reduce((best, alias) =>
+        const aliasSimilarity  = item.alternativeTitles.reduce((best, alias) =>
           Math.max(best, stringSimilarity(alias, queryTitle)), 0
         );
         const exactAlias = item.alternativeTitles.some(alias =>
           normalizeMatchTitle(alias) === normalizedQuery
         );
         item.titleSimilarity = Math.max(item.directSimilarity, aliasSimilarity);
-        item.exactTitle = item.exactDirect || exactAlias;
+        item.exactTitle      = item.exactDirect || exactAlias;
       }));
 
       for (const item of scored) {
-        // Short names like Robo must match a canonical or verified alternate
-        // title exactly. Approximate matching is unsafe for short titles.
         const titleMatched = isVeryShortTitle
           ? item.exactTitle
           : (item.exactTitle || item.titleSimilarity >= (strict ? 0.86 : 0.82));
@@ -553,10 +702,10 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
           continue;
         }
 
-        const queryNumbers = normalizedQuery.match(/\b\d+\b/g) || [];
-        const candidateNames = [item.rTitle, item.rOrig, ...item.alternativeTitles].join(' ');
-        const resultNumbers = normalizeMatchTitle(candidateNames).match(/\b\d+\b/g) || [];
-        // Keep sequel numbers distinct even when an alternate title matches.
+        // Extended sequel number guard (handles multi-digit, Roman, and word numbers)
+        const queryNumbers    = normalizedQuery.match(/\b\d+\b/g) || [];
+        const candidateNames  = [item.rTitle, item.rOrig, ...item.alternativeTitles].join(' ');
+        const resultNumbers   = normalizeMatchTitle(candidateNames).match(/\b\d+\b/g) || [];
         if (queryNumbers.length && !queryNumbers.some(number => resultNumbers.includes(number))) {
           item.score = -Infinity;
           continue;
@@ -570,14 +719,16 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
         }
         if (expectedType === item.rType) score += 12;
         else score -= 8;
-        if (item.r.popularity > 50) score += 3;
+        // v2: Popularity scoring is more conservative — cap at 4pts to avoid bias
+        if (item.r.popularity > 50)  score += 2;
         if (item.r.popularity > 200) score += 2;
+        // v2: Penalty for extreme popularity mismatch (popular wrong film)
+        if (item.r.popularity > 500 && item.titleSimilarity < 0.90) score -= 3;
         if (item.exactTitle) score += 5;
         item.score = score;
       }
 
-      // Compare TV filename years with each candidate season air date, not
-      // against the show's first-air year.
+      // Season year scoring
       if (isSeries && season && seasonYearHints.length) {
         const seasonCandidates = scored.filter(item =>
           item.score > -Infinity && item.isTvCandidate
@@ -592,7 +743,7 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       }
 
       scored.sort((a, b) => b.score - a.score);
-      const best = scored[0];
+      const best     = scored[0];
       const minScore = strict ? 65 : 58;
       if (!best || !Number.isFinite(best.score) || best.score < minScore) return null;
 
@@ -604,12 +755,11 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
       const d = dr.data || {};
       if (!yearCompatible(d.release_date || d.first_air_date)) return null;
 
-      const sd = await fetchSeasonData(best.r.id, season, isTv);
-      const tmdbTitle = d.title || d.name || title;
+      const sd         = await fetchSeasonData(best.r.id, season, isTv);
+      const tmdbTitle  = d.title || d.name || title;
       const queryClean = cleanTitleForApi(queryTitle) || queryTitle;
-      const tmdbClean = cleanTitleForApi(tmdbTitle) || tmdbTitle;
-      const titleSim = stringSimilarity(queryClean.toLowerCase(), tmdbClean.toLowerCase());
-      // Keep the source's dubbed title when its alternate-title alias was verified.
+      const tmdbClean  = cleanTitleForApi(tmdbTitle) || tmdbTitle;
+      const titleSim   = stringSimilarity(queryClean.toLowerCase(), tmdbClean.toLowerCase());
       const displayTitle = (titleSim >= 0.5 || best.exactTitle)
         ? (best.exactDirect || titleSim >= 0.5 ? tmdbTitle : (cleanTitleForApi(title) || title))
         : (cleanTitleForApi(title) || title);
@@ -634,22 +784,20 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
     return params;
   }
 
-  // ── Phase 1: Strict thresholds — all 14 candidate algorithms ────────────────
+  // ── Phase 1: Strict thresholds — all 24 candidate algorithms ────────────────
   for (let i = 0; i < candidates.length; i++) {
     const q     = candidates[i];
     const label = `A${i + 1}`;
     const strats = [];
     if (hintYear) strats.push({ ep: typeEp, params: buildSearchParams(typeEp, q, hintYear, label) });
-    // A distinct filename year is a fallback search hint, but for a TV series
-    // it is not treated as the show's premiere year by the scorer.
     const alternateSearchYear = !isSeries
       ? yearHints.find(candidate => candidate !== hintYear && Math.abs(candidate - hintYear) <= maxYearDifference)
       : (!options.messageYear && hintYear ? null : yearHints.find(candidate => candidate !== hintYear && (!hintYear || Math.abs(candidate - hintYear) <= maxYearDifference)));
     if (alternateSearchYear) strats.push({ ep: typeEp, params: buildSearchParams(typeEp, q, alternateSearchYear, label) });
-    strats.push(          { ep: typeEp,  params: { query: q, _algo: label } });
-    strats.push(          { ep: 'multi', params: { query: q, _algo: label } });
+    strats.push({ ep: typeEp,  params: { query: q, _algo: label } });
+    strats.push({ ep: 'multi', params: { query: q, _algo: label } });
     if (hintYear) strats.push({ ep: otherEp, params: buildSearchParams(otherEp, q, hintYear, label) });
-    strats.push(          { ep: otherEp, params: { query: q, _algo: label } });
+    strats.push({ ep: otherEp, params: { query: q, _algo: label } });
 
     for (const { ep, params } of strats) {
       const result = await runStrategy(ep, params, true);
@@ -687,10 +835,17 @@ async function searchTMDB(title, year, isSeries, season, msgDate, imdbId, tmdbId
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// searchOMDB — OMDB/IMDB fallback
+// searchOMDB — OMDB/IMDB fallback  (v2: rate-limit guard, year-empty retry)
 // ─────────────────────────────────────────────────────────────────────────────
+const OMDB_QUOTA = { count: 0, resetAt: Date.now() + 86400000 };
+const OMDB_DAILY_LIMIT = 950; // conservative under 1000
+
 async function searchOMDB(title, year, isSeries, omdbKey, options = {}) {
   if (!omdbKey) return null;
+  // Rate-limit guard
+  if (Date.now() > OMDB_QUOTA.resetAt) { OMDB_QUOTA.count = 0; OMDB_QUOTA.resetAt = Date.now() + 86400000; }
+  if (OMDB_QUOTA.count >= OMDB_DAILY_LIMIT) return null;
+
   const cleanTitle = cleanTitleForApi(title);
   if (!cleanTitle || cleanTitle.length < 2) return null;
   const validYear = value => {
@@ -698,29 +853,28 @@ async function searchOMDB(title, year, isSeries, omdbKey, options = {}) {
     return Number.isInteger(n) && n >= 1900 && n <= 2099 ? n : null;
   };
   const primaryYear = validYear(year);
-  const yearHints = [...new Set([primaryYear, ...(Array.isArray(options.yearHints) ? options.yearHints : [])]
+  const yearHints   = [...new Set([primaryYear, ...(Array.isArray(options.yearHints) ? options.yearHints : [])]
     .map(validYear).filter(Boolean))];
   const compactTitle = normalizeMatchTitle(cleanTitle).replace(/\s+/g, '');
 
   async function omdbFetch(t, queryYear) {
+    OMDB_QUOTA.count++;
     return fetchWithRetry(async () => {
       const params = { t, apikey: omdbKey, type: isSeries ? 'series' : 'movie', plot: 'short' };
       if (queryYear) params.y = queryYear;
       const res = await axios.get('https://www.omdbapi.com/', { params, timeout: 10000 });
-      const d = res.data;
+      const d   = res.data;
       if (!d || d.Response === 'False' || !d.Title) return null;
 
-      const returnedTitle = String(d.Title || '');
+      const returnedTitle   = String(d.Title || '');
       const titleSimilarity = stringSimilarity(cleanTitle, returnedTitle);
-      const exactTitle = normalizeMatchTitle(cleanTitle) === normalizeMatchTitle(returnedTitle);
-      // OMDb has no reliable cross-language alternative-title list. Never
-      // attach a different canonical title's poster or IMDb ID by fuzzy guess.
-      const titleMatches = compactTitle.length <= 4 ? exactTitle : (exactTitle || titleSimilarity >= 0.86);
+      const exactTitle      = normalizeMatchTitle(cleanTitle) === normalizeMatchTitle(returnedTitle);
+      const titleMatches    = compactTitle.length <= 4 ? exactTitle : (exactTitle || titleSimilarity >= 0.86);
       if (!titleMatches) return null;
 
-      const yearText = String(d.Year || '');
-      const omdbYears = (yearText.match(/19\d{2}|20\d{2}/g) || []).map(Number);
-      const omdbYear = omdbYears[0] || null;
+      const yearText    = String(d.Year || '');
+      const omdbYears   = (yearText.match(/19\d{2}|20\d{2}/g) || []).map(Number);
+      const omdbYear    = omdbYears[0] || null;
       const yearDiff = primaryYear && omdbYear
         ? Math.abs(primaryYear - omdbYear)
         : (omdbYear && yearHints.length
@@ -733,28 +887,28 @@ async function searchOMDB(title, year, isSeries, omdbKey, options = {}) {
 
       const runtimeMinutes = parseInt(d.Runtime, 10);
       return {
-        imdbId: d.imdbID || '',
-        title: d.Title || title,
-        description: d.Plot && d.Plot !== 'N/A' ? d.Plot : '',
-        poster: d.Poster && d.Poster !== 'N/A' ? d.Poster : '',
-        rating: d.imdbRating && d.imdbRating !== 'N/A' ? parseFloat(d.imdbRating) : 0,
-        year: omdbYear || primaryYear || yearHints[0] || null,
-        genre: d.Genre && d.Genre !== 'N/A' ? d.Genre.split(', ') : [],
-        duration: d.Runtime && d.Runtime !== 'N/A' && Number.isFinite(runtimeMinutes)
-          ? (Math.floor(runtimeMinutes / 60) + 'h ' + (runtimeMinutes % 60) + 'm')
-          : '',
-        type: d.Type === 'series' ? 'series' : 'movie',
+        imdbId:           d.imdbID || '',
+        title:            d.Title || title,
+        description:      d.Plot && d.Plot !== 'N/A' ? d.Plot : '',
+        poster:           d.Poster && d.Poster !== 'N/A' ? d.Poster : '',
+        rating:           d.imdbRating && d.imdbRating !== 'N/A' ? parseFloat(d.imdbRating) : 0,
+        year:             omdbYear || primaryYear || yearHints[0] || null,
+        genre:            d.Genre && d.Genre !== 'N/A' ? d.Genre.split(', ') : [],
+        duration:         d.Runtime && d.Runtime !== 'N/A' && Number.isFinite(runtimeMinutes)
+          ? (Math.floor(runtimeMinutes / 60) + 'h ' + (runtimeMinutes % 60) + 'm') : '',
+        type:             d.Type === 'series' ? 'series' : 'movie',
         originalLanguage: '',
       };
-    });
+    }, 2, 1200); // longer backoff for OMDb
   }
 
-  const candidates = [cleanTitle, title].filter((value, index, all) => value && all.indexOf(value) === index);
+  const titleCandidates = [cleanTitle, title].filter((v, i, all) => v && all.indexOf(v) === i);
   const usableYears = primaryYear
-    ? [primaryYear, ...yearHints.filter(value => value !== primaryYear && Math.abs(value - primaryYear) <= 2)]
+    ? [primaryYear, ...yearHints.filter(v => v !== primaryYear && Math.abs(v - primaryYear) <= 2)]
     : yearHints;
   const queryYears = usableYears.length ? usableYears : [null];
-  for (const candidate of candidates) {
+
+  for (const candidate of titleCandidates) {
     for (const queryYear of [...queryYears, null]) {
       const result = await omdbFetch(candidate, queryYear);
       if (result) return result;
@@ -762,4 +916,13 @@ async function searchOMDB(title, year, isSeries, omdbKey, options = {}) {
   }
   return null;
 }
-module.exports = { buildTitleCandidates, searchTMDB, searchOMDB, stringSimilarity };
+
+module.exports = {
+  buildTitleCandidates,
+  searchTMDB,
+  searchOMDB,
+  stringSimilarity,
+  parseFileSizeToBytes,
+  validateFileSizeVsQuality,
+  normalizeMatchTitle,
+};

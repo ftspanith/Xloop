@@ -26,12 +26,20 @@ module.exports.setUploadAborted = (v) => { _uploadAborted = v; };
 // ── Sync status helpers — stored in MongoDB so they persist on Vercel ────────
 const SYNC_CACHE_KEY = '_scrape_sync_status';
 
+async function ensureDbConnected(timeoutMs = 5000) {
+  const mongoose = require('mongoose');
+  if (mongoose.connection.readyState === 1) return;
+  if (mongoose.connection.readyState === 2) {
+    await mongoose.connection.asPromise();
+    return;
+  }
+  await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: timeoutMs, family: 4 });
+}
+
 async function getSyncStatus() {
   try {
     const PipelineCache = require('../models/PipelineCache');
-    const mongoose = require('mongoose');
-    if (mongoose.connection.readyState !== 1)
-      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+    await ensureDbConnected(5000);
     const doc = await PipelineCache.findOne({ key: SYNC_CACHE_KEY }).lean();
     return doc && doc.data ? doc.data : {};
   } catch { return {}; }
@@ -40,9 +48,7 @@ async function getSyncStatus() {
 async function saveSyncStatus(history) {
   try {
     const PipelineCache = require('../models/PipelineCache');
-    const mongoose = require('mongoose');
-    if (mongoose.connection.readyState !== 1)
-      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000, family: 4 });
+    await ensureDbConnected(5000);
     await PipelineCache.findOneAndUpdate(
       { key: SYNC_CACHE_KEY },
       { $set: { data: history, updatedAt: new Date() } },
