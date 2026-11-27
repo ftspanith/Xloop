@@ -2327,3 +2327,358 @@ a.card:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   XLOOP UI/UX v2 — Mobile zoom fix · Animation upgrades · Performance
+   Added: 2026-11-28
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. MOBILE ZOOM FIX ──────────────────────────────────────────────────────
+   iOS Safari auto-zooms when any input's font-size < 16px.
+   Force 16px on all inputs for mobile to suppress the zoom entirely,
+   then reset for desktop where smaller text is fine.                        */
+@media (max-width: 768px) {
+  input, textarea, select,
+  .nav-search-input, .mobile-nav-search input,
+  .search-input, .search-box, [type="search"],
+  [type="text"], [type="email"], [type="password"],
+  [type="number"], [type="tel"] {
+    font-size: 16px !important;
+    /* iOS touch target minimum */
+    min-height: 44px;
+  }
+  /* Prevent double-tap zoom on buttons and interactive elements */
+  button, a, [role="button"] {
+    touch-action: manipulation;
+  }
+  /* Safe-area insets for iPhone notch / home bar */
+  .navbar {
+    padding-left:  max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
+  }
+  body > footer {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}
+
+/* ── 2. ENHANCED SCROLL BEHAVIOR ─────────────────────────────────────────── */
+html {
+  /* GPU-composited smooth scroll — overscroll bounce only on y axis */
+  overscroll-behavior-x: none;
+}
+body {
+  /* Prevent pull-to-refresh interfering with draggable UI */
+  overscroll-behavior-y: contain;
+}
+
+/* ── 3. ANIMATION KEYFRAMES — NEW ───────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(229,9,20,0); }
+  50%       { box-shadow: 0 0 18px 4px rgba(229,9,20,0.35); }
+}
+@keyframes spinnerRing {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes skeletonWave {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+@keyframes navbarSlideDown {
+  from { opacity: 0; transform: translateY(-100%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateX(120%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes toastSlideOut {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(120%); }
+}
+@keyframes searchBarExpand {
+  from { max-width: 200px; }
+  to   { max-width: 500px; }
+}
+@keyframes searchPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(229,9,20,0.4); }
+  70%  { box-shadow: 0 0 0 8px rgba(229,9,20,0); }
+  100% { box-shadow: 0 0 0 0 rgba(229,9,20,0); }
+}
+
+/* ── 4. ENHANCED CARD INTERACTIONS ─────────────────────────────────────── */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .card {
+    transition: transform .2s cubic-bezier(.25,.8,.25,1),
+                box-shadow .2s cubic-bezier(.25,.8,.25,1),
+                outline-color .15s ease;
+    will-change: transform;
+  }
+  .card:hover {
+    transform: translateY(-4px) scale(1.025);
+    box-shadow:
+      0 16px 36px rgba(0,0,0,.55),
+      0 0 0 1px rgba(229,9,20,.18);
+    outline: none;
+  }
+  .card:hover .card-img img {
+    transform: scale(1.06);
+    transition: transform .32s cubic-bezier(.25,.8,.25,1);
+  }
+  .card-img { overflow: hidden; }
+  .card-img img { transition: transform .32s cubic-bezier(.25,.8,.25,1); }
+  .card-wide {
+    transition: transform .2s cubic-bezier(.25,.8,.25,1),
+                box-shadow .2s ease;
+    will-change: transform;
+  }
+  .card-wide:hover {
+    transform: translateY(-3px) scale(1.016);
+    box-shadow: 0 14px 32px rgba(0,0,0,.5);
+  }
+}
+
+/* Touch devices: use active-state instead of hover */
+@media (hover: none) {
+  .card:active  { transform: scale(.97); transition: transform .1s ease; }
+  .card-wide:active { transform: scale(.98); }
+}
+
+/* ── 5. SKELETON LOADING ANIMATION (upgrade from shimmer) ─────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg3) 25%,
+    rgba(80,80,80,0.5) 50%,
+    var(--bg3) 75%
+  );
+  background-size: 600px 100%;
+  animation: skeletonWave 1.4s ease-in-out infinite;
+  border-radius: var(--r-sm);
+}
+
+/* ── 6. NAVBAR ENTRANCE ─────────────────────────────────────────────────── */
+.navbar {
+  animation: navbarSlideDown .4s cubic-bezier(.2,.8,.2,1) both;
+}
+
+/* ── 7. SEARCH ENHANCEMENTS ─────────────────────────────────────────────── */
+.nav-search-form:focus-within {
+  animation: searchPulse .5s ease;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(229,9,20,.2);
+}
+
+/* Search suggestions — glass morphism upgrade */
+.search-suggestions {
+  background: rgba(18,18,18,0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--r);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.65), 0 0 0 1px rgba(229,9,20,0.07);
+}
+.suggestion-item {
+  transition: background .15s ease, padding-left .15s ease;
+}
+.suggestion-item:hover, .suggestion-item:focus {
+  background: rgba(229,9,20,0.12);
+  padding-left: 20px;
+  color: #fff;
+}
+
+/* Search input focus ring */
+.search-input-wrap input:focus,
+.nav-search-input:focus,
+[type="search"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(229,9,20,.35);
+  border-color: var(--accent);
+}
+
+/* ── 8. GLOBAL FOCUS RING (accessibility + looks) ───────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* ── 9. BUTTON MICRO-INTERACTIONS ───────────────────────────────────────── */
+.btn-watch, .btn-info, .type-tab, .search-pg-btn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.btn-watch::after, .btn-info::after, .type-tab::after, .search-pg-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(255,255,255,0.18) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity .25s ease;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.btn-watch:active::after, .btn-info:active::after,
+.type-tab:active::after, .search-pg-btn:active::after {
+  opacity: 1;
+}
+
+/* Active-state bounce for primary CTA */
+.btn-watch:active { transform: scale(.97); }
+.btn-info:active  { transform: scale(.97); }
+
+/* ── 10. HERO SECTION DEPTH ─────────────────────────────────────────────── */
+.hero-section {
+  position: relative;
+}
+.hero-section::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 40%,
+    rgba(0,0,0,0.5)  70%,
+    var(--bg) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+.hero-section > * { position: relative; z-index: 2; }
+
+/* ── 11. SECTION STAGGER ANIMATION ──────────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  .section-row {
+    animation: fadeInUp .5s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .section-row:nth-child(1) { animation-delay: .05s; }
+  .section-row:nth-child(2) { animation-delay: .12s; }
+  .section-row:nth-child(3) { animation-delay: .19s; }
+  .section-row:nth-child(4) { animation-delay: .26s; }
+  .section-row:nth-child(5) { animation-delay: .33s; }
+
+  /* Search results stagger */
+  #searchResults .card {
+    animation: fadeInUp .32s cubic-bezier(.2,.8,.2,1) both;
+  }
+  #searchResults .card:nth-child(1)  { animation-delay: .02s; }
+  #searchResults .card:nth-child(2)  { animation-delay: .04s; }
+  #searchResults .card:nth-child(3)  { animation-delay: .06s; }
+  #searchResults .card:nth-child(4)  { animation-delay: .08s; }
+  #searchResults .card:nth-child(5)  { animation-delay: .10s; }
+  #searchResults .card:nth-child(6)  { animation-delay: .12s; }
+  #searchResults .card:nth-child(7)  { animation-delay: .14s; }
+  #searchResults .card:nth-child(8)  { animation-delay: .16s; }
+  #searchResults .card:nth-child(n+9){ animation-delay: .18s; }
+}
+
+/* ── 12. TOAST NOTIFICATION ─────────────────────────────────────────────── */
+.xloop-toast {
+  position: fixed;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  right: max(16px, env(safe-area-inset-right));
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r);
+  padding: 12px 18px;
+  font-size: .9rem;
+  font-weight: 500;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  z-index: 9999;
+  max-width: min(340px, calc(100vw - 32px));
+  animation: toastSlideIn .28s cubic-bezier(.2,.8,.2,1) both;
+}
+.xloop-toast.exit {
+  animation: toastSlideOut .22s ease both;
+}
+
+/* ── 13. LOADING SPINNER ─────────────────────────────────────────────────── */
+.xloop-spinner {
+  display: inline-block;
+  width: 20px; height: 20px;
+  border: 2.5px solid rgba(255,255,255,0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spinnerRing .7s linear infinite;
+}
+
+/* ── 14. IMAGE LAZY LOAD FADE-IN ─────────────────────────────────────────── */
+.card-img img[loading="lazy"] {
+  opacity: 0;
+  transition: opacity .4s ease;
+}
+.card-img img.loaded,
+.card-img img:not([loading]) {
+  opacity: 1;
+}
+
+/* ── 15. SCROLLBAR UPGRADE ───────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(229,9,20,0.6);
+}
+
+/* ── 16. CONTENT VISIBILITY OPTIMIZATION ───────────────────────────────── */
+.section-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 400px;
+}
+
+/* ── 17. PERFORMANCE: GPU LAYER PROMOTION ───────────────────────────────── */
+.navbar, .hero-section, #mobileNavOverlay {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* ── 18. MOBILE SLIDER SWIPE INDICATOR ─────────────────────────────────── */
+@media (max-width: 680px) {
+  .slider-wrap::after {
+    content: '';
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: 48px;
+    background: linear-gradient(to right, transparent, rgba(0,0,0,0.5));
+    pointer-events: none;
+    border-radius: 0 var(--r) var(--r) 0;
+  }
+}
+
+/* ── 19. WATCH PAGE IMPROVEMENTS ────────────────────────────────────────── */
+.dl-row {
+  transition: background .15s ease, border-color .15s ease;
+}
+.dl-row:hover {
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(229,9,20,.2);
+}
+.dl-row:active {
+  background: rgba(229,9,20,.07);
+}
+
+/* ── 20. ALWAYS RESPECT REDUCED MOTION (override everything above) ──────── */
+@media (prefers-reduced-motion: reduce) {
+  .navbar { animation: none !important; }
+  .section-row { animation: none !important; content-visibility: auto; }
+  #searchResults .card { animation: none !important; }
+  .xloop-toast { animation: none !important; }
+  .skeleton { animation: none !important; background: var(--bg3); }
+  .xloop-spinner { animation-duration: 2s !important; }
+  .card-img img[loading="lazy"] { opacity: 1; transition: none; }
+}

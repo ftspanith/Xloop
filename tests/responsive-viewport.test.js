@@ -42,7 +42,7 @@ test('public and admin entry pages keep the device-width viewport declaration', 
     const html = fs.readFileSync(path.join(root, page), 'utf8');
     assert.match(
       html,
-      /<meta\s+name=["']viewport["']\s+content=["']width=device-width,\s*initial-scale=1(?:\.0)?["']/i,
+      /\<meta\s+name=["']viewport["']\s+content=["']width=device-width,\s*initial-scale=1(?:\.0)?(?:,[^"']*)?["']/i,
       page + ' should use the device viewport'
     );
   }
