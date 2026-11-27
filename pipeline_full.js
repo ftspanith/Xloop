@@ -1279,7 +1279,7 @@ async function main(opts = {}) {
         } else if (fs.existsSync(EXPORT_FILE)) {
           // No DB links — parse raw export from local filesystem (local dev mode)
           log('STEP 1 — Parsing telegram_export.json (inline)...');
-          const { parseMessageBlock, classifyUrl } = require('./utils/parser');
+          const { parseMessageBlock, splitMultiTitleMessage, classifyUrl } = require('./utils/parser');
           const rawExport = JSON.parse(fs.readFileSync(EXPORT_FILE, 'utf8'));
           const messages  = Array.isArray(rawExport) ? rawExport
             : (rawExport.messages || rawExport.data || []);
@@ -1290,8 +1290,9 @@ async function main(opts = {}) {
             const text = (typeof msg === 'string') ? msg
               : [msg.text, msg.caption, msg.message].filter(Boolean).join('\n');
             if (!text || text.length < 10) continue;
+            for (const messageText of splitMultiTitleMessage(text)) {
             try {
-              const parsed = parseMessageBlock(text);
+              const parsed = parseMessageBlock(messageText);
               if (!parsed || !parsed.downloads) continue;
               for (const dl of parsed.downloads) {
                 for (const link of (dl.links || [])) {
@@ -1322,6 +1323,7 @@ async function main(opts = {}) {
                 }
               }
             } catch (_) { /* skip unparseable blocks */ }
+            }
             if (msgIdx % 5000 === 0) log(`  Parsed ${msgIdx}/${messages.length} messages, ${extracted.length} links so far...`);
           }
           fs.writeFileSync(LINKS_FILE, JSON.stringify(extracted));
