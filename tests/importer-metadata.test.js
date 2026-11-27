@@ -140,7 +140,10 @@ test('recognizes additional surround channel layouts without guessing from forma
 test('MongoDB-only importer calls the shared TMDB/OMDb engine and poster fallback chain', () => {
   assert.match(pipelineSource, /sharedMetadataSearch\.searchTMDB\(/);
   assert.match(pipelineSource, /sharedMetadataSearch\.searchOMDB\(/);
-  assert.match(pipelineSource, /searchGoogleImage\(rep\.title, isSer \? \(rep\.messageYear \|\| null\) : \(rep\.messageYear \|\| rep\.year\), isSer\)/);
+  assert.match(pipelineSource, /No verified TMDB\/OMDb poster/);
+  assert.doesNotMatch(pipelineSource, /searchGoogleImage\(rep\.title/);
+  assert.match(pipelineSource, /buildTrustedMetadataUpdate\(dbRec/);
+  assert.match(pipelineSource, /shouldSplitMetadataIdentity\(existing, tmdb, parentYearHint\)/);
   assert.match(pipelineSource, /validatePoster\(meta\.poster\)/);
   assert.match(pipelineSource, /rep\.imdbId \|\| null, rep\.tmdbIdHint \|\| null/);
   assert.match(pipelineSource, /const needsMetadata = !existing/);
