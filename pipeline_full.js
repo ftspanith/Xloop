@@ -299,7 +299,69 @@ function levenshtein(a, b) {
   return dp[m][n];
 }
 function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\function escapeRegex(value) {
   return String(value || '').replace(/[.*+?^$()|[\\]{}]/g, '\\$&');
+}
+function stringSimilarity(a, b) {');
+}
+function metadataYear(value) {
+  const year = Number(value);
+  return Number.isInteger(year) && year >= 1900 && year <= 2099 ? year : null;
+}
+function shouldSplitMetadataIdentity(existing, incoming, expectedYear = null) {
+  if (!existing || !incoming?.tmdbId || Number(incoming.confidence || 0) < 65) return false;
+  const oldId = String(existing.tmdbId || '').trim();
+  const newId = String(incoming.tmdbId || '').trim();
+  const oldYear = metadataYear(existing.year);
+  const incomingYear = metadataYear(incoming.year) || metadataYear(expectedYear);
+  const yearConflict = !!(oldYear && incomingYear && Math.abs(oldYear - incomingYear) > 2);
+  const idConflict = !!(oldId && newId && oldId !== newId);
+  return idConflict || yearConflict;
+}
+function buildTrustedMetadataUpdate(existing, incoming, season = null) {
+  if (!existing || !incoming?.tmdbId || !existing.tmdbId ||
+      String(existing.tmdbId) !== String(incoming.tmdbId) ||
+      Number(incoming.confidence || 0) < 65) return {};
+  const set = {};
+  const tmdbImage = value => /^https:\/\/image\\.tmdb\\.org\\/t\\/p\\//i.test(String(value || ''));
+  if (incoming.poster && tmdbImage(incoming.poster) && incoming.poster !== existing.poster) {
+    if (existing.poster && !existing.posterFallback && existing.poster !== incoming.poster) {
+      set.posterFallback = existing.poster;
+    }
+    set.poster = incoming.poster;
+  }
+  if (incoming.backdrop && tmdbImage(incoming.backdrop) && incoming.backdrop !== existing.backdrop) {
+    set.backdrop = incoming.backdrop;
+  }
+  if (incoming.year && incoming.releaseDate && Number(existing.year || 0) !== Number(incoming.year)) {
+    set.year = Number(incoming.year);
+    set.releaseDate = incoming.releaseDate;
+  }
+  if (incoming.description && String(incoming.description).length > String(existing.description || '').length) {
+    set.description = incoming.description;
+  }
+  if (Number(incoming.rating) > 0 && Number(incoming.rating) !== Number(existing.rating || 0)) {
+    set.rating = Number(incoming.rating);
+  }
+  if ((!existing.genre || !existing.genre.length) && incoming.genre?.length) set.genre = incoming.genre;
+  if (!existing.duration && incoming.duration) set.duration = incoming.duration;
+  if (!existing.totalSeasons && incoming.totalSeasons) set.totalSeasons = incoming.totalSeasons;
+  if (!existing.originalLanguage && incoming.originalLanguage) set.originalLanguage = incoming.originalLanguage;
+  if (!existing.imdbId && incoming.imdbId) set.imdbId = incoming.imdbId;
+  if ((isJunkTitle(existing.title) || isGenericTitleCandidate(existing.title)) &&
+      incoming.title && !isJunkTitle(incoming.title) && !isGenericTitleCandidate(incoming.title)) {
+    set.title = incoming.title;
+  }
+  const seasonNumber = Number(season);
+  if (seasonNumber > 0 && incoming.seasonPoster &&
+      existing.seasonPosters?.[`s${seasonNumber}`] !== incoming.seasonPoster) {
+    set[`seasonPosters.s${seasonNumber}`] = incoming.seasonPoster;
+  }
+  if (seasonNumber > 0 && incoming.seasonYear &&
+      Number(existing.seasonYears?.[`s${seasonNumber}`] || 0) !== Number(incoming.seasonYear)) {
+    set[`seasonYears.s${seasonNumber}`] = Number(incoming.seasonYear);
+  }
+  return set;
 }
 function stringSimilarity(a, b) {
   a = (a||'').toLowerCase().trim(); b = (b||'').toLowerCase().trim();
@@ -600,11 +662,15 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
     const parentYearHint = isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year || null);
     const parentYearMismatch = !!(existing && parentYearHint && existing.year &&
       Math.abs(Number(existing.year) - Number(parentYearHint)) > 2);
+    let verifiedTmdbMeta = null;
+    let splitExistingIdentity = false;
     const needsMetadata = !existing || !existing.tmdbId || !existing.imdbId ||
       !existing.poster || !existing.backdrop || !existing.description ||
       !existing.rating || !existing.genre?.length || !existing.year ||
       !existing.duration || (isSer && !existing.totalSeasons) ||
       (rep.season && !existing.seasonPosters?.[`s${rep.season}`]) ||
+      (existing?.poster && !/image\\.tmdb\\.org/i.test(existing.poster)) ||
+      isJunkTitle(existing?.title) || isGenericTitleCandidate(existing?.title) ||
       parentYearMismatch;
 
     if (cleanTitle && needsMetadata) {
@@ -642,13 +708,21 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         }
       }
       if (tmdb) {
-        // Keep existing catalogue values; fill missing fields from the shared
-        // 14-algorithm TMDB matcher (including direct IMDb/TMDB-ID matches).
-        for (const [key, value] of Object.entries(tmdb)) {
-          const current = meta[key];
-          const missing = current == null || current === '' || current === 0 ||
-            (Array.isArray(current) && current.length === 0);
-          if (missing && value != null && value !== '') meta[key] = value;
+        verifiedTmdbMeta = tmdb;
+        // A verified different TMDB identity or a title-year conflict must
+        // never inherit the old catalogue row's poster, title or downloads.
+        if (existing && shouldSplitMetadataIdentity(existing, tmdb, parentYearHint)) {
+          splitExistingIdentity = true;
+          _emitter(`[IDENTITY] ${existing.title} (${existing.year || '?'}, TMDB ${existing.tmdbId || 'none'}) differs from verified ${tmdb.title} (${tmdb.year || '?'}, TMDB ${tmdb.tmdbId}); creating a separate catalogue record.`);
+          existing = null;
+          meta = { ...tmdb };
+        } else {
+          for (const [key, value] of Object.entries(tmdb)) {
+            const current = meta[key];
+            const missing = current == null || current === '' || current === 0 ||
+              (Array.isArray(current) && current.length === 0);
+            if (missing && value != null && value !== '') meta[key] = value;
+          }
         }
       }
 
@@ -685,11 +759,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         }
       }
       if (!meta.poster) {
-        const gImg = await searchGoogleImage(rep.title, isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year), isSer);
-        if (gImg) {
-          meta.poster = gImg;
-          _emitter(`[IMG] Google image used for: ${rep.title}`);
-        }
+        _emitter(`[IMG] No verified TMDB/OMDb poster for "${rep.title}" — leaving poster empty rather than attaching an unverified image.`);
       }
     }
 
@@ -761,8 +831,843 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       let dbRec = existing;
       // Re-check by tmdbId in case meta search found a different record than initial lookup
       if (!dbRec && meta.tmdbId) dbRec = await Movie.findOne({ tmdbId: String(meta.tmdbId), type: expectedTypes });
-      // Last resort: same-type title match. Do not key TV records by a later season year.
-      if (!dbRec && cleanTitle) dbRec = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' }, type: expectedTypes });
+      // After a verified year/identity split, never fall back to the old
+      // same-title record — it belongs to a different release.
+      if (!dbRec && cleanTitle && !splitExistingIdentity) {
+        dbRec = await Movie.findOne({ title: { $regex: `^${esc}#!/usr/bin/env node
+// ═══════════════════════════════════════════════════════════════════════════
+// pipeline_full.js  ─  UNIFIED BYPASS + IMPORT PIPELINE
+//
+// This replaces the disconnected bypass → import two-step process.
+// It integrates:
+//   1. Reads links_for_bypasser.json + shortlinks_report.json
+//   2. Shortlinks are bypassed INLINE (same bypassSofturl logic as bypass_bot)
+//   3. All entries (direct + newly bypassed) imported to MongoDB with TMDB
+//   4. Heal DB for any remaining gaps
+//
+// Usage:
+//   node pipeline_full.js                  — full pipeline
+//   node pipeline_full.js --no-wipe        — skip DB wipe
+//   node pipeline_full.js --no-heal        — skip healer
+//   node pipeline_full.js --no-bypass      — skip bypass (import direct only)
+//   node pipeline_full.js --from-mongodb --clean-catalogue
+//                                          — clear Movie catalogue, then re-import from
+//                                            MongoDB ExtractedLink (source links are preserved)
+//   node pipeline_full.js --concurrency=4  — bypass concurrency (default 3)
+//   node pipeline_full.js --import-source=./bypassed_links.json
+// ═══════════════════════════════════════════════════════════════════════════
+'use strict';
+
+require('dotenv').config();
+
+const mongoose = require('mongoose');
+const fs       = require('fs');
+const path     = require('path');
+const axios    = require('axios');
+// axios-cookiejar-support is ESM-only ("type": "module") — lazy-loaded below
+// to prevent Vercel's ncc bundler from crashing on it at build time
+const { CookieJar } = require('tough-cookie');
+const { spawn }     = require('child_process');
+const Movie         = require('./models/Movie');
+const {
+  cleanTitleForApi, detectHost, detectCodec, detectHDR, extractAudio,
+  detectBitDepth, detectAudioChannels, detectSource, detectContainer,
+  normalizeQuality, extractSize, detectAllLanguages, extractSeasonEpisode,
+  classifyLanguages, extractMediaMetadata, extractYear, normalizeGdflixUrl, isJunkTitle,
+  isGenericTitleCandidate,
+} = require('./utils/parser');
+const sharedMetadataSearch = require('./utils/tmdbSearch');
+const { analyzeVariantSet, rankVariantsForDisplay } = require('./utils/variant-intelligence');
+const { filterEntriesByScope } = require('./utils/pipelineScope');
+
+// ─── CLI args (only used when run directly, not when require()'d) ─────────────
+const IS_MAIN = require.main === module;
+const _argv        = IS_MAIN ? process.argv.slice(2) : [];
+
+const ROOT             = __dirname;
+const IS_VERCEL        = !!process.env.VERCEL;
+const TMP              = IS_VERCEL ? '/tmp' : ROOT;
+const EXPORT_FILE      = path.join(TMP, 'telegram_export.json');
+const LINKS_FILE       = path.join(TMP, 'links_for_bypasser.json');
+const SHORTLINKS_FILE  = path.join(TMP, 'shortlinks_report.json');
+const BYPASSED_FILE    = path.join(TMP, 'bypassed_links.json');
+const CHECKPOINT_FILE  = path.join(TMP, 'import_checkpoint.json');
+const TMDB_KEY         = process.env.TMDB_API_KEY  || '';
+const OMDB_KEY         = process.env.OMDB_API_KEY  || '';
+const GOOGLE_API_KEY   = process.env.GOOGLE_API_KEY || '';
+const GOOGLE_CSE_ID    = process.env.GOOGLE_CSE_ID  || '';
+
+// ─── Terminal colors ──────────────────────────────────────────────────────────
+const C = {
+  reset: '\x1b[0m', bold: '\x1b[1m',
+  green: '\x1b[32m', yellow: '\x1b[33m',
+  red: '\x1b[31m', cyan: '\x1b[36m', gray: '\x1b[90m',
+};
+// emitter: function(line:string) — injected by orchestrator route for SSE streaming
+// When running as CLI, emitter simply prints to stdout
+let _emitter = line => process.stdout.write(line + '\n');
+const log  = msg => _emitter(`[LOG] ${msg}`);
+const ok   = msg => _emitter(`[OK] ${msg}`);
+const warn = msg => _emitter(`[WARN]  ${msg}`);
+const fail = msg => _emitter(`[ERR] ${msg}`);
+const sep  = ()  => _emitter('─'.repeat(64));
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Shared provider URL normalizer ──────────────────────────────────────────
+// Use the same provider resolver as Telegram ingestion so TLD rotations,
+// subdomains and aliases are handled consistently in both stages.
+function normalizeUrl(url) {
+  return normalizeGdflixUrl(url);
+}
+
+// Only accept these as valid bypassed direct URLs (reliable cloud hosts only)
+const DIRECT_HOST_RE = /gdflix|hubcloud|tmbcloud|1fichier|filemoon|streamtape|pixeldrain|krakenfiles|buzzheavier|doodstream|mixdrop/i;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BYPASS ENGINE  (ported from bypass_bot.js — bypassSofturl)
+// ═══════════════════════════════════════════════════════════════════════════
+async function bypassSofturl(url) {
+  const jar    = new CookieJar();
+  const { wrapper } = await import('axios-cookiejar-support');
+  const client = wrapper(axios.create({ jar, withCredentials: true }));
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  const hdrs = {
+    'User-Agent': ua,
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+  };
+  const post = (u, body, ref) => client.post(u, body, {
+    headers: { ...hdrs, 'Content-Type': 'application/x-www-form-urlencoded', 'Referer': ref || u },
+    timeout: 25000, maxRedirects: 3,
+  });
+  const get = (u, ref) => client.get(u, {
+    headers: { ...hdrs, 'Referer': ref || u },
+    timeout: 25000, maxRedirects: 5,
+  });
+  const ex = (html, re) => html.match(re)?.[1] || null;
+
+  const r1 = await get(url);
+  const go1 = ex(r1.data, /name="go"\s+value="([^"]+)"/);
+  const a1  = ex(r1.data, /action="([^"]+)"/);
+  if (!go1 || !a1) throw new Error('Step 1: no go/action');
+
+  const r2  = await post(a1, `go=${encodeURIComponent(go1)}`, url);
+  const wp2 = ex(r2.data, /name="newwpsafelink"\s+value="([^"]+)"/);
+  const a2  = ex(r2.data, /id="landing"[^>]*action="([^"]+)"/) || a1;
+  if (!wp2) throw new Error('Step 2: no newwpsafelink');
+
+  const r3  = await post(a2, `humanverification=1&newwpsafelink=${encodeURIComponent(wp2)}`, a1);
+  const wp3 = ex(r3.data, /name="newwpsafelink"\s+value="([^"]+)"/) || wp2;
+  const j3  = JSON.parse(Buffer.from(wp3, 'base64').toString());
+  if (!j3.linkr) throw new Error('Step 3: no linkr');
+
+  const r4  = await get(j3.linkr, a2);
+  const go4 = ex(r4.data, /name="go"\s+value="([^"]+)"/);
+  const a4  = ex(r4.data, /action="([^"]+)"/);
+  if (!go4 || !a4) throw new Error('Step 4: no go/action');
+
+  const r5  = await post(a4, `go=${encodeURIComponent(go4)}`, j3.linkr);
+  const wp5 = ex(r5.data, /name="newwpsafelink"\s+value="([^"]+)"/);
+  const a5  = ex(r5.data, /id="landing"[^>]*action="([^"]+)"/) || a4;
+  if (!wp5) throw new Error('Step 5: no newwpsafelink');
+
+  const r6  = await post(a5, `humanverification=1&newwpsafelink=${encodeURIComponent(wp5)}`, a4);
+  const wp6 = ex(r6.data, /name="newwpsafelink"\s+value="([^"]+)"/) || wp5;
+  const j6  = JSON.parse(Buffer.from(wp6, 'base64').toString());
+  const delay = parseInt(j6.delay || '25', 10);
+  if (!j6.linkr) throw new Error('Step 6: no linkr');
+
+  await sleep((delay + 3) * 1000);  // Server-enforced ad timer
+
+  const r7 = await get(j6.linkr, a5);
+  let ad, csrf, tf, ga, refForFinal;
+  ad   = ex(r7.data, /name="ad_form_data"\s+value="([^"]+)"/);
+  csrf = ex(r7.data, /name="_csrfToken"[^>]+value="([^"]+)"/);
+  tf   = ex(r7.data, /name="_Token\[fields\]"[^>]*value="([^"]+)"/);
+  ga   = ex(r7.data, /id="go-link"[^>]*action="([^"]+)"/) || '/links/go';
+  refForFinal = j6.linkr;
+
+  if (!ad) {
+    const go7 = ex(r7.data, /name="go"\s+value="([^"]+)"/);
+    const a7  = ex(r7.data, /action="([^"]+)"/);
+    if (!go7 || !a7) throw new Error('Step 7: no go/action and no ad_form_data');
+    const r8 = await post(a7, `go=${encodeURIComponent(go7)}`, j6.linkr);
+    ad   = ex(r8.data, /name="ad_form_data"\s+value="([^"]+)"/);
+    csrf = ex(r8.data, /name="_csrfToken"[^>]+value="([^"]+)"/);
+    tf   = ex(r8.data, /name="_Token\[fields\]"[^>]*value="([^"]+)"/);
+    ga   = ex(r8.data, /id="go-link"[^>]*action="([^"]+)"/) || '/links/go';
+    refForFinal = a7;
+    if (!ad) throw new Error('Step 8: no ad_form_data');
+  }
+
+  const base        = new URL(url).origin;
+  const finalAction = ga.startsWith('http') ? ga : base + ga;
+  const parts       = ['_method=POST'];
+  if (csrf) parts.push(`_csrfToken=${encodeURIComponent(csrf)}`);
+  parts.push(`ad_form_data=${encodeURIComponent(ad)}`);
+  if (tf) parts.push(`_Token[fields]=${encodeURIComponent(decodeURIComponent(tf))}`);
+
+  const rFinal = await client.post(finalAction, parts.join('&'), {
+    headers: { ...hdrs, 'Content-Type': 'application/x-www-form-urlencoded', 'Referer': refForFinal, 'X-Requested-With': 'XMLHttpRequest' },
+    timeout: 25000, maxRedirects: 5, validateStatus: s => s < 500,
+  });
+
+  const loc      = rFinal.headers?.location || rFinal.request?.res?.responseUrl;
+  if (loc && DIRECT_HOST_RE.test(loc)) return loc;
+  const finalUrl = rFinal.request?.res?.responseUrl;
+  if (finalUrl && DIRECT_HOST_RE.test(finalUrl)) return finalUrl;
+  const allHrefs = [...(rFinal.data?.matchAll?.(/href="(https?:\/\/[^"]+)"/g) || [])].map(m => m[1]);
+  const direct   = allHrefs.find(u => DIRECT_HOST_RE.test(u));
+  if (direct) return direct;
+  try {
+    const json = typeof rFinal.data === 'string' ? JSON.parse(rFinal.data) : rFinal.data;
+    if (json?.url  && DIRECT_HOST_RE.test(json.url))  return json.url;
+    if (json?.link && DIRECT_HOST_RE.test(json.link)) return json.link;
+  } catch {}
+  throw new Error(`No download link. Status=${rFinal.status}`);
+}
+
+async function bypassGeneric(url) {
+  const r = await axios.get(url, { maxRedirects: 15, timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+  return r.request?.res?.responseUrl || url;
+}
+
+async function bypassUrl(url) {
+  const host = new URL(url).hostname;
+  if (host.includes('softurl.in')) return bypassSofturl(url);
+  return bypassGeneric(url);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE 1: BYPASS ALL SHORTLINKS
+// ═══════════════════════════════════════════════════════════════════════════
+async function phaseBypass(allEntries, existingBypassed, CONCURRENCY = 3, isStopRequested = () => false) {
+  const alreadyBypassed = new Map(existingBypassed.map(e => [e.url, e.bypassedUrl]));
+  const pending = allEntries.filter(e => e.host === 'Shortlink' && !alreadyBypassed.has(e.url));
+
+  console.log(`\n  Direct links    : ${C.green}${allEntries.filter(e => e.host !== 'Shortlink').length}${C.reset}`);
+  console.log(`  Pending bypass  : ${C.yellow}${pending.length}${C.reset}`);
+  console.log(`  Already bypassed: ${alreadyBypassed.size}`);
+
+  // Restore cached bypassed URLs first
+  for (const e of allEntries) {
+    if (!e.bypassedUrl && alreadyBypassed.has(e.url)) e.bypassedUrl = alreadyBypassed.get(e.url);
+  }
+
+  if (pending.length === 0) { log('No new shortlinks — bypass phase skipped.'); return; }
+
+  let done = 0, succeeded = 0, failed = 0;
+  const queue = [...pending];
+  const active = new Set();
+
+  async function processOne(item) {
+    try {
+      const bypassed = await bypassUrl(item.url);
+      if (bypassed && bypassed !== item.url && DIRECT_HOST_RE.test(bypassed)) {
+        item.bypassedUrl = bypassed;
+        item.host        = detectHost(bypassed);
+        succeeded++;
+        process.stdout.write(`\r  ${C.green}[OK]${C.reset} [${item.title || '?'}] → ${bypassed.slice(0, 50)}\n`);
+      } else {
+        item.bypassedUrl = null; failed++;
+        process.stdout.write(`\r  ${C.yellow}[WARN]${C.reset} No direct URL: ${item.url.slice(0, 55)}\n`);
+      }
+    } catch (err) {
+      item.bypassedUrl = null; failed++;
+      process.stdout.write(`\r  ${C.red}[ERR]${C.reset} ${item.url.slice(0, 50)}: ${err.message.slice(0, 35)}\n`);
+    }
+    done++;
+    process.stdout.write(`\r  Progress: ${done}/${pending.length} | [OK] ${succeeded} | [ERR] ${failed}  `);
+  }
+
+  while (queue.length > 0 || active.size > 0) {
+    if (isStopRequested()) { _emitter('\n  [WARN] Bypass aborted by user stop request.'); break; }
+    while (active.size < CONCURRENCY && queue.length > 0) {
+      const item = queue.shift();
+      const p = processOne(item).finally(() => active.delete(p));
+      active.add(p);
+    }
+    if (active.size > 0) await Promise.race(active);
+  }
+  process.stdout.write('\n');
+
+  // Checkpoint save
+  const toSave = allEntries.filter(e => e.host !== 'Shortlink' || e.bypassedUrl);
+  fs.writeFileSync(BYPASSED_FILE, JSON.stringify(toSave, null, 2));
+  console.log(`\n  [SAVE] Checkpoint saved → ${path.basename(BYPASSED_FILE)}`);
+  console.log(`  [OK] ${succeeded} bypassed | [ERR] ${failed} failed`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// API HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+let _lastApiCall = 0;
+async function apiThrottle() {
+  const wait = 500 - (Date.now() - _lastApiCall);
+  if (wait > 0) await sleep(wait);
+  _lastApiCall = Date.now();
+}
+async function fetchWithRetry(fn, retries = 3) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try { await apiThrottle(); return await fn(); }
+    catch (err) {
+      const status = err?.response?.status;
+      if (status === 429) {
+        const ra = parseInt(err.response?.headers?.['retry-after'] || '10', 10);
+        console.log(`\n... TMDB rate limit. Waiting ${ra}s...`);
+        await sleep(ra * 1000); continue;
+      }
+      if (attempt < retries && (!status || status >= 500)) { await sleep(1000 * (attempt + 1)); continue; }
+      return null;
+    }
+  }
+  return null;
+}
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) => Array.from({ length: n + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0));
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  return dp[m][n];
+}
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^$()|[\\]{}]/g, '\\$&');
+}
+function stringSimilarity(a, b) {');
+}
+function metadataYear(value) {
+  const year = Number(value);
+  return Number.isInteger(year) && year >= 1900 && year <= 2099 ? year : null;
+}
+function shouldSplitMetadataIdentity(existing, incoming, expectedYear = null) {
+  if (!existing || !incoming?.tmdbId || Number(incoming.confidence || 0) < 65) return false;
+  const oldId = String(existing.tmdbId || '').trim();
+  const newId = String(incoming.tmdbId || '').trim();
+  const oldYear = metadataYear(existing.year);
+  const incomingYear = metadataYear(incoming.year) || metadataYear(expectedYear);
+  const yearConflict = !!(oldYear && incomingYear && Math.abs(oldYear - incomingYear) > 2);
+  const idConflict = !!(oldId && newId && oldId !== newId);
+  return idConflict || yearConflict;
+}
+function buildTrustedMetadataUpdate(existing, incoming, season = null) {
+  if (!existing || !incoming?.tmdbId || !existing.tmdbId ||
+      String(existing.tmdbId) !== String(incoming.tmdbId) ||
+      Number(incoming.confidence || 0) < 65) return {};
+  const set = {};
+  const tmdbImage = value => /^https:\/\/image\\.tmdb\\.org\\/t\\/p\\//i.test(String(value || ''));
+  if (incoming.poster && tmdbImage(incoming.poster) && incoming.poster !== existing.poster) {
+    if (existing.poster && !existing.posterFallback && existing.poster !== incoming.poster) {
+      set.posterFallback = existing.poster;
+    }
+    set.poster = incoming.poster;
+  }
+  if (incoming.backdrop && tmdbImage(incoming.backdrop) && incoming.backdrop !== existing.backdrop) {
+    set.backdrop = incoming.backdrop;
+  }
+  if (incoming.year && incoming.releaseDate && Number(existing.year || 0) !== Number(incoming.year)) {
+    set.year = Number(incoming.year);
+    set.releaseDate = incoming.releaseDate;
+  }
+  if (incoming.description && String(incoming.description).length > String(existing.description || '').length) {
+    set.description = incoming.description;
+  }
+  if (Number(incoming.rating) > 0 && Number(incoming.rating) !== Number(existing.rating || 0)) {
+    set.rating = Number(incoming.rating);
+  }
+  if ((!existing.genre || !existing.genre.length) && incoming.genre?.length) set.genre = incoming.genre;
+  if (!existing.duration && incoming.duration) set.duration = incoming.duration;
+  if (!existing.totalSeasons && incoming.totalSeasons) set.totalSeasons = incoming.totalSeasons;
+  if (!existing.originalLanguage && incoming.originalLanguage) set.originalLanguage = incoming.originalLanguage;
+  if (!existing.imdbId && incoming.imdbId) set.imdbId = incoming.imdbId;
+  if ((isJunkTitle(existing.title) || isGenericTitleCandidate(existing.title)) &&
+      incoming.title && !isJunkTitle(incoming.title) && !isGenericTitleCandidate(incoming.title)) {
+    set.title = incoming.title;
+  }
+  const seasonNumber = Number(season);
+  if (seasonNumber > 0 && incoming.seasonPoster &&
+      existing.seasonPosters?.[`s${seasonNumber}`] !== incoming.seasonPoster) {
+    set[`seasonPosters.s${seasonNumber}`] = incoming.seasonPoster;
+  }
+  if (seasonNumber > 0 && incoming.seasonYear &&
+      Number(existing.seasonYears?.[`s${seasonNumber}`] || 0) !== Number(incoming.seasonYear)) {
+    set[`seasonYears.s${seasonNumber}`] = Number(incoming.seasonYear);
+  }
+  return set;
+}
+function stringSimilarity(a, b) {
+  a = (a||'').toLowerCase().trim(); b = (b||'').toLowerCase().trim();
+  if (a === b) return 1;
+  const lo = a.length > b.length ? a : b, sh = a.length > b.length ? b : a;
+  if (!lo.length) return 1;
+  return (lo.length - levenshtein(lo, sh)) / lo.length;
+}
+function toMB(s) { if (!s) return 0; const n = parseFloat(s); return /GB/i.test(s) ? n * 1024 : (n || 0); }
+function detectCodecLocal(fn) {
+  return detectCodec(fn || '') || 'Other';
+}
+function seasonFromFilename(fn) {
+  if (!fn) return null;
+  const m = fn.match(/[._\s-]S(\d{1,2})[._\s\[\.-]/i) || fn.match(/\bS(\d{1,2})\b(?!\d)/i) || fn.match(/Season[\s._]?(\d+)/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+async function searchOMDB(title, year, isSeries, yearHints = []) {
+  return sharedMetadataSearch.searchOMDB(title, year, isSeries, OMDB_KEY, { yearHints });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// GOOGLE IMAGE SEARCH
+// ─────────────────────────────────────────────────────────────────────────
+// Falls back to Google Custom Search API when TMDB + OMDB both return no poster.
+// Requires GOOGLE_API_KEY and GOOGLE_CSE_ID in env.
+// Returns a direct image URL string or null.
+async function searchGoogleImage(title, year, isSeries) {
+  if (!GOOGLE_API_KEY || !GOOGLE_CSE_ID) return null;
+  const cleanT = cleanTitleForApi(title) || title;
+  const type   = isSeries ? 'TV show' : 'movie';
+  const q = year ? `"${cleanT}" ${year} ${type} official poster` : `"${cleanT}" ${type} official poster`;
+  try {
+    const res = await axios.get('https://www.googleapis.com/customsearch/v1', {
+      params: {
+        key: GOOGLE_API_KEY, cx: GOOGLE_CSE_ID,
+        q, searchType: 'image',
+        imgType: 'photo', imgSize: 'large',
+        num: 5, safe: 'off',
+      },
+      timeout: 8000,
+    });
+    const items = res.data?.items || [];
+    // Prefer portrait-ratio images (poster shape) over landscape
+    for (const item of items) {
+      const w = item.image?.width  || 0;
+      const h = item.image?.height || 0;
+      const url = item.link || '';
+      if (!url) continue;
+      // Accept portrait (h > w) or near-square — skip wide banners
+      if (h >= w * 0.9) return url;
+    }
+    // Fallback: just return first image URL
+    return items[0]?.link || null;
+  } catch { return null; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// POSTER VALIDATION
+// ─────────────────────────────────────────────────────────────────────────
+// HEAD request to confirm a poster URL is reachable (returns 200).
+// Returns the url if valid, null otherwise.
+async function validatePoster(url) {
+  if (!url) return null;
+  // TMDB CDN images are always reachable — skip expensive HEAD round-trip
+  if (/image\.tmdb\.org/i.test(url)) return url;
+  try {
+    const r = await axios.head(url, { timeout: 6000, maxRedirects: 3 });
+    return r.status >= 200 && r.status < 400 ? url : null;
+  } catch { return null; }
+}
+
+function recomputeAggregates(doc) {
+  const dls = doc.downloads || [];
+  const QUALITY_ORDER = ['8K', '4K', '1440p', '1080p', '720p', '576p', '540p', '480p', '360p', '240p', 'SD', 'HD'];
+
+  // Preserve the catalogue's quality-first order. Inside each quality group,
+  // use cross-account variant intelligence to rank close-size encodes by
+  // source, codec, HDR, audio and metadata completeness. No link is removed.
+  const qualityKeys = [...new Set(dls.map(download => download.quality || ''))]
+    .sort((a, b) => {
+      const ai = QUALITY_ORDER.indexOf(a);
+      const bi = QUALITY_ORDER.indexOf(b);
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    });
+  const sortedDownloads = [];
+  for (const quality of qualityKeys) {
+    const group = dls.filter(download => (download.quality || '') === quality);
+    const ranked = rankVariantsForDisplay(group.map((download, index) => ({
+      ...(typeof download.toObject === 'function' ? download.toObject() : download),
+      title: doc.title || '',
+      year: doc.year || null,
+      _rankIndex: index,
+    })), { sizeTolerance: 0.08 });
+    sortedDownloads.push(...ranked.map(item => group[item._rankIndex]).filter(Boolean));
+  }
+  // Keep original Mongoose subdocuments; only change their display order.
+  dls.splice(0, dls.length, ...sortedDownloads);
+
+  doc.formats = [...new Set(dls.map(d => d.quality))].filter(Boolean);
+  // Root codecs are video codecs only. Older records may have audio formats
+  // mistakenly copied into this aggregate; keep audio on each download row.
+  doc.codecs  = [...new Set(dls.map(d => d.codec || detectCodecLocal(d.filename)))].filter(c =>
+    c && c !== 'Other' && !/^(?:E-?AC-?3|DDP|DD\+?|AC-?3|DTS|TRUEHD|ATMOS|AAC|FLAC|MP3|OPUS|ALAC|L?PCM|VORBIS|AC4|WMA|DOLBY)/i.test(String(c).trim())
+  );
+  const allLangs = [];
+  dls.forEach(d => {
+    if (!d.language) return;
+    d.language.split(',').forEach(l => {
+      const c = l.trim();
+      if (c && !/^(?:single|dual|multi)(?:\s+audio)?$/i.test(c)) {
+        allLangs.push(c.charAt(0).toUpperCase() + c.slice(1).toLowerCase());
+      }
+    });
+  });
+  doc.languages = [...new Set(allLangs)].filter(Boolean);
+  // Root language is derived from stored downloads, never TMDB/OMDb original language.
+  doc.language = doc.languages.join(', ');
+  const primaryDownload = dls.find(download =>
+    (download.language && !/^(?:single|dual|multi)(?:\s+audio)?$/i.test(String(download.language).trim()))
+    || Number(download.languageCount) > 0
+  ) || dls.find(download => download.languageType || download.language);
+  const primaryLanguageInfo = primaryDownload
+    ? classifyLanguages(primaryDownload.language || '', primaryDownload.filename || '')
+    : classifyLanguages(doc.languages || [], '');
+  doc.languageType = primaryDownload?.languageType || primaryLanguageInfo.languageType || '';
+  const best = QUALITY_ORDER.find(q => doc.formats.includes(q));
+  if (best) doc.quality = best;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE 2: IMPORT TO MONGODB
+// ═══════════════════════════════════════════════════════════════════════════
+async function phaseImport(allEntries, RESUME = false, isStopRequested = () => false) {
+  // Accept: direct links OR shortlinks that were successfully bypassed
+  const valid = allEntries.filter(e => {
+    if (e.host !== 'Shortlink') return true;
+    return e.bypassedUrl && DIRECT_HOST_RE.test(e.bypassedUrl);
+  });
+  const stillShort = allEntries.length - valid.length;
+
+  // PRE-DEDUP: collapse entries that resolve to the same final URL.
+  // This catches the case where a direct GDFlix entry AND a shortlink-bypassed-to-GDFlix
+  // entry both exist in the list — they'd produce identical finalUrls and cause duplicates.
+  const seenFinalUrls = new Set();
+  const deduped = valid.filter(e => {
+    const resolved = normalizeUrl(
+      (e.bypassedUrl || e.url || '').replace(/^http:\/\//i,'https://').replace(/\/$/, '')
+    );
+    if (!resolved || seenFinalUrls.has(resolved)) return false;
+    seenFinalUrls.add(resolved);
+    return true;
+  });
+  const preDedupRemoved = valid.length - deduped.length;
+
+  _emitter(`\n  Importable entries : ${C.green}${valid.length}${C.reset}`);
+  if (preDedupRemoved > 0) _emitter(`  Pre-dedup removed  : ${C.yellow}${preDedupRemoved}${C.reset} (same URL from direct+bypass)`);
+  if (stillShort > 0)      _emitter(`  Skipped (no bypass): ${C.yellow}${stillShort}${C.reset}`);
+
+  let added = 0, updated = 0, skipped = 0, noMeta = 0;
+
+  // ── Group by title+year for TMDB efficiency ───────────────────────────────────────
+  const groups = {};
+  for (const item of deduped) {
+    const seriesEntry = !!(item.isSeries || item.contentType === 'series' || item.contentType === 'anime');
+    const groupYear = seriesEntry ? (item.messageYear || '') : (item.messageYear || item.year || '');
+    const key = `${(item.title || '').toLowerCase().trim()}__${groupYear}`;
+    if (!groups[key]) groups[key] = { items: [], msgDate: item.date || null };
+    if (item.date && (!groups[key].msgDate || item.date < groups[key].msgDate)) groups[key].msgDate = item.date;
+    groups[key].items.push(item);
+  }
+  _emitter(`  Unique title groups: ${Object.keys(groups).length}`);
+
+  // ── Checkpoint: load already-processed groups for --resume ────────────────────────
+  let processedKeys = new Set();
+  if (RESUME) {
+    if (fs.existsSync(CHECKPOINT_FILE)) {
+      try {
+        processedKeys = new Set(JSON.parse(fs.readFileSync(CHECKPOINT_FILE, 'utf8')));
+      } catch(_) {}
+    }
+    if (processedKeys.size === 0) {
+      try {
+        const PipelineCache = require('./models/PipelineCache');
+        const cpDoc = await PipelineCache.findOne({ key: '_import_checkpoint' }).lean();
+        if (cpDoc && Array.isArray(cpDoc.data)) {
+          processedKeys = new Set(cpDoc.data);
+        }
+      } catch(_) {}
+    }
+    if (processedKeys.size > 0) {
+      _emitter(`  [SKIP]  Resuming: ${processedKeys.size} groups already done — skipping them`);
+    }
+  } else {
+    // Clean checkpoint on fresh run
+    try { if (fs.existsSync(CHECKPOINT_FILE)) fs.unlinkSync(CHECKPOINT_FILE); } catch(_) {}
+    try {
+      const PipelineCache = require('./models/PipelineCache');
+      PipelineCache.deleteOne({ key: '_import_checkpoint' }).exec().catch(() => {});
+    } catch(_) {}
+  }
+
+  const groupEntries = Object.entries(groups).filter(([key]) => !processedKeys.has(key));
+  _emitter(`  Processing: ${groupEntries.length} groups\n`);
+
+  // Save checkpoint every N groups so crashes can resume from near where they stopped
+  const CHECKPOINT_EVERY = 50;
+  function saveCheckpoint(processedSoFar) {
+    const allDone = [...processedKeys, ...processedSoFar];
+    try { fs.writeFileSync(CHECKPOINT_FILE, JSON.stringify(allDone)); }
+    catch(_) {}
+    try {
+      const PipelineCache = require('./models/PipelineCache');
+      PipelineCache.findOneAndUpdate(
+        { key: '_import_checkpoint' },
+        { $set: { data: allDone, count: allDone.length, updatedAt: new Date() } },
+        { upsert: true }
+      ).exec().catch(() => {});
+    } catch(_) {}
+  }
+
+  async function processGroup([, group]) {
+    const rep   = group.items[0];
+    const isSer = rep.isSeries || rep.contentType === 'series' || rep.contentType === 'anime';
+    const yearHints = [...new Set([
+      rep.messageYear, rep.year, ...(rep.yearCandidates || []),
+      ...group.items.map(item => item && (item.fileYear || extractYear([item.filename]))),
+    ].map(value => Number(value)).filter(value => Number.isInteger(value) && value >= 1900 && value <= 2099))];
+
+    // Advisory cross-account variant analysis: reports close-size/metadata
+    // candidates but never drops a link or treats size as proof of identity.
+    const variantAnalysis = analyzeVariantSet(group.items, { sizeTolerance: 0.01 });
+    if (variantAnalysis.nearDuplicates.length) {
+      _emitter(`[VARIANT] "${rep.title}": ${variantAnalysis.nearDuplicates.length} possible near-duplicate group(s) flagged for review; no variants removed.`);
+    }
+
+    const titleSources = [
+      rep.title,
+      rep.rawTitle,
+      ...group.items.map(item => item.filename),
+    ].filter(Boolean);
+    let cleanTitle = '';
+    let searchTitle = rep.rawTitle || rep.title || '';
+    for (const source of titleSources) {
+      const candidate = cleanTitleForApi(source, rep.year);
+      if (candidate && candidate.length >= 2 &&
+          !isJunkTitle(candidate) && !isGenericTitleCandidate(candidate)) {
+        cleanTitle = candidate;
+        const currentSearchTitle = cleanTitleForApi(searchTitle, rep.year);
+        if (!searchTitle || isJunkTitle(currentSearchTitle) ||
+            isGenericTitleCandidate(currentSearchTitle)) searchTitle = source;
+        break;
+      }
+    }
+    const normalizedSearchTitle = cleanTitleForApi(searchTitle, rep.year);
+    if (cleanTitle && (!searchTitle || isJunkTitle(normalizedSearchTitle) ||
+        isGenericTitleCandidate(normalizedSearchTitle))) {
+      searchTitle = cleanTitle;
+    }
+
+    const esc = escapeRegex(cleanTitle || '');
+    const expectedTypes = isSer ? { $in: ['series', 'anime'] } : 'movie';
+    const titleQuery = cleanTitle ? { title: { $regex: `^${esc}$`, $options: 'i' }, type: expectedTypes } : null;
+    let existing = null;
+    // IDs are authoritative. A series season year must never create a second
+    // catalogue card for the same TMDB record.
+    if (rep.tmdbIdHint) existing = await Movie.findOne({ tmdbId: String(rep.tmdbIdHint), type: expectedTypes });
+    if (!existing && titleQuery && rep.messageYear) {
+      existing = await Movie.findOne({ ...titleQuery, year: rep.messageYear });
+    }
+    if (!existing && titleQuery && rep.year && !isSer) {
+      existing = await Movie.findOne({ ...titleQuery, year: rep.year });
+    }
+    // For series/anime, only the message/show year describes the parent title.
+    // Season filename years are stored per download and do not split the parent.
+    if (!existing && titleQuery) existing = await Movie.findOne(titleQuery);
+
+    let meta = existing ? {
+      tmdbId: existing.tmdbId || '', imdbId: existing.imdbId || '',
+      title: existing.title || cleanTitle, type: existing.type || (isSer ? 'series' : 'movie'),
+      totalSeasons: existing.totalSeasons || 0,
+      description: existing.description || '', poster: existing.poster || '',
+      posterFallback: existing.posterFallback || '', backdrop: existing.backdrop || '',
+      rating: existing.rating || 0, year: existing.year || rep.messageYear || (isSer ? null : rep.year) || null,
+      releaseDate: existing.releaseDate || '',
+      genre: existing.genre || [], duration: existing.duration || '',
+      runtimeMinutes: existing.runtimeMinutes ?? rep.runtimeMinutes ?? null,
+      certification: existing.certification || rep.certification || '',
+      isIMAX: !!existing.isIMAX || !!rep.isIMAX,
+      aspectRatio: existing.aspectRatio || rep.aspectRatio || '',
+      languageType: existing.languageType || rep.languageType || '',
+      seasonPosters: existing.seasonPosters || {},
+      seasonPoster: rep.season && existing.seasonPosters?.[`s${rep.season}`]
+        ? existing.seasonPosters[`s${rep.season}`] : '',
+    } : {};
+
+    const parentYearHint = isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year || null);
+    const parentYearMismatch = !!(existing && parentYearHint && existing.year &&
+      Math.abs(Number(existing.year) - Number(parentYearHint)) > 2);
+    let verifiedTmdbMeta = null;
+    let splitExistingIdentity = false;
+    const needsMetadata = !existing || !existing.tmdbId || !existing.imdbId ||
+      !existing.poster || !existing.backdrop || !existing.description ||
+      !existing.rating || !existing.genre?.length || !existing.year ||
+      !existing.duration || (isSer && !existing.totalSeasons) ||
+      (rep.season && !existing.seasonPosters?.[`s${rep.season}`]) ||
+      (existing?.poster && !/image\\.tmdb\\.org/i.test(existing.poster)) ||
+      isJunkTitle(existing?.title) || isGenericTitleCandidate(existing?.title) ||
+      parentYearMismatch;
+
+    if (cleanTitle && needsMetadata) {
+      // A Telegram heading can be slightly different from the actual release
+      // filename. Search the best heading first, then retry distinct filename
+      // candidates before giving up on TMDB metadata for this title.
+      const tmdbSearchCandidates = [];
+      const seenTmdbSearchTitles = new Set();
+      for (const candidate of [
+        searchTitle, rep.title, rep.rawTitle,
+        ...group.items.map(item => item && item.filename),
+      ]) {
+        const value = String(candidate || '').trim();
+        const normalized = cleanTitleForApi(value, rep.year).toLowerCase();
+        if (!value || normalized.length < 2 || isJunkTitle(normalized) ||
+            isGenericTitleCandidate(normalized) || seenTmdbSearchTitles.has(normalized)) continue;
+        seenTmdbSearchTitles.add(normalized);
+        tmdbSearchCandidates.push(value);
+      }
+
+      let tmdb = null;
+      for (let candidateIndex = 0; candidateIndex < tmdbSearchCandidates.length; candidateIndex++) {
+        const candidate = tmdbSearchCandidates[candidateIndex];
+        tmdb = await searchTMDB(
+          candidate, isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year), isSer, rep.season, group.msgDate,
+          rep.imdbId || null, rep.tmdbIdHint || null, yearHints,
+          group.items.filter(file => !rep.season || Number(file.season) === Number(rep.season))
+            .map(file => file.fileYear || extractYear([file.filename]) || (!rep.messageYear ? file.year : null)).filter(Boolean)
+        );
+        if (tmdb) {
+          if (candidateIndex > 0) {
+            _emitter(`[TMDB] Filename/title fallback matched: "${candidate}" → ${tmdb.title}`);
+          }
+          break;
+        }
+      }
+      if (tmdb) {
+        verifiedTmdbMeta = tmdb;
+        // A verified different TMDB identity or a title-year conflict must
+        // never inherit the old catalogue row's poster, title or downloads.
+        if (existing && shouldSplitMetadataIdentity(existing, tmdb, parentYearHint)) {
+          splitExistingIdentity = true;
+          _emitter(`[IDENTITY] ${existing.title} (${existing.year || '?'}, TMDB ${existing.tmdbId || 'none'}) differs from verified ${tmdb.title} (${tmdb.year || '?'}, TMDB ${tmdb.tmdbId}); creating a separate catalogue record.`);
+          existing = null;
+          meta = { ...tmdb };
+        } else {
+          for (const [key, value] of Object.entries(tmdb)) {
+            const current = meta[key];
+            const missing = current == null || current === '' || current === 0 ||
+              (Array.isArray(current) && current.length === 0);
+            if (missing && value != null && value !== '') meta[key] = value;
+          }
+        }
+      }
+
+      // OMDb is a final metadata fallback; try the same alternate title
+      // candidates so a slightly noisy Telegram heading doesn't block lookup.
+      let omdb = null;
+      for (const candidate of tmdbSearchCandidates.slice(0, 4)) {
+        omdb = await searchOMDB(candidate, isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year), isSer, yearHints);
+        if (omdb) break;
+      }
+      if (omdb) {
+        for (const key of ['imdbId', 'description', 'duration', 'rating', 'year', 'title', 'type']) {
+          if (!meta[key] && omdb[key]) meta[key] = omdb[key];
+        }
+        if ((!meta.genre || !meta.genre.length) && omdb.genre?.length) meta.genre = omdb.genre;
+        if (omdb.poster && omdb.poster !== meta.poster && !meta.posterFallback) {
+          meta.posterFallback = omdb.poster;
+        }
+        if (!meta.tmdbId) meta.tmdbId = '';
+      }
+
+      // Validate primary poster; then try OMDb and Google Images as fallbacks.
+      if (meta.poster) {
+        const validPoster = await validatePoster(meta.poster);
+        if (!validPoster) meta.poster = '';
+      }
+      if (!meta.poster && meta.posterFallback) {
+        const validFallback = await validatePoster(meta.posterFallback);
+        if (validFallback) {
+          meta.poster = validFallback;
+          meta.posterFallback = '';
+        } else {
+          meta.posterFallback = '';
+        }
+      }
+      if (!meta.poster) {
+        _emitter(`[IMG] No verified TMDB/OMDb poster for "${rep.title}" — leaving poster empty rather than attaching an unverified image.`);
+      }
+    }
+
+    if (!meta.title) {
+      if (!cleanTitle) { noMeta += group.items.length; return; }
+      meta = { title: cleanTitle, year: rep.year || null, type: isSer ? 'series' : 'movie', tmdbId: '', imdbId: '', poster: '', backdrop: '', rating: 0, description: '', genre: [], duration: '' };
+      _emitter(`[WARN]  No TMDB — raw title: "${meta.title}"`);
+    }
+
+    // Carry Telegram-extracted CBFC/runtime/IMAX data even when TMDB/OMDb omit it.
+    if (!meta.certification && rep.certification) meta.certification = rep.certification;
+    if (!meta.runtimeMinutes && rep.runtimeMinutes) meta.runtimeMinutes = rep.runtimeMinutes;
+    if (!meta.duration && rep.duration) meta.duration = rep.duration;
+    if (!meta.aspectRatio && rep.aspectRatio) meta.aspectRatio = rep.aspectRatio;
+    if (!meta.isIMAX && rep.isIMAX) meta.isIMAX = true;
+    if (!meta.languageType && rep.languageType) meta.languageType = rep.languageType;
+
+    // Preserve an IMDb ID explicitly parsed from Telegram even when OMDb is not configured.
+    if (!meta.imdbId && rep.imdbId) meta.imdbId = rep.imdbId;
+
+    const tmdbGenres  = (meta.genre || []).map(g => (g||'').toLowerCase());
+    const isAnimation = tmdbGenres.some(g => /animation|anime/i.test(g));
+    const origLang    = (meta.originalLanguage || '').toLowerCase();
+    const isEastAsian = /^(japanese|korean|chinese|mandarin|cantonese|ja|ko|zh)$/.test(origLang);
+    const parserAnime = rep.contentType === 'anime';
+    let finalType;
+    if ((isAnimation && isEastAsian) || (parserAnime && (isAnimation || isEastAsian)) || parserAnime) finalType = 'anime';
+    else if (meta.type === 'series' || isSer) finalType = 'series';
+    else finalType = 'movie';
+
+    for (const item of group.items) {
+      // KEY FIX: use bypassedUrl for shortlinks, direct url otherwise.
+      // DEDUP FIX: if bypass produced a *different* URL, only store the bypassed URL —
+      // never store both the shortlink AND the direct URL as separate entries.
+      let finalUrl = item.bypassedUrl || item.url;
+      finalUrl = finalUrl.replace(/^http:\/\//i, 'https://').replace(/\/$/, '');
+      finalUrl = normalizeUrl(finalUrl);  // Canonicalize GDFlix → gdflix.dev, HubCloud → hubcloud.one
+      const host = detectHost(finalUrl);
+
+      // If we skipped the bypasser, do NOT insert unresolved shortlinks!
+      if (host === 'Shortlink' && !item.bypassedUrl) {
+        skipped++;
+        continue;
+      }
+      const filename = item.filename || '';
+      const fileTags = extractSeasonEpisode(filename);
+      const quality  = item.quality || normalizeQuality(filename) || 'HD';
+      const size     = item.size || extractSize(filename) || '';
+      const language = item.language || detectAllLanguages(filename).join(', ') || '';
+      const codec    = item.codec || detectCodec(filename) || 'Other';
+      const hdr      = item.hdr || detectHDR(filename) || null;
+      const audio    = item.audio || extractAudio(filename) || null;
+      const source   = detectSource(filename) || detectSource(item.source) || item.source || null;
+      const container = item.container || detectContainer(filename) || null;
+      const bitDepth = item.bitDepth || detectBitDepth(filename) || null;
+      const audioChannels = item.audioChannels || detectAudioChannels(filename) || null;
+      const audioTracks = Array.isArray(item.audioTracks) && item.audioTracks.length >= 2 ? item.audioTracks.slice(0, 8) : [];
+      const parsedFileMetadata = extractMediaMetadata([filename, item.rawTitle || ''].filter(Boolean).join(' '));
+      const isRepack = !!item.isRepack || /repack|rerip/i.test(String(item.releaseType || '')) || parsedFileMetadata.isRepack;
+      const releaseType = isRepack ? 'Repack' : (item.releaseType || parsedFileMetadata.releaseType || 'Original');
+      const isIMAX = !!item.isIMAX || parsedFileMetadata.isIMAX;
+      const aspectRatio = item.aspectRatio || parsedFileMetadata.aspectRatio || rep.aspectRatio || '';
+      const languageInfo = classifyLanguages(item.language || detectAllLanguages(filename), filename);
+      const languageType = item.languageType || languageInfo.languageType;
+      const languageCount = item.languageCount ?? languageInfo.languageCount;
+      const correctSeason = seasonFromFilename(filename) ?? item.season ?? fileTags.season ?? null;
+      const correctEpisode = item.episode ?? fileTags.episode ?? null;
+
+      let dbRec = existing;
+      // Re-check by tmdbId in case meta search found a different record than initial lookup
+, $options: 'i' }, type: expectedTypes });
+      }
 
       const newDl = {
         quality, size, filename, language, codec, hdr, audio, source, container, bitDepth, audioChannels, audioTracks,
@@ -856,6 +1761,10 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           }
         }
         const metaSet = {};
+        Object.assign(metaSet, buildTrustedMetadataUpdate(dbRec, {
+          ...verifiedTmdbMeta,
+          imdbId: verifiedTmdbMeta?.imdbId || meta.imdbId || '',
+        }, correctSeason || rep.season || null));
         if (!dbRec.backdrop       && meta.backdrop)       metaSet.backdrop       = meta.backdrop;
         if (!dbRec.releaseDate    && meta.releaseDate)    metaSet.releaseDate    = meta.releaseDate;
         if (!dbRec.poster         && meta.poster)         metaSet.poster         = meta.poster;
@@ -1385,7 +2294,7 @@ if (IS_MAIN) {
 }
 
 // ── When require()'d by orchestrator route ────────────────────────────────────
-module.exports = { runPipeline: main, searchTMDB, searchOMDB, searchGoogleImage, fetchWithRetry, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates };// ═════════════════════════════════════════════════════════════════════════
+module.exports = { runPipeline: main, searchTMDB, searchOMDB, searchGoogleImage, fetchWithRetry, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates, shouldSplitMetadataIdentity, buildTrustedMetadataUpdate };// ═════════════════════════════════════════════════════════════════════════
 // TMDB SEARCH  —  Multi-Algorithm Title-Candidate Cascade
 // ═════════════════════════════════════════════════════════════════════════
 // Each of the 12 algorithms produces a different title variant.
