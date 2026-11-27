@@ -71,16 +71,19 @@ function hasDownloadUrl(downloads, url) {
 
 // Host detector
 function detectHost(url) {
-  if (/^(?:https?:\/\/)?(?:[^/]+\.)?gdflix\.dev(?:[/:?#]|$)/i.test(url)) return 'GDFlix';
-  if (/^(?:https?:\/\/)?(?:[^/]+\.)?hubcloud\.one(?:[/:?#]|$)/i.test(url) || /hubcloud/i.test(url)) return 'HubCloud';
-  if (/gdlink/i.test(url))         return 'GDLink';
-  if (/terabox/i.test(url))        return 'TeraBox';
-  if (/gofile/i.test(url))         return 'GoFile';
-  if (/pixeldrain/i.test(url))     return 'PixelDrain';
-  if (/drive\.google/i.test(url))  return 'Google Drive';
-  if (/1fichier/i.test(url))       return '1Fichier';
-  if (/filepress/i.test(url))      return 'FilePress';
-  if (/streamtape/i.test(url))     return 'StreamTape';
+  const normalized = normalizeGdflixUrl(url);
+  let hostname = '';
+  try { hostname = new URL(normalized).hostname.toLowerCase(); } catch (_) {}
+  if (hostname === 'gdflix.dev') return 'GDFlix';
+  if (hostname === 'hubcloud.one' || /hubcloud|drivehub/i.test(url)) return 'HubCloud';
+  if (/gdlink/i.test(url)) return 'GDLink';
+  if (/terabox/i.test(url)) return 'TeraBox';
+  if (/gofile/i.test(url)) return 'GoFile';
+  if (/pixeldrain/i.test(url)) return 'PixelDrain';
+  if (/drive\.google/i.test(url)) return 'Google Drive';
+  if (/1fichier/i.test(url)) return '1Fichier';
+  if (/filepress/i.test(url)) return 'FilePress';
+  if (/streamtape/i.test(url)) return 'StreamTape';
   return 'Download';
 }
 
