@@ -301,6 +301,59 @@ function levenshtein(a, b) {
 function escapeRegex(value) {
   return String(value || '').replace(/[.*+?^$()|[\\]{}]/g, '\\$&');
 }
+function metadataYear(value) {
+  const year = Number(value);
+  return Number.isInteger(year) && year >= 1900 && year <= 2099 ? year : null;
+}
+function shouldSplitMetadataIdentity(existing, incoming, expectedYear = null) {
+  if (!existing || !incoming || !incoming.tmdbId || Number(incoming.confidence || 0) < 65) return false;
+  const oldId = String(existing.tmdbId || '').trim();
+  const newId = String(incoming.tmdbId || '').trim();
+  const oldYear = metadataYear(existing.year);
+  const newYear = metadataYear(incoming.year) || metadataYear(expectedYear);
+  const yearConflict = !!(oldYear && newYear && Math.abs(oldYear - newYear) > 2);
+  const idConflict = !!(oldId && newId && oldId !== newId);
+  return idConflict || yearConflict;
+}
+function buildTrustedMetadataUpdate(existing, incoming, season = null) {
+  if (!existing || !incoming || !incoming.tmdbId || !existing.tmdbId ||
+      String(existing.tmdbId) !== String(incoming.tmdbId) || Number(incoming.confidence || 0) < 65) return {};
+  const set = {};
+  const isTmdbImage = value => String(value || '').startsWith('https://image.tmdb.org/t/p/');
+  if (incoming.poster && isTmdbImage(incoming.poster) && incoming.poster !== existing.poster) {
+    if (existing.poster && !existing.posterFallback) set.posterFallback = existing.poster;
+    set.poster = incoming.poster;
+  }
+  if (incoming.backdrop && isTmdbImage(incoming.backdrop) && incoming.backdrop !== existing.backdrop) set.backdrop = incoming.backdrop;
+  if (incoming.year && incoming.releaseDate && Number(existing.year || 0) !== Number(incoming.year)) {
+    set.year = Number(incoming.year);
+    set.releaseDate = incoming.releaseDate;
+  }
+  if (incoming.description && String(incoming.description).length > String(existing.description || '').length) set.description = incoming.description;
+  if (Number(incoming.rating) > 0 && Number(incoming.rating) !== Number(existing.rating || 0)) set.rating = Number(incoming.rating);
+  if ((!existing.genre || !existing.genre.length) && incoming.genre && incoming.genre.length) set.genre = incoming.genre;
+  if (!existing.duration && incoming.duration) set.duration = incoming.duration;
+  if (!existing.totalSeasons && incoming.totalSeasons) set.totalSeasons = incoming.totalSeasons;
+  if (!existing.originalLanguage && incoming.originalLanguage) set.originalLanguage = incoming.originalLanguage;
+  if (!existing.imdbId && incoming.imdbId) set.imdbId = incoming.imdbId;
+  const oldClean = cleanTitleForApi(existing.title || '');
+  const newClean = cleanTitleForApi(incoming.title || '');
+  const cleanTitleIsBetter = newClean && !isJunkTitle(newClean) && !isGenericTitleCandidate(newClean) &&
+    (isJunkTitle(existing.title) || isGenericTitleCandidate(existing.title) ||
+      (oldClean && newClean.length < oldClean.length && stringSimilarity(oldClean, newClean) >= 0.90));
+  if (cleanTitleIsBetter && newClean !== existing.title) set.title = newClean;
+  const seasonNumber = Number(season);
+  if (seasonNumber > 0 && incoming.seasonPoster &&
+      (!existing.seasonPosters || existing.seasonPosters['s' + seasonNumber] !== incoming.seasonPoster)) {
+    set['seasonPosters.s' + seasonNumber] = incoming.seasonPoster;
+  }
+  if (seasonNumber > 0 && incoming.seasonYear &&
+      Number((existing.seasonYears || {})['s' + seasonNumber] || 0) !== Number(incoming.seasonYear)) {
+    set['seasonYears.s' + seasonNumber] = Number(incoming.seasonYear);
+  }
+  return set;
+}
+
 function stringSimilarity(a, b) {
   a = (a||'').toLowerCase().trim(); b = (b||'').toLowerCase().trim();
   if (a === b) return 1;
@@ -600,11 +653,15 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
     const parentYearHint = isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year || null);
     const parentYearMismatch = !!(existing && parentYearHint && existing.year &&
       Math.abs(Number(existing.year) - Number(parentYearHint)) > 2);
+    let verifiedTmdbMeta = null;
+    let splitExistingIdentity = false;
     const needsMetadata = !existing || !existing.tmdbId || !existing.imdbId ||
       !existing.poster || !existing.backdrop || !existing.description ||
       !existing.rating || !existing.genre?.length || !existing.year ||
       !existing.duration || (isSer && !existing.totalSeasons) ||
       (rep.season && !existing.seasonPosters?.[`s${rep.season}`]) ||
+      (existing && existing.poster && !String(existing.poster).includes('image.tmdb.org')) ||
+      (existing && (isJunkTitle(existing.title) || isGenericTitleCandidate(existing.title))) ||
       parentYearMismatch;
 
     if (cleanTitle && needsMetadata) {
@@ -642,13 +699,19 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         }
       }
       if (tmdb) {
-        // Keep existing catalogue values; fill missing fields from the shared
-        // 14-algorithm TMDB matcher (including direct IMDb/TMDB-ID matches).
-        for (const [key, value] of Object.entries(tmdb)) {
-          const current = meta[key];
-          const missing = current == null || current === '' || current === 0 ||
-            (Array.isArray(current) && current.length === 0);
-          if (missing && value != null && value !== '') meta[key] = value;
+        verifiedTmdbMeta = tmdb;
+        if (existing && shouldSplitMetadataIdentity(existing, tmdb, parentYearHint)) {
+          splitExistingIdentity = true;
+          _emitter('[IDENTITY] ' + existing.title + ' (' + (existing.year || '?') + ', TMDB ' + (existing.tmdbId || 'none') + ') differs from verified ' + tmdb.title + ' (' + (tmdb.year || '?') + ', TMDB ' + tmdb.tmdbId + '); creating a separate catalogue record.');
+          existing = null;
+          meta = Object.assign({}, tmdb);
+        } else {
+          for (const [key, value] of Object.entries(tmdb)) {
+            const current = meta[key];
+            const missing = current == null || current === '' || current === 0 ||
+              (Array.isArray(current) && current.length === 0);
+            if (missing && value != null && value !== '') meta[key] = value;
+          }
         }
       }
 
@@ -685,11 +748,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
         }
       }
       if (!meta.poster) {
-        const gImg = await searchGoogleImage(rep.title, isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year), isSer);
-        if (gImg) {
-          meta.poster = gImg;
-          _emitter(`[IMG] Google image used for: ${rep.title}`);
-        }
+        _emitter('[IMG] No verified TMDB/OMDb poster for "' + rep.title + '" — leaving poster empty rather than attaching an unverified image.');
       }
     }
 
@@ -762,7 +821,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       // Re-check by tmdbId in case meta search found a different record than initial lookup
       if (!dbRec && meta.tmdbId) dbRec = await Movie.findOne({ tmdbId: String(meta.tmdbId), type: expectedTypes });
       // Last resort: same-type title match. Do not key TV records by a later season year.
-      if (!dbRec && cleanTitle) dbRec = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' }, type: expectedTypes });
+      if (!dbRec && cleanTitle && !splitExistingIdentity) dbRec = await Movie.findOne({ title: { $regex: `^${esc}$`, $options: 'i' }, type: expectedTypes });
 
       const newDl = {
         quality, size, filename, language, codec, hdr, audio, source, container, bitDepth, audioChannels, audioTracks,
@@ -776,6 +835,8 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       if (dbRec) {
         const duplicateDownloadIndex = dbRec.downloads?.findIndex(d => d.links?.some(l => l.url === finalUrl)) ?? -1;
         if (duplicateDownloadIndex >= 0) {
+          const trustedSet = buildTrustedMetadataUpdate(dbRec, Object.assign({}, verifiedTmdbMeta, { imdbId: (verifiedTmdbMeta && verifiedTmdbMeta.imdbId) || meta.imdbId || '' }), correctSeason || rep.season || null);
+          if (Object.keys(trustedSet).length) await Movie.findByIdAndUpdate(dbRec._id, { $set: trustedSet });
           const savedTracks = dbRec.downloads[duplicateDownloadIndex]?.audioTracks;
           if (audioTracks.length >= 2 && (!Array.isArray(savedTracks) || savedTracks.length < 2)) {
             await Movie.findByIdAndUpdate(dbRec._id, {
@@ -856,6 +917,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
           }
         }
         const metaSet = {};
+        Object.assign(metaSet, buildTrustedMetadataUpdate(dbRec, Object.assign({}, verifiedTmdbMeta, { imdbId: (verifiedTmdbMeta && verifiedTmdbMeta.imdbId) || meta.imdbId || '' }), correctSeason || rep.season || null));
         if (!dbRec.backdrop       && meta.backdrop)       metaSet.backdrop       = meta.backdrop;
         if (!dbRec.releaseDate    && meta.releaseDate)    metaSet.releaseDate    = meta.releaseDate;
         if (!dbRec.poster         && meta.poster)         metaSet.poster         = meta.poster;
@@ -1385,7 +1447,7 @@ if (IS_MAIN) {
 }
 
 // ── When require()'d by orchestrator route ────────────────────────────────────
-module.exports = { runPipeline: main, searchTMDB, searchOMDB, searchGoogleImage, fetchWithRetry, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates };// ═════════════════════════════════════════════════════════════════════════
+module.exports = { runPipeline: main, searchTMDB, searchOMDB, searchGoogleImage, fetchWithRetry, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates, shouldSplitMetadataIdentity, buildTrustedMetadataUpdate };
 // TMDB SEARCH  —  Multi-Algorithm Title-Candidate Cascade
 // ═════════════════════════════════════════════════════════════════════════
 // Each of the 12 algorithms produces a different title variant.
