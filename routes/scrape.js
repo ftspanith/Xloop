@@ -303,15 +303,48 @@ router.post('/upload-export', auth, upload.array('files', 10), async (req, res) 
     // This prevents exact-duplicate URLs from being saved twice across accounts.
     // Different URL for same file (mirror on different host) IS kept — pipeline handles slot merge.
     let linksToSave = allLinks;
+    let refreshedDuplicateCount = 0;
     if (mergeMode) {
-      // Get all URLs already stored so we can skip exact duplicates
-      const existingUrls = new Set(
-        (await ExtractedLink.find({}, 'url').lean()).map(d => d.url)
-      );
+      // Existing URLs are not re-inserted, but their parsed filename/title metadata
+      // must be refreshed. This repairs old batches where a multi-movie Telegram
+      // post was previously assigned its first title for every extracted link.
+      const existingDocs = await ExtractedLink.find(
+        { url: { $in: allLinks.map(entry => entry.url) } }
+      ).lean();
+      const existingByUrl = new Map(existingDocs.map(doc => [doc.url, doc]));
+      const refreshOps = [];
+      const refreshFields = [
+        'messageId', 'host', 'title', 'rawTitle', 'year', 'messageYear', 'yearCandidates',
+        'quality', 'size', 'language', 'season', 'episode', 'type', 'filename', 'codec',
+        'hdr', 'audio', 'source', 'container', 'bitDepth', 'audioChannels', 'fileYear',
+        'audioTracks', 'isRepack', 'releaseType', 'isIMAX', 'aspectRatio', 'languageType',
+        'languageCount', 'runtimeMinutes', 'duration', 'certification', 'isSeries',
+        'contentType', 'date', 'imdbId', 'tmdbIdHint', 'sourceAccount'
+      ];
+      for (const incoming of allLinks) {
+        const existing = existingByUrl.get(incoming.url);
+        if (!existing) continue;
+        const set = {};
+        for (const field of refreshFields) {
+          const value = incoming[field];
+          if (value === undefined || value === null || value === '') continue;
+          if (Array.isArray(value) && value.length === 0) continue;
+          if (JSON.stringify(existing[field] ?? null) !== JSON.stringify(value)) set[field] = value;
+        }
+        if (Object.keys(set).length) {
+          refreshOps.push({ updateOne: { filter: { _id: existing._id }, update: { $set: set } } });
+        }
+      }
+      const WRITE_CHUNK = 500;
+      for (let index = 0; index < refreshOps.length; index += WRITE_CHUNK) {
+        await ExtractedLink.bulkWrite(refreshOps.slice(index, index + WRITE_CHUNK), { ordered: false });
+      }
+      refreshedDuplicateCount = refreshOps.length;
+      const existingUrls = new Set(existingByUrl.keys());
       const before = linksToSave.length;
-      linksToSave = linksToSave.filter(e => !existingUrls.has(e.url));
+      linksToSave = linksToSave.filter(entry => !existingUrls.has(entry.url));
       const skippedDupes = before - linksToSave.length;
-      if (skippedDupes > 0) console.log(`[merge] Skipped ${skippedDupes} exact-duplicate URLs from previous account`);
+      if (skippedDupes > 0) console.log(`[merge] Refreshed ${refreshedDuplicateCount} existing link records; skipped ${skippedDupes} exact-duplicate inserts.`);
     }
 
     // Tag all entries with this batch ID
@@ -341,7 +374,7 @@ router.post('/upload-export', auth, upload.array('files', 10), async (req, res) 
 
     // Write links_for_bypasser.json to /tmp for immediate same-Lambda pipeline use
     try {
-      fs.writeFileSync(path.join(os.tmpdir(), 'links_for_bypasser.json'), JSON.stringify(linksToSave));
+      fs.writeFileSync(path.join(os.tmpdir(), 'links_for_bypasser.json'), JSON.stringify(mergeMode ? allLinks : linksToSave));
       fs.writeFileSync(path.join(os.tmpdir(), 'shortlinks_report.json'), JSON.stringify(shortlinks));
     } catch(_) {}
 
@@ -380,7 +413,7 @@ router.post('/upload-export', auth, upload.array('files', 10), async (req, res) 
     const dedupNote = dedupCount > 0 ? ` (${dedupCount} duplicate messages removed across files)` : '';
     const modeNote  = mergeMode ? ` [MERGE MODE — total across all accounts: ${totalCount} links]` : '';
     res.json({
-      message: `[DONE] Extracted ${linksToSave.length} new links from ${messages.length} messages (${skipped} skipped)${dedupNote}${modeNote}. Saved to MongoDB. Run Full Pipeline now.`,
+      message: `[DONE] Extracted ${linksToSave.length} new links and refreshed ${refreshedDuplicateCount} existing links from ${messages.length} messages (${skipped} skipped)${dedupNote}${modeNote}. Saved to MongoDB. Run Full Pipeline now.`,
       count: linksToSave.length, totalCount, messages: messages.length, rawMessages: rawCount, duplicatesRemoved: dedupCount, skipped, mergeMode,
     });
   } catch (err) {
