@@ -1096,11 +1096,12 @@ router.post('/refetch-poster/:id', auth, async (req, res) => {
 
     async function validatePoster(url) {
       if (!url) return null;
+      if (/^https:\/\/image\.tmdb\.org\//i.test(url)) return url;
       try { const r = await axios.head(url, { timeout: 5000 }); return r.status < 400 ? url : null; }
       catch { return null; }
     }
 
-    const { searchTMDB, searchOMDB, searchGoogleImage } = require('../pipeline_full');
+    const { searchTMDB, searchOMDB } = require('../pipeline_full');
     const { extractYear } = require('../utils/parser');
     const isSer = movie.type === 'series' || movie.type === 'anime';
     const downloads = movie.downloads || [];
@@ -1118,6 +1119,15 @@ router.post('/refetch-poster/:id', auth, async (req, res) => {
     );
     let poster = '', posterFallback = '', backdrop = '', tmdbId = movie.tmdbId, imdbId = movie.imdbId;
     const seasonYears = { ...(movie.seasonYears || {}) };
+
+    if (tmdb && movie.tmdbId && tmdb.tmdbId &&
+        String(movie.tmdbId) !== String(tmdb.tmdbId)) {
+      return res.status(409).json({
+        message: 'Verified TMDB identity differs from the saved record. Refusing to overwrite its poster/year; review the title identity first.',
+        savedTmdbId: String(movie.tmdbId),
+        verifiedTmdbId: String(tmdb.tmdbId),
+      });
+    }
 
     if (tmdb) {
       tmdbId = tmdb.tmdbId || tmdbId;
