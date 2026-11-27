@@ -1608,24 +1608,24 @@ function parseMessageBlock(rawText, messageId, msgDate) {
 
 function splitMultiTitleMessage(rawText) {
   if (typeof rawText !== 'string' || !rawText.trim()) return [];
-  const normalized = rawText.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');
-  const sourceLines = normalized.split('\\n');
-  const isUrlLine = value => /^\\s*https?:\\/\\//i.test(String(value || '').trim());
+  const normalized = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const sourceLines = normalized.split('\n');
+  const isUrlLine = value => /^\s*https?:\/\//i.test(String(value || '').trim());
   const candidates = [];
 
   for (let index = 0; index < sourceLines.length; index++) {
     const line = String(sourceLines[index] || '').trim();
     if (!line || isUrlLine(line)) continue;
-    const hasMediaExtension = /\\.(?:iso|mkv|mp4|avi|m2ts|mov|ts|zip|rar)\\b/i.test(line);
-    const hasReleaseDescriptor = /\\b(?:BD50|BD25|BDMV|Blu[ ._-]?Ray|WEB[ ._-]?(?:DL|Rip)|DVDRip|Remux|2160p|1080p|720p)\\b/i.test(line);
-    const hasYear = /\\b(?:19|20)\\d{2}\\b/.test(line);
-    const hasSize = /\\b\\d+(?:[.,]\\d+)?\\s*(?:TB|GB|GiB|MB|MiB)\\b/i.test(line);
+    const hasMediaExtension = /\.(?:iso|mkv|mp4|avi|m2ts|mov|ts|zip|rar)\b/i.test(line);
+    const hasReleaseDescriptor = /\b(?:BD50|BD25|BDMV|Blu[ ._-]?Ray|WEB[ ._-]?(?:DL|Rip)|DVDRip|Remux|2160p|1080p|720p)\b/i.test(line);
+    const hasYear = /\b(?:19|20)\d{2}\b/.test(line);
+    const hasSize = /\b\d+(?:[.,]\d+)?\s*(?:TB|GB|GiB|MB|MiB)\b/i.test(line);
     if (!hasMediaExtension && !(hasYear && hasReleaseDescriptor && hasSize)) continue;
 
     const year = extractYear([line]);
     const titleSource = line
-      .replace(/\\.(?:iso|mkv|mp4|avi|m2ts|mov|ts|zip|rar)\\b/gi, ' ')
-      .replace(/\\b\\d+(?:[.,]\\d+)?\\s*(?:TB|GB|GiB|MB|MiB)\\b/gi, ' ');
+      .replace(/\.(?:iso|mkv|mp4|avi|m2ts|mov|ts|zip|rar)\b/gi, ' ')
+      .replace(/\b\d+(?:[.,]\d+)?\s*(?:TB|GB|GiB|MB|MiB)\b/gi, ' ');
     const title = cleanTitleForApi(titleSource, year);
     if (!title || title.length < 2 || isJunkTitle(title) || isGenericTitleCandidate(title)) continue;
     candidates.push({ index, title, year });
@@ -1637,13 +1637,13 @@ function splitMultiTitleMessage(rawText) {
   for (let itemIndex = 0; itemIndex < candidates.length; itemIndex++) {
     const start = itemIndex === 0 ? 0 : candidates[itemIndex].index;
     const end = itemIndex + 1 < candidates.length ? candidates[itemIndex + 1].index : sourceLines.length;
-    const text = sourceLines.slice(start, end).join('\\n').trim();
+    const text = sourceLines.slice(start, end).join('\n').trim();
     if (!text || !sourceLines.slice(candidates[itemIndex].index, end).some(isUrlLine)) return [normalized];
     blocks.push(text);
   }
 
   const identities = new Set(candidates.map(item =>
-    item.title.toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu, ' ').trim() + '|' + (item.year || '')
+    item.title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim() + '|' + (item.year || '')
   ));
   if (identities.size < 2) return [normalized];
 
