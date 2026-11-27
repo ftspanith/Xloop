@@ -320,7 +320,7 @@ function buildTrustedMetadataUpdate(existing, incoming, season = null) {
       String(existing.tmdbId) !== String(incoming.tmdbId) ||
       Number(incoming.confidence || 0) < 65) return {};
   const set = {};
-  const tmdbImage = value => /^https:\/\/image\\.tmdb\\.org\\/t\\/p\\//i.test(String(value || ''));
+  const tmdbImage = value => String(value || '').startsWith('https://image.tmdb.org/t/p/');
   if (incoming.poster && tmdbImage(incoming.poster) && incoming.poster !== existing.poster) {
     if (existing.poster && !existing.posterFallback && existing.poster !== incoming.poster) {
       set.posterFallback = existing.poster;
@@ -666,7 +666,7 @@ async function phaseImport(allEntries, RESUME = false, isStopRequested = () => f
       !existing.rating || !existing.genre?.length || !existing.year ||
       !existing.duration || (isSer && !existing.totalSeasons) ||
       (rep.season && !existing.seasonPosters?.[`s${rep.season}`]) ||
-      (existing?.poster && !/image\\.tmdb\\.org/i.test(existing.poster)) ||
+      (existing?.poster && !String(existing.poster).includes('image.tmdb.org')) ||
       isJunkTitle(existing?.title) || isGenericTitleCandidate(existing?.title) ||
       parentYearMismatch;
 
