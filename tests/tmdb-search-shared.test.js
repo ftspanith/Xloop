@@ -271,3 +271,43 @@ test('Telegram upload date is not sent to TMDB as a release-year filter', async 
     axios.get = originalGet;
   }
 });
+
+test('TMDB image catalogue supplies a verified portrait poster when the details record has none', async () => {
+  const originalGet = axios.get;
+  const calls = [];
+  axios.get = async (url, config = {}) => {
+    calls.push({ url, params: config.params || {} });
+    if (url.endsWith('/search/movie')) {
+      return { data: { results: [{
+        id: 9877, title: 'Exact Poster Film', original_title: 'Exact Poster Film',
+        release_date: '2020-05-01', popularity: 10,
+      }] } };
+    }
+    if (url.endsWith('/movie/9877')) {
+      return { data: {
+        id: 9877, title: 'Exact Poster Film', original_title: 'Exact Poster Film',
+        release_date: '2020-05-01', original_language: 'te',
+        poster_path: null, backdrop_path: null, genres: [],
+      } };
+    }
+    if (url.endsWith('/movie/9877/images')) {
+      return { data: { posters: [
+        { file_path: '/wide-banner.jpg', width: 1600, height: 900, aspect_ratio: 1.78, iso_639_1: 'en', vote_average: 10 },
+        { file_path: '/english-poster.jpg', width: 1000, height: 1500, aspect_ratio: 0.67, iso_639_1: 'en', vote_average: 9 },
+        { file_path: '/telugu-poster.jpg', width: 900, height: 1350, aspect_ratio: 0.67, iso_639_1: 'te', vote_average: 6 },
+      ] } };
+    }
+    throw new Error('Unexpected mocked TMDB URL: ' + url);
+  };
+
+  try {
+    const result = await searchTMDB('Exact Poster Film', 2020, false, null, null, null, null, {
+      tmdbKey: 'test-key', messageYear: 2020,
+    });
+    assert.ok(result);
+    assert.equal(result.poster, 'https://image.tmdb.org/t/p/w500/telugu-poster.jpg');
+    assert.ok(calls.some(call => call.url.endsWith('/movie/9877/images')));
+  } finally {
+    axios.get = originalGet;
+  }
+});
