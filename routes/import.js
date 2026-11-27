@@ -47,18 +47,22 @@ function normalizeQuality(str) {
 
 // Canonicalize GDFlix subdomains while preserving each link's path and query.
 function normalizeGdflixUrl(value) {
+  if (!value) return value;
   try {
-    const parsed = new URL(value);
-    const host = parsed.hostname.toLowerCase();
-    if (host === 'gdflix.dev' || host.endsWith('.gdflix.dev')) {
-      parsed.hostname = 'gdflix.dev';
-      return parsed.toString();
-    }
-    if (host === 'hubcloud.one' || host.endsWith('.hubcloud.one')) {
-      parsed.hostname = 'hubcloud.one';
-      return parsed.toString();
-    }
-    return value;
+    const parsed = new URL(String(value).trim());
+    let host = parsed.hostname.toLowerCase();
+    if (host.endsWith('.')) host = host.slice(0, -1);
+    const gdflixDomains = ['gdflix.dev', 'gdflix.to', 'gdflix.one', 'gdflix.link', 'gdflix.net', 'gdflix.dad', 'gdflix.cfd', 'gdflix.xyz', 'gdlink.dev'];
+    const hubcloudDomains = ['hubcloud.foo', 'hubcloud.one', 'hubcloud.art', 'hubcloud.cx', 'hubcloud.lol', 'hubcloud.bz', 'hubcloud.club', 'hubcloud.in', 'hubcloud.to', 'hubcloud.work', 'hubcloud.zone', 'hubcloud.dev', 'hubcloud.me', 'hubcloud.best', 'drivehub.dev', 'drivehub.to', 'drivehub.in', 'drivehub.online'];
+    const matches = domains => domains.some(domain => host === domain || host.endsWith('.' + domain));
+    let canonical = null;
+    if (matches(gdflixDomains)) canonical = 'gdflix.dev';
+    else if (matches(hubcloudDomains)) canonical = 'hubcloud.one';
+    if (!canonical) return value;
+    parsed.protocol = 'https:';
+    parsed.hostname = canonical;
+    parsed.port = '';
+    return parsed.toString();
   } catch (_) {
     return value;
   }
