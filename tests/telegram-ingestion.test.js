@@ -145,3 +145,60 @@ test('uses a descriptive filename instead of a generic cleaned heading', () => {
   assert.equal(result.links[0].rawTitle, 'The.Real.Film.2024.1080p.WEB-DL.HEVC.mkv');
   assert.equal(result.links[0].url, 'https://gdflix.dev/file/generic-title-test');
 });
+
+
+test('splits a single Telegram post containing multiple unrelated BluRay ISO movie entries', () => {
+  const message = {
+    channel_id: '789',
+    id: 8801,
+    date: '2026-11-27',
+    text: [
+      'Aadhavan (2009) AYNGARAN BluRay - BD50 - ORG [Tamil LPCM & DTS-HDMA5.1].iso [39.66 GB]',
+      'https://gdflix.dev/file/aadhavan',
+      '',
+      'Angadi Theru (2010) AYNGARAN BluRay - BD50 - ORG [Tamil LPCM & DTS-HDMA5.1] ESub.iso [43.38 GB]',
+      'https://gdflix.dev/file/angadi-theru',
+      '',
+      'Billa 2 (2012) API BD50 ORG UNTOUCHED TAMIL [LPCM & DTS-HDMA5.1] ESub.iso [39.77 GB]',
+      'https://gdflix.dev/file/billa2-api',
+      '',
+      'Billa 2 (2012) SEYONS BluRay - BD50 -ORG [Tamil DTS-HDMA 5.1 & DD+5.1] ESub.iso [40.02 GB]',
+      'https://gdflix.dev/file/billa2-seyons',
+      '',
+      'Thuppakki (2012) API BluRay - BD50 - ORG [Tamil DTS-HDMA5.1] ESub.iso [39.62 GB]',
+      'https://gdflix.dev/file/thuppakki',
+    ].join('\n'),
+  };
+
+  const result = extractTelegramLinks([message], '1');
+  const byUrl = new Map(result.links.map(entry => [entry.url.split('/').pop(), entry]));
+
+  assert.equal(result.links.length, 5);
+  assert.equal(byUrl.get('aadhavan').title, 'Aadhavan');
+  assert.equal(byUrl.get('aadhavan').year, 2009);
+  assert.equal(byUrl.get('angadi-theru').title, 'Angadi Theru');
+  assert.equal(byUrl.get('angadi-theru').year, 2010);
+  assert.equal(byUrl.get('billa2-api').title, 'Billa 2');
+  assert.equal(byUrl.get('billa2-seyons').title, 'Billa 2');
+  assert.equal(byUrl.get('thuppakki').title, 'Thuppakki');
+  assert.ok(result.links.every(entry => entry.messageId === 8801),
+    'all split blocks keep the original Telegram message id');
+});
+
+test('does not split multiple editions or mirrors that belong to the same movie', () => {
+  const message = {
+    channel_id: '789',
+    id: 8802,
+    text: [
+      'Billa 2 (2012) API BluRay BD50 [Tamil DTS-HD MA].iso [39.77 GB]',
+      'https://gdflix.dev/file/billa2-edition-one',
+      '',
+      'Billa 2 (2012) SEYONS BluRay BD50 [Tamil DTS-HD MA].iso [40.02 GB]',
+      'https://gdflix.dev/file/billa2-edition-two',
+    ].join('\n'),
+  };
+
+  const result = extractTelegramLinks([message], '1');
+  assert.equal(result.links.length, 2);
+  assert.deepEqual(new Set(result.links.map(entry => entry.title)), new Set(['Billa 2']));
+});
