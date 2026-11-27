@@ -738,8 +738,9 @@ window.openPlayer = (src, title) => {
   document.body.style.overflow = 'hidden';
 };
 
-document.getElementById('closePlayerBtn').addEventListener('click', () => {
-  document.getElementById('watchPlayerModal').style.display = 'none';
+document.getElementById('closePlayerBtn')?.addEventListener('click', () => {
+  const modal = document.getElementById('watchPlayerModal');
+  if (modal) modal.style.display = 'none';
   document.body.style.overflow = '';
   const iframe = document.querySelector('#playerWrap iframe');
   if (iframe) iframe.src = iframe.src;
