@@ -13,6 +13,8 @@ on:
       - 'utils/variant-intelligence.js'
       - 'utils/tmdbSearch.js'
       - 'pipeline_full.js'
+      - 'routes/import.js'
+      - 'tests/metadata-reconciliation.test.js'
       - 'utils/extractedLinkMerge.js'
       - 'tests/extracted-link-merge.test.js'
       - 'routes/scrape.js'
