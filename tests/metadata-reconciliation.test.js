@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const {
   shouldSplitMetadataIdentity,
   buildTrustedMetadataUpdate,
+  removeExactDownloadUrlFromRecord,
 } = require('../pipeline_full');
 
 test('verified TMDB identity keeps same-title remakes in separate catalogue records', () => {
@@ -104,4 +105,34 @@ test('trusted season metadata is saved per-season without changing the parent sh
   assert.equal(update['seasonPosters.s2'], incoming.seasonPoster);
   assert.equal(update['seasonYears.s2'], 2020);
   assert.equal(update.year, undefined);
+});
+
+
+test('moves one misassigned URL without deleting other mirrors or file variants', () => {
+  const record = {
+    title: 'Aadhavan',
+    tmdbId: 'wrong-owner',
+    downloads: [
+      {
+        filename: 'Angadi.Theru.2010.BD50.iso',
+        links: [
+          { url: 'https://gdflix.dev/file/angadi-theru' },
+          { url: 'https://hubcloud.one/file/angadi-theru-mirror' },
+        ],
+      },
+      {
+        filename: 'Aadhavan.2009.BD50.iso',
+        links: [{ url: 'https://gdflix.dev/file/aadhavan' }],
+      },
+    ],
+  };
+
+  assert.equal(removeExactDownloadUrlFromRecord(record, 'https://gdflix.dev/file/angadi-theru'), true);
+  assert.equal(record.downloads.length, 2);
+  assert.deepEqual(
+    record.downloads[0].links.map(link => link.url),
+    ['https://hubcloud.one/file/angadi-theru-mirror']
+  );
+  assert.equal(record.downloads[1].links[0].url, 'https://gdflix.dev/file/aadhavan');
+  assert.equal(removeExactDownloadUrlFromRecord(record, 'https://unknown/file/not-here'), false);
 });
