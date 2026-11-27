@@ -784,7 +784,7 @@ function cleanTitleForApi(title, year = null) {
     .replace(/\bS\s*\d{1,2}\b(?!\d)/gi,'')
     .replace(/\bSeason\s*\d+\s*[-–to]+\s*\d+\b/gi,'')  // strip "Season 1-5", "Season 1 to 3"
     .replace(/\bSeason\s*\d+\b/gi,'')
-    .replace(/\.(mkv|mp4|avi|mov|ts|m2ts|zip|rar)\b/gi,'')
+    .replace(/\.(iso|mkv|mp4|avi|mov|ts|m2ts|zip|rar)\b/gi,'')
     .replace(/v\d+|reloaded|uncut|extended/gi,'')
     .replace(/(?<!^)#[a-zA-Z0-9_]+/g,'')   // strip mid/end hashtags (channel tags) but NOT leading # (part of title like #Love)
     // ── Strip trailing standalone year (1900–2099) at end of title ───────────
@@ -1104,7 +1104,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     if (!l||isUrl(l)||isMetadataLine(l)||isPromo(l)||isTgLink(l)||isLinkLabel(l)) return false;
     const _fl = l.trim();
     return (
-      /\.(mkv|mp4|avi|zip|rar|m2ts|mov)\b/i.test(_fl)||
+      /\.(iso|mkv|mp4|avi|zip|rar|m2ts|mov)\b/i.test(_fl)||
       /\b(4320p|2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4[Kk]\b|UHD)\b/i.test(_fl)||
       /\b\d+(?:\.\d+)?\s*(?:GB|MB)\b/i.test(_fl)
     ) && _fl.length > 3;
@@ -1401,7 +1401,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     .replace(/\bH[.\s]+26[45]\b/gi,'')
     .replace(/\bx26[45]\b/gi,'')
     // File extensions
-    .replace(/\.(mkv|mp4|avi|mov|ts|m2ts|zip|rar)\b/gi,'')
+    .replace(/\.(iso|mkv|mp4|avi|mov|ts|m2ts|zip|rar)\b/gi,'')
     .replace(/\b(mkv|mp4|avi|m2ts)\b/gi,'')
     .replace(/\bS\d{1,2}\s*E\d{1,3}\b/gi,'').replace(/\bSeason\s*\d+\b/gi,'')
     .replace(/\bSeason\s*\d+\s*[-–to]+\s*\d+\b/gi,'')  // Strip season ranges: "Season 1-5"
@@ -1420,7 +1420,7 @@ function parseMessageBlock(rawText, messageId, msgDate) {
     .replace(/\b(mkv|mp4|avi|m2ts)\b/gi,'')
     .replace(/\bE\d{2,3}\b/gi,'')
     .replace(/\b(Combined|Complete|Pack|Collection|Boxset|Trilogy|4K\.REMUX|COMPLETE)\b/gi,'')
-    .replace(/\.(mkv|mp4|avi|mov|ts|m2ts|zip|rar)\b/gi,'')
+    .replace(/\.(iso|mkv|mp4|avi|mov|ts|m2ts|zip|rar)\b/gi,'')
     .replace(/[\[\(][^\]\)]*[\]\)]/g,'').replace(/#[a-zA-Z0-9_]+/g,'')
     // Replace dots/underscores with space, but preserve hyphens BETWEEN proper-case words
     // e.g. "Hanu-Man" keeps hyphen; "WEB-DL", "H.265" become spaces
@@ -1606,7 +1606,53 @@ function parseMessageBlock(rawText, messageId, msgDate) {
   };
 }
 
+function splitMultiTitleMessage(rawText) {
+  if (typeof rawText !== 'string' || !rawText.trim()) return [];
+  const normalized = rawText.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');
+  const sourceLines = normalized.split('\\n');
+  const isUrlLine = value => /^\\s*https?:\\/\\//i.test(String(value || '').trim());
+  const candidates = [];
+
+  for (let index = 0; index < sourceLines.length; index++) {
+    const line = String(sourceLines[index] || '').trim();
+    if (!line || isUrlLine(line)) continue;
+    const hasMediaExtension = /\\.(?:iso|mkv|mp4|avi|m2ts|mov|ts|zip|rar)\\b/i.test(line);
+    const hasReleaseDescriptor = /\\b(?:BD50|BD25|BDMV|Blu[ ._-]?Ray|WEB[ ._-]?(?:DL|Rip)|DVDRip|Remux|2160p|1080p|720p)\\b/i.test(line);
+    const hasYear = /\\b(?:19|20)\\d{2}\\b/.test(line);
+    const hasSize = /\\b\\d+(?:[.,]\\d+)?\\s*(?:TB|GB|GiB|MB|MiB)\\b/i.test(line);
+    if (!hasMediaExtension && !(hasYear && hasReleaseDescriptor && hasSize)) continue;
+
+    const year = extractYear([line]);
+    const titleSource = line
+      .replace(/\\.(?:iso|mkv|mp4|avi|m2ts|mov|ts|zip|rar)\\b/gi, ' ')
+      .replace(/\\b\\d+(?:[.,]\\d+)?\\s*(?:TB|GB|GiB|MB|MiB)\\b/gi, ' ');
+    const title = cleanTitleForApi(titleSource, year);
+    if (!title || title.length < 2 || isJunkTitle(title) || isGenericTitleCandidate(title)) continue;
+    candidates.push({ index, title, year });
+  }
+
+  if (candidates.length < 2) return [normalized];
+
+  const blocks = [];
+  for (let itemIndex = 0; itemIndex < candidates.length; itemIndex++) {
+    const start = itemIndex === 0 ? 0 : candidates[itemIndex].index;
+    const end = itemIndex + 1 < candidates.length ? candidates[itemIndex + 1].index : sourceLines.length;
+    const text = sourceLines.slice(start, end).join('\\n').trim();
+    if (!text || !sourceLines.slice(candidates[itemIndex].index, end).some(isUrlLine)) return [normalized];
+    blocks.push(text);
+  }
+
+  const identities = new Set(candidates.map(item =>
+    item.title.toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu, ' ').trim() + '|' + (item.year || '')
+  ));
+  if (identities.size < 2) return [normalized];
+
+  return blocks.length > 1 ? blocks : [normalized];
+}
+
+
 module.exports = {
+  splitMultiTitleMessage,
   parseMessageBlock,classifyUrl,stripEmojis,cleanTitleForApi,normalizeQuality,
   extractSize,toMB,detectHost,detectLanguage,detectAllLanguages,detectContentType,
   extractSeasonEpisode,detectCodec,detectContainer,detectHDR,detectBitDepth,detectAudioChannels,extractAudio,detectSource,isJunkTitle,isGenericTitleCandidate,isMetadataLine,
