@@ -189,7 +189,9 @@ test('cross-account variant analysis flags suspicious near-duplicates without dr
 });
 
 test('TMDB main poster and season poster are returned and saved separately', () => {
-  assert.match(sharedSearchSource, /poster:\s+d\.poster_path/);
+  assert.match(sharedSearchSource, /const posterPath = d\.poster_path \|\| await fetchPosterFromImages/);
+  assert.match(sharedSearchSource, /function fetchPosterFromImages/);
+  assert.match(sharedSearchSource, /Number\(poster\.height \|\| 0\) > Number\(poster\.width \|\| 0\)/);
   assert.match(sharedSearchSource, /seasonPoster:\s+extra\.seasonPoster/);
   assert.match(pipelineSource, /seasonPosters\.s\$\{rep\.season\}/);
   assert.match(pipelineSource, /seasonPosters: rep\.season && meta\.seasonPoster/);
