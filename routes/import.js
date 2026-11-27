@@ -7,6 +7,7 @@ const {
   cleanTitleForApi,
   extractSeasonEpisode,
   parseMessageBlock,
+  splitMultiTitleMessage,
   detectCodec,
   detectHDR,
   extractAudio,
@@ -484,7 +485,10 @@ router.post('/bulk', auth, async (req, res) => {
   }
 
   // Phase 1: Parse + fetch meta in parallel
-  const processedItems = await Promise.all(expandedMessages.map(async (msgObj) => {
+  const parseMessages = expandedMessages.flatMap(msgObj =>
+    splitMultiTitleMessage(msgObj.text).map(text => ({ ...msgObj, text }))
+  );
+  const processedItems = await Promise.all(parseMessages.map(async (msgObj) => {
     if (!msgObj?.text) return { skip: true, reason: 'empty' };
     const parsed = parseMessageBlock(msgObj.text);
     if (!parsed || !parsed.title?.trim()) return { skip: true, reason: 'no_title' };
