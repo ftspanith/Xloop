@@ -12,6 +12,9 @@ const {
   detectHDR,
   extractAudio,
   extractYear,
+  detectHost: sharedDetectHost,
+  normalizeQuality: sharedNormalizeQuality,
+  normalizeGdflixUrl: sharedNormalizeGdflixUrl,
 } = require('../utils/parser');
 const { searchTMDB: _sharedSearchTMDB, searchOMDB: _sharedSearchOMDB, stringSimilarity: sharedStringSimilarity } = require('../utils/tmdbSearch');
 
@@ -36,34 +39,35 @@ function escapeRegex(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// Quality normalizer
+// Quality normalizer — delegates to shared utils/parser.js (supports 8K/4K/1440p/1080p/720p/BD50)
 function normalizeQuality(str) {
-  if (/2160p|\b4K\b|\bUHD\b/i.test(str)) return '4K';
-  if (/1080p/i.test(str)) return '1080p';
-  if (/720p/i.test(str))  return '720p';
-  if (/480p/i.test(str))  return '480p';
-  if (/360p/i.test(str))  return '360p';
-  return 'HD';
+  return sharedNormalizeQuality(str);
 }
 
-// Canonicalize GDFlix subdomains while preserving each link's path and query.
+// Canonicalize legacy GDFlix/HubCloud mirror TLDs and delegate rotated domains / TMBCloud
+// to the shared utils/parser.js normalizer.
 function normalizeGdflixUrl(value) {
   if (!value) return value;
   try {
     const parsed = new URL(String(value).trim());
     let host = parsed.hostname.toLowerCase();
     if (host.endsWith('.')) host = host.slice(0, -1);
-    const gdflixDomains = ['gdflix.dev', 'gdflix.to', 'gdflix.one', 'gdflix.link', 'gdflix.net', 'gdflix.dad', 'gdflix.cfd', 'gdflix.xyz', 'gdlink.dev'];
+    const gdflixDomains = ['gdflix.dev', 'gdflix.to', 'gdflix.one', 'gdflix.link', 'gdflix.net', 'gdflix.dad', 'gdflix.cfd', 'gdflix.io', 'gdflix.xyz', 'gdlink.dev'];
     const hubcloudDomains = ['hubcloud.foo', 'hubcloud.one', 'hubcloud.art', 'hubcloud.cx', 'hubcloud.lol', 'hubcloud.bz', 'hubcloud.club', 'hubcloud.in', 'hubcloud.to', 'hubcloud.work', 'hubcloud.zone', 'hubcloud.dev', 'hubcloud.me', 'hubcloud.best', 'drivehub.dev', 'drivehub.to', 'drivehub.in', 'drivehub.online'];
     const matches = domains => domains.some(domain => host === domain || host.endsWith('.' + domain));
-    let canonical = null;
-    if (matches(gdflixDomains)) canonical = 'gdflix.dev';
-    else if (matches(hubcloudDomains)) canonical = 'hubcloud.one';
-    if (!canonical) return value;
-    parsed.protocol = 'https:';
-    parsed.hostname = canonical;
-    parsed.port = '';
-    return parsed.toString();
+    if (matches(gdflixDomains)) {
+      parsed.protocol = 'https:';
+      parsed.hostname = 'gdflix.dev';
+      parsed.port = '';
+      return parsed.toString();
+    }
+    if (matches(hubcloudDomains)) {
+      parsed.protocol = 'https:';
+      parsed.hostname = 'hubcloud.one';
+      parsed.port = '';
+      return parsed.toString();
+    }
+    return sharedNormalizeGdflixUrl(parsed.toString());
   } catch (_) {
     return value;
   }
@@ -74,22 +78,10 @@ function hasDownloadUrl(downloads, url) {
   return (downloads || []).some(d => (d.links || []).some(l => normalizeGdflixUrl(String(l.url || '')) === target));
 }
 
-// Host detector
+// Host detector — delegates to canonical parser while preserving normalized hostnames
 function detectHost(url) {
   const normalized = normalizeGdflixUrl(url);
-  let hostname = '';
-  try { hostname = new URL(normalized).hostname.toLowerCase(); } catch (_) {}
-  if (hostname === 'gdflix.dev') return 'GDFlix';
-  if (hostname === 'hubcloud.one' || /hubcloud|drivehub/i.test(url)) return 'HubCloud';
-  if (/gdlink/i.test(url)) return 'GDLink';
-  if (/terabox/i.test(url)) return 'TeraBox';
-  if (/gofile/i.test(url)) return 'GoFile';
-  if (/pixeldrain/i.test(url)) return 'PixelDrain';
-  if (/drive\.google/i.test(url)) return 'Google Drive';
-  if (/1fichier/i.test(url)) return '1Fichier';
-  if (/filepress/i.test(url)) return 'FilePress';
-  if (/streamtape/i.test(url)) return 'StreamTape';
-  return 'Download';
+  return sharedDetectHost(normalized);
 }
 
 // Levenshtein similarity (0–1)
@@ -548,7 +540,10 @@ router.post('/bulk', auth, async (req, res) => {
       let updated = false;
       for (const newDl of downloads) {
         // 1. Check if the URL already exists anywhere in this movie
-        newDl.links = (newDl.links || []).map(link => ({ ...link, url: normalizeGdflixUrl(link.url) }));
+        newDl.links = (newDl.links || []).map(link => {
+          const nUrl = normalizeGdflixUrl(link.url);
+          return { ...link, url: nUrl, host: detectHost(nUrl), isFast: /gdflix|hubcloud|gdlink|tmbcloud/i.test(nUrl) };
+        });
         const newUrl = newDl.links[0]?.url;
         const hasUrl = hasDownloadUrl(existing.downloads, newUrl);
         
@@ -565,6 +560,7 @@ router.post('/bulk', auth, async (req, res) => {
           const oldName = String(d.filename || '').trim().toLowerCase();
           const newName = String(newDl.filename || '').trim().toLowerCase();
           if (oldName && newName) return oldName === newName;
+          if (!!d.isRepack !== !!newDl.isRepack) return false;
           return (
             d.quality === newDl.quality &&
             String(d.size || '') === String(newDl.size || '') &&
@@ -664,6 +660,8 @@ router.post('/bulk', auth, async (req, res) => {
     };
 
     try {
+      const { recomputeAggregates } = require('../pipeline_full');
+      if (typeof recomputeAggregates === 'function') recomputeAggregates(movieData);
       await Movie.create(movieData);
       successCount++;
       lastAddedTitle = finalTitle;
@@ -1412,13 +1410,12 @@ router.post('/normalize-links-batch', auth, async (req, res) => {
         for (const link of (download.links || [])) {
           const oldUrl = String(link.url || '');
           const newUrl = normalizeGdflixUrl(oldUrl);
-          let newHost = link.host || 'Download';
-          if (/^https?:\/\/(?:[^/]+\.)?gdflix\.dev(?:[/:?#]|$)/i.test(newUrl)) newHost = 'GDFlix';
-          else if (/^https?:\/\/(?:[^/]+\.)?hubcloud\.one(?:[/:?#]|$)/i.test(newUrl)) newHost = 'HubCloud';
-          if (newUrl !== oldUrl || newHost !== (link.host || 'Download')) {
+          const newHost = detectHost(newUrl);
+          const newIsFast = /gdflix|hubcloud|gdlink|tmbcloud/i.test(newUrl);
+          if (newUrl !== oldUrl || newHost !== (link.host || '') || newIsFast !== !!link.isFast) {
             link.url = newUrl;
             link.host = newHost;
-            if (newHost === 'GDFlix' || newHost === 'HubCloud') link.isFast = true;
+            link.isFast = newIsFast;
             changedLinks++;
             movieChanged = true;
           }

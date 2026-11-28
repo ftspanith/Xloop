@@ -59,11 +59,14 @@ const SCRAPE_SCRIPT = path.join(__dirname, 'scrape_api.js');
 const uploadOnly  = hasFlag('upload-only');
 const noPipeline  = hasFlag('no-pipeline');
 const showHelp    = hasFlag('help') || hasFlag('h');
-const mode        = getArg('mode')       || '4';   // default: new-only (fastest)
-const days        = getArg('days')       || '1';
-const channels    = getArg('channels')   || 'all';
-const startDate   = getArg('start-date') || '';
-const endDate     = getArg('end-date')   || '';
+const mode        = getArg('mode')         || '4';   // default: new-only (fastest)
+const days        = getArg('days')         || '1';
+const channels    = getArg('channels')     || 'all';
+const startDate   = getArg('start-date')   || '';
+const endDate     = getArg('end-date')     || '';
+const scope       = getArg('scope')        || 'all';
+const titleFilter = getArg('title-filter') || '';
+const skipBypass  = hasFlag('skip-bypass');
 const mergeMode   = hasFlag('merge') || account === '2'; // account 2 always merges
 
 const MODE_LABELS = {
@@ -91,6 +94,9 @@ Options:
   --days=N                Number of days back for mode 3
   --account=2             Use second Telegram account (auto-uses TG_CHANNELS_2, merges with acc1 data)
   --merge                 Upload in merge mode (don't wipe existing links)
+  --scope=all|daily|title Limit auto-triggered pipeline scope (default: all)
+  --title-filter=TEXT     Filter pattern when --scope=title (min 3 chars)
+  --skip-bypass           Pass skipBypass to pipeline on upload
 
 NPM shortcuts:
   npm run scrape           Daily update (mode 4)
@@ -233,12 +239,19 @@ async function uploadExport(token, mergeMode = false) {
   const rejectedLinks = extraction.stats.rejectedLinks || 0;
   log(`After message dedup: ${dedupedMsgs.length} unique messages (${extraction.stats.duplicateMessages} duplicates removed)`);
   log(`Parsed ${extraction.stats.parsedMessages} messages; kept ${allLinks.length} approved provider links; rejected ${rejectedLinks} other website/provider links; skipped ${skipped} messages`);
+  if (extraction.stats.providerCounts && Object.keys(extraction.stats.providerCounts).length) {
+    const breakdown = Object.entries(extraction.stats.providerCounts).map(([h, n]) => `${h}:${n}`).join(' · ');
+    log(`Provider breakdown: ${breakdown}`);
+  }
+  if (!allLinks.length) {
+    throw new Error('No approved GDFlix, HubCloud, or TMBCloud links found in export; upload aborted to protect existing data.');
+  }
 
   // ── Upload in chunks of 400 links (~150-250KB each, well under 4.5MB limit) ──
   const CHUNK = 400;
   const MAX_RETRIES = 4;   // retry up to 4× on 503/timeout
   const RETRY_DELAY_MS = 4000;
-  const modeQs = mergeMode ? '&merge=true' : '';
+  const modeQs = mergeMode ? '?merge=true' : '';
   let batchId   = null;
   let totalSent = 0;
 
@@ -246,12 +259,13 @@ async function uploadExport(token, mergeMode = false) {
     const chunk   = allLinks.slice(i, i + CHUNK);
     const isFinal = i + CHUNK >= allLinks.length;
     const body    = { links: chunk, batchId, isFinal,
+      sourceAccount: String(account),
       messageCount: dedupedMsgs.length, skipped };
 
     let res = null;
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        res = await apiRequest('POST', `/api/scrape/save-extracted?${modeQs}`, body, token);
+        res = await apiRequest('POST', `/api/scrape/save-extracted${modeQs}`, body, token);
         if (res.status === 200) break;   // success
         if (res.status === 503 || res.status === 504 || res.status === 502) {
           warn(`\nChunk ${Math.floor(i/CHUNK)+1}: Server busy (${res.status}), retry ${attempt}/${MAX_RETRIES} in ${RETRY_DELAY_MS/1000}s...`);
@@ -277,11 +291,12 @@ async function uploadExport(token, mergeMode = false) {
   }
 
   // ── Also upload the raw JSON export so json-search-links endpoint can use it ──
-  // Send just the messages array compressed to a dedicated endpoint
+  // indexOnly=true refreshes telegram_export.json without overwriting the ExtractedLink batch just saved.
   log('Uploading raw messages for search index...');
   try {
+    const exportQs = mergeMode ? '?indexOnly=true&merge=true' : '?indexOnly=true';
     const exportRes = await apiRequest('POST',
-      `/api/scrape/upload-export${mergeMode ? '?merge=true' : ''}`,
+      `/api/scrape/upload-export${exportQs}`,
       { messages: dedupedMsgs, account: String(account) }, token);
     if (exportRes.status === 200) {
       log('Search index updated.');
@@ -301,11 +316,16 @@ async function triggerPipeline(token) {
     return;
   }
 
-  const preserveCatalogue = uploadOnly || mergeMode;
+  const preserveCatalogue = uploadOnly || mergeMode || scope !== 'all';
   log(preserveCatalogue
     ? 'Triggering Skip Scraper / import-only pipeline on Vercel (preserve existing catalogue)...'
     : 'Triggering Full Pipeline on Vercel...');
-  const res = await apiRequest('POST', '/api/orchestrator/start', { skipScraper: preserveCatalogue }, token);
+  const res = await apiRequest('POST', '/api/orchestrator/start', {
+    skipScraper: preserveCatalogue,
+    ...(skipBypass ? { skipBypass: true } : {}),
+    scope,
+    ...(titleFilter ? { titleFilter } : {}),
+  }, token);
   if (res.status === 200) {
     ok(`${preserveCatalogue ? 'Skip Scraper / import-only pipeline' : 'Full Pipeline'} started! Watch progress at:`);
     log(`  → ${SITE_URL}/admin/dashboard.html`);

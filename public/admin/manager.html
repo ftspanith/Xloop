@@ -443,7 +443,7 @@
       <div class="form-group" style="margin-bottom:0">
         <label>Quality</label>
         <select id="edit-quality">
-          <option>4K</option><option>1080p</option><option>720p</option><option>480p</option>
+          <option>8K</option><option>4K</option><option>1440p</option><option>1080p</option><option>720p</option><option>576p</option><option>540p</option><option>480p</option><option>360p</option><option>SD</option><option>HD</option>
         </select>
       </div>
       <div class="form-group" style="margin-bottom:0">
@@ -512,7 +512,7 @@
       </div>
       <div class="form-row triple">
         <div><label>Size</label><input type="text" id="new-link-size" placeholder="2.1 GB"></div>
-        <div><label>Quality</label><select id="new-link-quality"><option>1080p</option><option>4K</option><option>720p</option><option>480p</option></select></div>
+        <div><label>Quality</label><select id="new-link-quality"><option>8K</option><option>4K</option><option>1440p</option><option>1080p</option><option>720p</option><option>576p</option><option>540p</option><option>480p</option><option>360p</option><option>240p</option><option>SD</option><option>HD</option></select></div>
         <div><label>Language</label><input type="text" id="new-link-lang" placeholder="Telugu"></div>
       </div>
       <button class="btn btn-green btn-sm" onclick="addNewDownload()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add Link</button>
@@ -637,6 +637,7 @@ async function startLinkNormalization() {
   } finally {
     button.disabled = false;
     button.style.opacity = '';
+    status.style.color = '';
     button.textContent = 'Run Again / Retry';
   }
 }
@@ -965,7 +966,7 @@ function addExtraLink(di) {
   if (!/^https?:\/\//i.test(rawUrl)) return showStatus('edit-status', 'Enter a valid http(s) URL.', 'error');
   const url = normalizeGdflixUrl(rawUrl);
   if (!editMovieData.downloads[di].links) editMovieData.downloads[di].links = [];
-  editMovieData.downloads[di].links.push({ host: detectHostJS(url), url, isFast: /gdflix|hubcloud|gdlink/i.test(url) });
+  editMovieData.downloads[di].links.push({ host: detectHostJS(url), url, isFast: /gdflix|hubcloud|gdlink|tmbcloud/i.test(url) });
   openEdit(editMovieData);
 }
 function addNewDownload() {
@@ -977,7 +978,7 @@ function addNewDownload() {
   if (!/^https?:\/\//i.test(rawUrl)) return showStatus('edit-status', 'Enter a valid http(s) URL.', 'error');
   const url = normalizeGdflixUrl(rawUrl);
   if (!editMovieData.downloads) editMovieData.downloads = [];
-  editMovieData.downloads.push({ filename, size, quality, language, links: [{ host: detectHostJS(url), url, isFast: /gdflix|hubcloud|gdlink/i.test(url) }] });
+  editMovieData.downloads.push({ filename, size, quality, language, links: [{ host: detectHostJS(url), url, isFast: /gdflix|hubcloud|gdlink|tmbcloud/i.test(url) }] });
   // Clear fields
   ['new-link-url','new-link-filename','new-link-size','new-link-lang'].forEach(id => document.getElementById(id).value='');
   openEdit(editMovieData);
@@ -990,6 +991,7 @@ function detectHostJS(url) {
   if (hostname === 'gdflix.dev') return 'GDFlix';
   if (hostname === 'hubcloud.one' || /hubcloud|drivehub/i.test(url)) return 'HubCloud';
   if (/gdlink/i.test(url)) return 'GDLink';
+  if (/tmbcloud/i.test(url)) return 'TMBCloud';
   if (/terabox/i.test(url)) return 'TeraBox';
   if (/gofile/i.test(url)) return 'GoFile';
   if (/pixeldrain/i.test(url)) return 'PixelDrain';
@@ -1009,7 +1011,7 @@ async function saveEdit() {
     if (link) {
       link.url = normalizeGdflixUrl(input.value.trim());
       link.host = detectHostJS(link.url);
-      link.isFast = /gdfilx\.dev|gdflix|hubcloud|gdlink/i.test(link.url);
+      link.isFast = /gdflix\.dev|gdflix|hubcloud|gdlink|tmbcloud/i.test(link.url);
     }
   });
   const invalidLink = (editMovieData.downloads || []).some(d => (d.links || []).some(l => !/^https?:\/\//i.test((l.url || '').trim())));

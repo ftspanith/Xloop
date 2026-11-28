@@ -2,14 +2,30 @@
 'use strict';
 
 // Termux-only Telegram export sync. Uploads extracted links in small batches.
-// Requires the local dry-run parser helper created during the export validation.
+// Requires the local dry-run parser helper if available; otherwise uses the
+// canonical shared parser in utils/telegram-ingestion.js so the uploader works
+// seamlessly in any environment.
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
-const { readExport, extractLinksFromMessages } = require('../.telegram-import-dry-run.js');
+
+let readExport;
+let extractLinksFromMessages;
+try {
+  ({ readExport, extractLinksFromMessages } = require('../.telegram-import-dry-run.js'));
+} catch (_) {
+  const { extractTelegramLinks } = require('../utils/telegram-ingestion');
+  readExport = (filePath) => {
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const messages = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.messages) ? parsed.messages : []);
+    return { messages };
+  };
+  extractLinksFromMessages = (messages, account) => extractTelegramLinks(messages, account);
+}
 
 const EXPORT_DIR = path.resolve(__dirname, '../../Xloop-local-safe');
 const EXPECTED = { account1: 37455, account2: 32216, total: 69671 };
+const ALLOW_DYNAMIC_COUNTS = process.argv.includes('--dynamic') || process.argv.includes('--force') || process.env.SYNC_DYNAMIC === '1';
 const CHUNK_SIZE = 300;
 
 function comparableUrl(value) {
@@ -108,16 +124,22 @@ async function main() {
   console.log('Account 2 unique additions:', account2.length.toLocaleString());
   console.log('Combined unique total:', links.length.toLocaleString());
 
-  if (account1.length !== EXPECTED.account1 ||
-      account2.length !== EXPECTED.account2 ||
-      links.length !== EXPECTED.total) {
+  const expectedCounts = ALLOW_DYNAMIC_COUNTS
+    ? { account1: account1.length, account2: account2.length, total: links.length }
+    : EXPECTED;
+
+  if (!ALLOW_DYNAMIC_COUNTS &&
+      (account1.length !== EXPECTED.account1 ||
+       account2.length !== EXPECTED.account2 ||
+       links.length !== EXPECTED.total)) {
     throw new Error(
       'Export counts changed. Expected A1=' + EXPECTED.account1 +
       ', A2=' + EXPECTED.account2 + ', total=' + EXPECTED.total +
       '; got A1=' + account1.length + ', A2=' + account2.length +
-      ', total=' + links.length + '. Nothing uploaded.'
+      ', total=' + links.length + '. Nothing uploaded. (Re-run with --dynamic to upload new export counts.)'
     );
   }
+  if (!expectedCounts.total) throw new Error('No links extracted. Check export files and parser.');
 
   const baseInput = process.env.XLOOP_API_BASE ||
     await ask('Xloop site base URL (e.g. https://your-site.vercel.app): ');
@@ -130,18 +152,18 @@ async function main() {
   let syncId;
   if (current.status === 'uploading' &&
       current.expected &&
-      current.expected.total === EXPECTED.total &&
-      current.expected.account1 === EXPECTED.account1 &&
-      current.expected.account2 === EXPECTED.account2) {
+      current.expected.total === expectedCounts.total &&
+      current.expected.account1 === expectedCounts.account1 &&
+      current.expected.account2 === expectedCounts.account2) {
     syncId = current.syncId;
     console.log('Resuming existing staged sync:', syncId);
   } else {
     syncId = 'termux_' + Date.now();
     await requestJson(base, '/api/scrape/telegram-sync/start', token, {
       syncId,
-      expectedTotal: EXPECTED.total,
-      account1Count: EXPECTED.account1,
-      account2Count: EXPECTED.account2,
+      expectedTotal: expectedCounts.total,
+      account1Count: expectedCounts.account1,
+      account2Count: expectedCounts.account2,
     });
     console.log('Started staged sync:', syncId);
   }

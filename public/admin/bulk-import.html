@@ -237,19 +237,24 @@
               rawMessages.forEach(msg => {
                 if (msg.type && msg.type !== 'message') return;
                 let fullText = '';
-                if (typeof msg.text === 'string' && msg.channel_id) {
-                  fullText = msg.text;
-                } else if (Array.isArray(msg.text)) {
+                if (Array.isArray(msg.text)) {
                   fullText = msg.text.map(t => {
                     if (typeof t === 'string') return t;
-                    if (t.type === 'text_link') return t.text + '\n' + t.href; 
-                    return t.text || '';
+                    if (t && t.type === 'text_link' && t.href) return `${t.text || ''}\n${t.href}\n`;
+                    return (t && t.text) || '';
                   }).join('');
                 } else if (typeof msg.text === 'string') {
                   fullText = msg.text;
                 }
+                if (msg.reply_markup?.inline_keyboard) {
+                  for (const row of msg.reply_markup.inline_keyboard) {
+                    for (const btn of (row || [])) {
+                      if (btn && btn.url) fullText += '\n' + btn.url;
+                    }
+                  }
+                }
                 if (fullText.trim().length > 0) {
-                  textBlocks.push({ id: msg.id, text: fullText.trim() });
+                  textBlocks.push({ id: msg.id, date: msg.date || msg.date_unixtime || null, text: fullText.trim() });
                 }
               });
 

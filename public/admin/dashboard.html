@@ -1101,10 +1101,17 @@
   }
   function _normalizeQuality(s) {
     if(!s) return 'HD'; s=s.toUpperCase();
+    if (/8K\b|8192/.test(s)) return '8K';
     if (/2160P|4K\b|UHD/.test(s)) return '4K';
+    if (/1440P/.test(s)) return '1440p';
     if (/1080P/.test(s)) return '1080p';
     if (/720P/.test(s)) return '720p';
+    if (/576P/.test(s)) return '576p';
+    if (/540P/.test(s)) return '540p';
     if (/480P/.test(s)) return '480p';
+    if (/360P/.test(s)) return '360p';
+    if (/240P/.test(s)) return '240p';
+    if (/BD50|BD25|BDREMUX/.test(s)) return '1080p';
     return 'HD';
   }
   function _detectLanguage(s) {

@@ -755,7 +755,7 @@
     if (eventSource) { eventSource.close(); eventSource = null; }
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 
-    eventSource = new EventSource('/api/orchestrator/stream');
+    eventSource = new EventSource('/api/orchestrator/stream?token=' + encodeURIComponent(localStorage.getItem('xloop_admin_token') || ''));
 
     eventSource.onopen = () => {
       // Clear any lingering reconnect timer
@@ -808,7 +808,7 @@
     try {
       appendLog(skipScraper ? 'Starting FAST LOCAL Loop (Skip Scraper mode)...' : 'Starting Full Pipeline...');
       if (window._pipelineES) { window._pipelineES.close(); }
-      window._pipelineES = new EventSource('/api/orchestrator/start-local?skipScraper=' + skipScraper);
+      window._pipelineES = new EventSource('/api/orchestrator/start-local?skipScraper=' + skipScraper + '&token=' + encodeURIComponent(token || ''));
       window._pipelineES.onmessage = (e) => {
         try {
             const ev = JSON.parse(e.data);
@@ -956,10 +956,17 @@
   }
   function _normalizeQuality(s) {
     if(!s) return 'HD'; s=s.toUpperCase();
+    if (/8K\b|8192/.test(s)) return '8K';
     if (/2160P|4K\b|UHD/.test(s)) return '4K';
+    if (/1440P/.test(s)) return '1440p';
     if (/1080P/.test(s)) return '1080p';
     if (/720P/.test(s)) return '720p';
+    if (/576P/.test(s)) return '576p';
+    if (/540P/.test(s)) return '540p';
     if (/480P/.test(s)) return '480p';
+    if (/360P/.test(s)) return '360p';
+    if (/240P/.test(s)) return '240p';
+    if (/BD50|BD25|BDREMUX/.test(s)) return '1080p';
     return 'HD';
   }
   function _detectLanguage(s) {

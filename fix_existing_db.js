@@ -24,14 +24,14 @@
 'use strict';
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Movie    = require('./models/Movie');
-const { detectHost, toMB, detectCodec } = require('./utils/parser');
+const Movie = require('./models/Movie');
+const { detectHost, toMB, detectCodec, normalizeGdflixUrl } = require('./utils/parser');
 
 const IS_DRY_RUN = process.argv.includes('--dry-run');
 
-const BLOCKED_RE    = [/vflix\./i, /vifix\./i, /gofile\.io/i, /dtflix\./i, /dotflix\./i];
-const MAX_LINKS     = 40;
-const QUALITY_ORDER = ['4K', '1080p', '720p', '480p', '360p', 'HD'];
+const BLOCKED_RE = [/vflix\./i, /vifix\./i, /gofile\.io/i, /dtflix\./i, /dotflix\./i];
+const MAX_LINKS = 40;
+const QUALITY_ORDER = ['8K', '4K', '1440p', '1080p', '720p', '576p', '540p', '480p', '360p', '240p', 'SD', 'HD'];
 
 function recompute(downloads = [], currentMovie = {}) {
   // Sort downloads: highest quality first, then largest size first
@@ -142,13 +142,13 @@ async function run() {
       const seenUrls = new Set();
       const uniqueLinks = [];
       for (const l of dl.links) {
-        const cleanUrl = (l.url || '').replace(/^http:\/\//i, 'https://').replace(/\/$/, '');
+        const cleanUrl = normalizeGdflixUrl((l.url || '').replace(/^http:\/\//i, 'https://').replace(/\/$/, ''));
         if (seenUrls.has(cleanUrl)) continue;
         seenUrls.add(cleanUrl);
         // Ensure host and isFast are accurate
         l.url = cleanUrl;
         l.host = detectHost(cleanUrl);
-        l.isFast = /gdflix|hubcloud|gdlink/i.test(cleanUrl);
+        l.isFast = /gdflix|hubcloud|gdlink|tmbcloud/i.test(cleanUrl);
         uniqueLinks.push(l);
       }
       if (uniqueLinks.length !== dl.links.length) changed = true;
@@ -181,19 +181,21 @@ async function run() {
     // 4. Dedup & merge download groups: same quality + season + episode + shared host
     const merged = [];
     for (const dl of downloads) {
-      const q  = dl.quality || '';
-      const s  = dl.season  ?? null;
+      const q = dl.quality || '';
+      const s = dl.season ?? null;
       const ep = dl.episode ?? null;
       const dlHosts = new Set(dl.links.map(l => l.host || detectHost(l.url)));
 
       let placed = false;
       for (const ex of merged) {
-        const qOk  = ex.quality === q;
+        const qOk = ex.quality === q;
         const seOk = (ex.season ?? null) == s && (ex.episode ?? null) == ep;
         if (!qOk || !seOk) continue;
+        // Never merge a repack into a non-repack group and vice-versa
+        if (!!ex.isRepack !== !!dl.isRepack) continue;
 
         const exHosts = new Set(ex.links.map(l => l.host || detectHost(l.url)));
-        const shared  = [...dlHosts].some(h => exHosts.has(h));
+        const shared = [...dlHosts].some(h => exHosts.has(h));
         if (!shared) continue;
 
         // Merge links
@@ -208,13 +210,13 @@ async function run() {
 
         // Fill missing metadata from dl if ex didn't have it
         if (!ex.filename && dl.filename) { ex.filename = dl.filename; changed = true; }
-        if (!ex.size && dl.size)         { ex.size = dl.size; changed = true; }
+        if (!ex.size && dl.size) { ex.size = dl.size; changed = true; }
         if ((!ex.codec || ex.codec === 'Other') && dl.codec && dl.codec !== 'Other') {
           ex.codec = dl.codec; changed = true;
         }
-        if (!ex.hdr && dl.hdr)           { ex.hdr = dl.hdr; changed = true; }
-        if (!ex.audio && dl.audio)       { ex.audio = dl.audio; changed = true; }
-        if (!ex.source && dl.source)     { ex.source = dl.source; changed = true; }
+        if (!ex.hdr && dl.hdr) { ex.hdr = dl.hdr; changed = true; }
+        if (!ex.audio && dl.audio) { ex.audio = dl.audio; changed = true; }
+        if (!ex.source && dl.source) { ex.source = dl.source; changed = true; }
 
         // Prefer specific language over 'Multi' or empty
         if (dl.language && dl.language !== 'Multi' && (!ex.language || ex.language === 'Multi')) {
@@ -239,7 +241,7 @@ async function run() {
       let remaining = MAX_LINKS;
       downloads = downloads.map(dl => {
         const keep = Math.min(dl.links.length, remaining);
-        remaining  = Math.max(0, remaining - keep);
+        remaining = Math.max(0, remaining - keep);
         return { ...dl, links: dl.links.slice(0, keep) };
       }).filter(dl => dl.links.length > 0);
     }

@@ -53,11 +53,12 @@ const ALL_CHANNEL_IDS = [
 
 // ── Download relevance indicators ────────────────────────────
 const DOWNLOAD_PATTERNS = [
-  /\.(mkv|mp4|avi|mov|m2ts|ts|wmv)\b/i,
-  /\b(gdflix|hubcloud|filepress|gplinks|nowshort|shorturl|aroralinks)\b/i,
+  /\.(mkv|mp4|avi|mov|m2ts|ts|wmv|iso)\b/i,
+  /\b(gdflix|hubcloud|tmbcloud|gdlink|gdtot|extralink|neolinks|gtlinks|drivehub|filepress|gplinks|nowshort|shorturl|aroralinks)\b/i,
+  /(?:gdflix|hubcloud|tmbcloud|gdlink|gdtot)\.[a-z]{2,}/i,
   /https?:\/\/[^\s]+/,
-  /\[\d+\.?\d*\s?(GB|MB)\]/i,
-  /\b(2160p|1080p|720p|480p|360p|4K|UHD|BluRay|WEB-DL|REMUX|HEVC|x265|x264|H\.264|H\.265)\b/i,
+  /[\[(]\d+\.?\d*\s?(?:GB|MB|GiB|MiB)[\])]/i,
+  /\b(4320p|2160p|1440p|1080p|720p|576p|540p|480p|360p|8K|4K|2K|QHD|UHD|BluRay|BD50|BD25|BDMV|WEB[-.]?DL|WEBRip|DVDRip|REMUX|REPACK|HEVC|x265|x264|AV1|H\.264|H\.265)\b/i,
 ];
 
 const SKIP_PATTERNS = [
@@ -248,12 +249,13 @@ async function scrapeChannel(client, channelId, { minId = 0, minDate = 0, maxDat
       if (!isRelevant(text, msg)) { skipped++; continue; }
 
       msgs_out.push({
-        id:           msg.id,
-        type:         'message',
-        channel_id:   channelId,
-        channel_name: channelName,
-        date:         new Date(msg.date * 1000).toISOString(),
-        text:         text.trim(),
+        id:            msg.id,
+        type:          'message',
+        channel_id:    channelId,
+        channel_name:  channelName,
+        sourceAccount: String(PROFILE),
+        date:          new Date(msg.date * 1000).toISOString(),
+        text:          text.trim(),
       });
       collected++;
     }
@@ -308,6 +310,8 @@ function saveOutput(newMessages, modeLabel, existingMessages = []) {
   const exportedAt = new Date().toISOString();
   const exportData = {
     exported_at:              exportedAt,
+    account:                  PROFILE,
+    sourceAccount:            String(PROFILE),
     scrape_mode:              modeLabel,
     total_messages_collected: merged.length,
     messages:                 merged,

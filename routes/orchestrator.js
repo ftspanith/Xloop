@@ -409,9 +409,15 @@ router.post('/import-batch', auth, async (req, res) => {
   const mongoose = require('mongoose');
   const ExtractedLinkM = require('../models/ExtractedLink');
   const Movie = require('../models/Movie');
-  const { cleanTitleForApi, detectHost, classifyUrl, extractYear } = require('../utils/parser');
-  const { normalizeTelegramUrl } = require('../utils/telegram-ingestion');
-  const { searchTMDB, searchOMDB, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates, searchGoogleImage } = require('../pipeline_full');
+  const {
+    cleanTitleForApi, detectHost, classifyUrl, extractYear,
+    normalizeQuality, extractSize, detectAllLanguages, classifyLanguages,
+    detectHDR, extractAudio, detectSource, detectContainer,
+    detectBitDepth, detectAudioChannels, extractMediaMetadata,
+    extractSeasonEpisode, normalizeGdflixUrl,
+  } = require('../utils/parser');
+  const { normalizeTelegramUrl, isAllowedTelegramDownloadUrl } = require('../utils/telegram-ingestion');
+  const { searchTMDB, searchOMDB, toMB, detectCodecLocal, seasonFromFilename, recomputeAggregates, buildTrustedMetadataUpdate, shouldSplitMetadataIdentity } = require('../pipeline_full');
 
   try {
     await ensureDbConnected(10000);
@@ -422,15 +428,17 @@ router.post('/import-batch', auth, async (req, res) => {
     }
 
     // Normalize and validate legacy/new records consistently before import.
-    // This also repairs stale host labels when the URL itself identifies the real host.
+    // This repairs stale URLs and host labels and mirrors pipeline_full.js rules.
     const groups = new Map();
     const seenImportUrls = new Set();
     for (const item of links) {
-      const normalizedUrl = normalizeTelegramUrl(item.url);
+      const candidateUrl = item.bypassedUrl || item.url;
+      const normalizedUrl = normalizeTelegramUrl(candidateUrl);
       if (!normalizedUrl) continue;
       const actualHost = classifyUrl(normalizedUrl);
       if (actualHost === 'Ignore' || actualHost === 'Paste') continue;
       if (actualHost === 'Shortlink' && !item.bypassedUrl) continue;
+      if (!isAllowedTelegramDownloadUrl(normalizedUrl)) continue;
       if (seenImportUrls.has(normalizedUrl)) continue;
       seenImportUrls.add(normalizedUrl);
 
@@ -462,7 +470,6 @@ router.post('/import-batch', auth, async (req, res) => {
     const progressPercent = total ? Math.round(nextOffset / total * 100) : 100;
     emit('[PROGRESS] ' + nextOffset + ' / ' + total + ' (' + progressPercent + '%)');
     emit('Batch ' + (Math.floor(offset / batchSize) + 1) + ': groups ' + (offset + 1) + '-' + nextOffset + ' of ' + total);
-    // Persist progress so /status and UI can show resume point
     pipelineProgress = { offset: nextOffset, total, label: 'Skip Scraper (import-only)' };
     setPipelineRunningFlag(pipelineRunning, { offset: nextOffset, total, label: 'Skip Scraper (import-only)' });
 
@@ -473,7 +480,6 @@ router.post('/import-batch', auth, async (req, res) => {
         const cleanTitle = cleanTitleForApi(rep.title || '', rep.messageYear || rep.year);
         if (!cleanTitle || cleanTitle.length < 2) { skipped++; continue; }
 
-        // Reuse the same show record even when an upload belongs to a later season.
         const escapedTitle = [...cleanTitle].map(char =>
           '$^.*+?()[]{}|'.includes(char) || char === String.fromCharCode(92)
             ? String.fromCharCode(92) + char : char
@@ -492,6 +498,9 @@ router.post('/import-batch', auth, async (req, res) => {
 
         // Full TMDB + OMDB enrichment
         let meta = {};
+        let verifiedTmdbMeta = null;
+        let splitExistingIdentity = false;
+        const parentYearHint = isSer ? (rep.messageYear || null) : (rep.messageYear || rep.year || null);
         const tmdbSeason = rep.season || null;
         const yearHints = [...new Set([rep.messageYear, rep.year, ...(rep.yearCandidates || []),
           ...group.items.map(file => file.fileYear || extractYear([file.filename]))].filter(Boolean).map(Number))];
@@ -501,8 +510,12 @@ router.post('/import-batch', auth, async (req, res) => {
         const tmdb = await searchTMDB(cleanTitle, titleYearHint, isSer, tmdbSeason, group.msgDate,
           rep.imdbId || null, rep.tmdbIdHint || null, yearHints, seasonYearHints);
         if (tmdb) {
+          verifiedTmdbMeta = tmdb;
+          if (existing && typeof shouldSplitMetadataIdentity === 'function' && shouldSplitMetadataIdentity(existing, tmdb, parentYearHint)) {
+            splitExistingIdentity = true;
+            existing = null;
+          }
           Object.assign(meta, tmdb);
-          // Always fetch OMDB for rating, imdbId, and fallback poster
           const omdb = await searchOMDB(cleanTitle, titleYearHint, isSer, yearHints);
           if (omdb) {
             if (!meta.rating && omdb.rating)           meta.rating = omdb.rating;
@@ -510,18 +523,20 @@ router.post('/import-batch', auth, async (req, res) => {
             if (!meta.duration && omdb.duration)       meta.duration = omdb.duration;
             if (!(meta.genre && meta.genre.length) && omdb.genre && omdb.genre.length) meta.genre = omdb.genre;
             if (omdb.imdbId)                           meta.imdbId = omdb.imdbId;
-            // Store OMDB poster as posterFallback when TMDB poster differs
             if (omdb.poster && omdb.poster !== meta.poster) meta.posterFallback = omdb.poster;
           }
         } else {
           const omdb = await searchOMDB(cleanTitle, titleYearHint, isSer, yearHints);
           if (omdb) Object.assign(meta, omdb, { tmdbId: '' });
         }
-        // Google Image fallback when poster still empty
-        if (!meta.poster) {
-          const gImg = await searchGoogleImage(rep.title, titleYearHint, isSer);
-          if (gImg) { meta.poster = gImg; emit(`[IMG] Google image: ${rep.title}`); }
-        }
+
+        if (!meta.certification && rep.certification) meta.certification = rep.certification;
+        if (!meta.runtimeMinutes && rep.runtimeMinutes) meta.runtimeMinutes = rep.runtimeMinutes;
+        if (!meta.duration && rep.duration) meta.duration = rep.duration;
+        if (!meta.aspectRatio && rep.aspectRatio) meta.aspectRatio = rep.aspectRatio;
+        if (!meta.isIMAX && rep.isIMAX) meta.isIMAX = true;
+        if (!meta.languageType && rep.languageType) meta.languageType = rep.languageType;
+        if (!meta.imdbId && rep.imdbId) meta.imdbId = rep.imdbId;
 
         const genreLower = (meta.genre || []).map(g => (g || '').toLowerCase());
         const isAnim = genreLower.some(g => /animation|anime/.test(g));
@@ -534,36 +549,57 @@ router.post('/import-batch', auth, async (req, res) => {
         else finalType = 'movie';
 
         const finalTitle = meta.title || cleanTitle || rep.title;
-        const origLang2 = meta.originalLanguage || meta.language || '';
 
-        // Insert / Merge items
+        // Insert / Merge items — synced with pipeline_full.js phaseImport
         for (const item of group.items) {
           let finalUrl = item.bypassedUrl || item.url;
-          finalUrl = finalUrl.replace(/^http:\/\//i, 'https://').replace(/\/$/, '');
+          finalUrl = normalizeGdflixUrl(finalUrl.replace(/^http:\/\//i, 'https://').replace(/\/$/, ''));
           const host = detectHost(finalUrl);
 
           if (host === 'Shortlink' && !item.bypassedUrl) { skipped++; continue; }
 
-          const quality = item.quality || 'HD';
-          const size = item.size || '';
-          const language = item.language || '';
-          const codec = item.codec || detectCodecLocal(item.filename);
-          const hdr = item.hdr || null;
-          const audio = item.audio || null;
+          const filename = item.filename || '';
+          const fileTags = extractSeasonEpisode(filename);
+          const quality  = item.quality || normalizeQuality(filename) || 'HD';
+          const size     = item.size || extractSize(filename) || '';
+          const detectedLangs = detectAllLanguages(filename);
+          const language = item.language || detectedLangs.join(', ') || '';
+          const codec    = item.codec || detectCodecLocal(filename);
+          const hdr      = item.hdr || detectHDR(filename) || null;
+          const audio    = item.audio || extractAudio(filename) || null;
+          const source   = detectSource(filename) || detectSource(item.source) || item.source || null;
+          const container = item.container || detectContainer(filename) || null;
+          const bitDepth  = item.bitDepth || detectBitDepth(filename) || null;
+          const audioChannels = item.audioChannels || detectAudioChannels(filename) || null;
           const audioTracks = Array.isArray(item.audioTracks) && item.audioTracks.length >= 2 ? item.audioTracks.slice(0, 8) : [];
-          const correctSeason = seasonFromFilename(item.filename) ?? item.season ?? null;
+          const parsedFileMeta = extractMediaMetadata([filename, item.rawTitle || ''].filter(Boolean).join(' '));
+          const isRepack = !!item.isRepack || /repack|rerip/i.test(String(item.releaseType || '')) || parsedFileMeta.isRepack;
+          const releaseType = isRepack ? 'Repack' : (item.releaseType || parsedFileMeta.releaseType || 'Original');
+          const isIMAX = !!item.isIMAX || parsedFileMeta.isIMAX;
+          const aspectRatio = item.aspectRatio || parsedFileMeta.aspectRatio || rep.aspectRatio || '';
+          const langInfo = classifyLanguages(item.language || detectedLangs, filename);
+          const languageType = item.languageType || langInfo.languageType;
+          const languageCount = item.languageCount ?? langInfo.languageCount;
+          const correctSeason = seasonFromFilename(filename) ?? item.season ?? fileTags.season ?? null;
+          const correctEpisode = item.episode ?? fileTags.episode ?? null;
 
           let dbRec = existing;
           if (!dbRec && meta.tmdbId) {
-            dbRec = await Movie.findOne({ tmdbId: meta.tmdbId, type: expectedTypes });
+            dbRec = await Movie.findOne({ tmdbId: String(meta.tmdbId), type: expectedTypes });
+            existing = dbRec;
+          }
+          if (!dbRec && cleanTitle && !splitExistingIdentity) {
+            dbRec = await Movie.findOne({ title: titleRegex, type: expectedTypes });
             existing = dbRec;
           }
 
           const newDl = {
-            quality, size, filename: item.filename || '', language, codec, hdr, audio, audioTracks,
-            season: correctSeason, episode: item.episode ?? null,
-            fileYear: item.fileYear || extractYear([item.filename]) || null,
-            links: [{ host, url: finalUrl, isFast: /gdflix|hubcloud|gdlink/i.test(finalUrl) }],
+            quality, size, filename, language, codec, hdr, audio, source, container, bitDepth, audioChannels, audioTracks,
+            isRepack, releaseType, isIMAX, aspectRatio, languageType, languageCount,
+            sourceDate: item.date || '',
+            season: correctSeason, episode: correctEpisode,
+            fileYear: item.fileYear || extractYear([filename]) || null,
+            links: [{ host, url: finalUrl, isFast: /gdflix|hubcloud|gdlink|tmbcloud/i.test(finalUrl) }],
           };
 
           if (dbRec) {
@@ -582,30 +618,50 @@ router.post('/import-batch', auth, async (req, res) => {
             let matchedIdx = -1;
             for (let j = 0; j < dbRec.downloads.length; j++) {
               const ex = dbRec.downloads[j];
+              const seasOk = (finalType === 'series' || finalType === 'anime')
+                ? (ex.season == correctSeason && ex.episode == correctEpisode) : true;
+              if (!seasOk) continue;
+              if (!!ex.isRepack !== !!newDl.isRepack) continue;
+
+              const exFn  = (ex.filename || '').trim().toLowerCase();
+              const newFn = filename.trim().toLowerCase();
+              if (exFn && newFn && exFn === newFn) { matchedIdx = j; break; }
+
               const qualOk = ex.quality === quality;
-              const seasOk = (finalType === 'series' || finalType === 'anime') ? (ex.season == correctSeason && ex.episode == (item.episode ?? null)) : true;
+              const exMB   = toMB(ex.size);
+              const bothKnown = newMB > 0 && exMB > 0;
+              const pct = bothKnown ? Math.abs(newMB - exMB) / Math.max(newMB, exMB) : 1;
+              const sizeClose = bothKnown && pct < 0.05;
+              const exCodec = (ex.codec || '').toLowerCase().trim();
+              const newCodec = (codec || '').toLowerCase().trim();
+              const codecOk = !exCodec || !newCodec || exCodec === newCodec;
 
-              const exactSizeMatch = (newMB > 0 && toMB(ex.size) > 0 && Math.abs(newMB - toMB(ex.size)) < 2);
-              const langOk = (ex.language || '') === (language || '');
-              const sizeOk = ex.size === size || exactSizeMatch || (!ex.size && !size);
-
-              if (qualOk && seasOk && (exactSizeMatch || (sizeOk && langOk))) {
+              if (qualOk && sizeClose && codecOk) {
                 matchedIdx = j;
-                // If we merged based on exact size but language was missing in existing, let's capture the language
-                if (language && language !== 'Multi' && (!ex.language || ex.language === 'Multi')) {
-                  ex.language = language; // update in memory
-                }
+                if (language && language !== 'Multi' && (!ex.language || ex.language === 'Multi')) ex.language = language;
                 break;
+              }
+              const langNorm = s => (s || '').toLowerCase().replace(/\s+/g, '');
+              const langOk = langNorm(ex.language) === langNorm(language);
+              const bothUnknown = !size && !ex.size;
+              if (qualOk && langOk && bothUnknown && exFn && newFn && exFn === newFn) {
+                matchedIdx = j; break;
               }
             }
 
             const metaSet = {};
+            if (typeof buildTrustedMetadataUpdate === 'function') {
+              Object.assign(metaSet, buildTrustedMetadataUpdate(dbRec, Object.assign({}, verifiedTmdbMeta, { imdbId: (verifiedTmdbMeta && verifiedTmdbMeta.imdbId) || meta.imdbId || '' }), correctSeason || rep.season || null));
+            }
             if (!dbRec.releaseDate && meta.releaseDate) metaSet.releaseDate = meta.releaseDate;
             if (meta.year && meta.releaseDate && (!dbRec.tmdbId || String(dbRec.tmdbId) === String(meta.tmdbId))) {
               metaSet.year = meta.year;
             }
-            const seasonYear = meta.seasonYear || newDl.fileYear;
+            const seasonYear = (correctSeason === rep.season && meta.seasonYear) || newDl.fileYear;
             if (correctSeason && seasonYear) metaSet['seasonYears.s' + correctSeason] = Number(seasonYear);
+            if (rep.season && meta.seasonPoster && !dbRec.seasonPosters?.[`s${rep.season}`]) {
+              metaSet[`seasonPosters.s${rep.season}`] = meta.seasonPoster;
+            }
             if (!dbRec.backdrop       && meta.backdrop)       metaSet.backdrop       = meta.backdrop;
             if (!dbRec.poster         && meta.poster)         metaSet.poster         = meta.poster;
             if (!dbRec.posterFallback && meta.posterFallback) metaSet.posterFallback = meta.posterFallback;
@@ -613,10 +669,22 @@ router.post('/import-batch', auth, async (req, res) => {
             if (!dbRec.imdbId         && meta.imdbId)         metaSet.imdbId         = meta.imdbId;
             if (!dbRec.rating         && meta.rating)         metaSet.rating         = meta.rating;
             if (!dbRec.description    && meta.description)    metaSet.description    = meta.description;
+            if (!dbRec.originalLanguage && meta.originalLanguage) metaSet.originalLanguage = meta.originalLanguage;
+            if (!dbRec.duration && (meta.duration || item.duration || rep.duration)) metaSet.duration = meta.duration || item.duration || rep.duration;
+            if (!dbRec.runtimeMinutes && (meta.runtimeMinutes || item.runtimeMinutes || rep.runtimeMinutes)) metaSet.runtimeMinutes = meta.runtimeMinutes || item.runtimeMinutes || rep.runtimeMinutes;
+            if (!dbRec.certification && (meta.certification || item.certification || rep.certification)) metaSet.certification = meta.certification || item.certification || rep.certification;
+            if (!dbRec.isIMAX && (meta.isIMAX || item.isIMAX)) metaSet.isIMAX = true;
+            if (!dbRec.aspectRatio && (meta.aspectRatio || item.aspectRatio || rep.aspectRatio)) metaSet.aspectRatio = meta.aspectRatio || item.aspectRatio || rep.aspectRatio;
+            if (!dbRec.languageType && (meta.languageType || item.languageType || rep.languageType)) metaSet.languageType = meta.languageType || item.languageType || rep.languageType;
             if (finalType === 'anime' && dbRec.type === 'series') metaSet.type = 'anime';
 
             if (matchedIdx >= 0) {
               const matchedDownload = dbRec.downloads[matchedIdx] || {};
+              for (const field of ['source', 'container', 'bitDepth', 'audioChannels', 'codec', 'hdr', 'audio', 'filename', 'fileYear', 'isIMAX', 'aspectRatio', 'languageType', 'languageCount', 'releaseType', 'sourceDate']) {
+                if (!matchedDownload[field] && newDl[field]) {
+                  metaSet[`downloads.${matchedIdx}.${field}`] = newDl[field];
+                }
+              }
               if (audioTracks.length >= 2 && (!Array.isArray(matchedDownload.audioTracks) || matchedDownload.audioTracks.length < 2)) {
                 metaSet[`downloads.${matchedIdx}.audioTracks`] = audioTracks;
               }
@@ -624,48 +692,81 @@ router.post('/import-batch', auth, async (req, res) => {
                 metaSet[`downloads.${matchedIdx}.language`] = dbRec.downloads[matchedIdx].language;
               }
               const existLinks = dbRec.downloads[matchedIdx]?.links || [];
-              if (existLinks.length >= 3 || existLinks.map(l => l.host).includes(host)) { skipped++; continue; }
+              if (existLinks.length >= 8) { skipped++; continue; }
+              const totalLinksInContent = dbRec.downloads.reduce((sum, d) => sum + (d.links?.length || 0), 0);
+              if (totalLinksInContent >= 30) { skipped++; continue; }
               const op = { $addToSet: { [`downloads.${matchedIdx}.links`]: newDl.links[0] } };
               if (Object.keys(metaSet).length) op.$set = metaSet;
               const res = await Movie.findOneAndUpdate({ _id: dbRec._id, [`downloads.${matchedIdx}.links.url`]: { $ne: finalUrl } }, op, { new: true });
               if (res) {
                 recomputeAggregates(res);
-                const upd = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, { new: true });
+                const upd = await Movie.findByIdAndUpdate(dbRec._id, {
+                  $set: {
+                    downloads: res.downloads,
+                    formats: res.formats, quality: res.quality,
+                    languages: res.languages, language: res.language,
+                    codecs: res.codecs, languageType: res.languageType,
+                  }
+                }, { new: true });
                 existing = upd;
                 updated++;
                 emit(`[MERGED] ${res.title} | ${quality} -> ${host}`);
               } else skipped++;
             } else {
+              const totalLinksInContent = dbRec.downloads.reduce((sum, d) => sum + (d.links?.length || 0), 0);
+              if (totalLinksInContent >= 30) { skipped++; continue; }
               const op = { $push: { downloads: newDl } };
               if (Object.keys(metaSet).length) op.$set = metaSet;
               const res = await Movie.findByIdAndUpdate(dbRec._id, op, { new: true });
               if (res) {
                 recomputeAggregates(res);
-                const upd2 = await Movie.findByIdAndUpdate(dbRec._id, { $set: { formats: res.formats, quality: res.quality, languages: res.languages, codecs: res.codecs } }, { new: true });
+                const upd2 = await Movie.findByIdAndUpdate(dbRec._id, {
+                  $set: {
+                    downloads: res.downloads,
+                    formats: res.formats, quality: res.quality,
+                    languages: res.languages, language: res.language,
+                    codecs: res.codecs, languageType: res.languageType,
+                  }
+                }, { new: true });
                 existing = upd2;
                 updated++;
                 emit(`[UPDATED] ${res.title} | ${quality} -> ${host}`);
               }
             }
           } else {
+            const allLangsSet = [...new Set(
+              String(language || '').split(',')
+                .map(l => l.trim())
+                .filter(l => l && !/^(?:single|dual|multi)(?:\s+audio)?$/i.test(l))
+            )];
+            const displayLang = allLangsSet.join(', ');
             const newDoc = await Movie.create({
               title: finalTitle, tmdbId: meta.tmdbId || '', imdbId: meta.imdbId || '',
               type: finalType, totalSeasons: meta.totalSeasons || 0,
+              originalLanguage: meta.originalLanguage || '',
               description: meta.description || '',
               poster: meta.poster || '', posterFallback: meta.posterFallback || '',
               backdrop: meta.backdrop || '',
               releaseDate: meta.releaseDate || '',
+              seasonPosters: rep.season && meta.seasonPoster ? { [`s${rep.season}`]: meta.seasonPoster } : {},
               seasonYears: Object.fromEntries(group.items.filter(file => file.season && file.fileYear)
                 .map(file => ['s' + file.season, Number(file.fileYear)])),
-              rating: meta.rating || 0, year: meta.year || rep.messageYear || (isSer ? null : rep.year) || null,
-              genre: meta.genre || [], duration: meta.duration || '', quality, language: origLang2,
+              rating: meta.rating || 0, year: meta.year || rep.messageYear || (isSer ? null : (rep.year || item.year || null)),
+              genre: meta.genre || [], duration: meta.duration || item.duration || rep.duration || '',
+              runtimeMinutes: meta.runtimeMinutes || item.runtimeMinutes || rep.runtimeMinutes || null,
+              certification: meta.certification || item.certification || rep.certification || '',
+              isIMAX: !!(meta.isIMAX || item.isIMAX),
+              aspectRatio: meta.aspectRatio || item.aspectRatio || rep.aspectRatio || '',
+              languageType: languageType || meta.languageType || '',
+              quality, language: displayLang,
               formats: [quality].filter(Boolean), codecs: [codec].filter(c => c && c !== 'Other'),
-              languages: (language || origLang2).split(',').map(l => l.trim()).filter(Boolean),
+              languages: allLangsSet,
+              telegramMessageIds: item.messageId ? [item.messageId] : [],
               downloads: [newDl],
             });
             added++;
             existing = newDoc;
-            emit(`[NEW] ${finalTitle} (${meta.year || rep.year || '?'}) | ${quality}${audio ? ' · '+audio : ''}${hdr ? ' · '+hdr : ''} -> ${host} | POSTER: ${meta.poster ? '' : ''}`);
+            emit(`[NEW] ${finalTitle} (${meta.year || rep.year || '?'}) | ${quality}${audio ? ' · '+audio : ''}${hdr ? ' · '+hdr : ''} -> ${host}`);
           }
         }
       } catch (e) {
