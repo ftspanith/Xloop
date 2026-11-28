@@ -326,10 +326,14 @@ function isMetadataLine(line) {
 function isLinkLabel(line) {
   const s = (line || '').trim();
   if (!s || s.length > 100) return false;
-  if (/^(GDFLIX|HubCloud|FilePress|TMBCloud|DTFlix|DriveNext|FileBee|PixelDrain|StreamTape|MixDrop|DoodStream|BuzzHeavier|CatBox|1Fichier|mnmcloud)$/i.test(s)) return true;
+  if (/^(GDFLIX|HubCloud|FilePress|TMBCloud|DTFlix|DriveNext|FileBee|PixelDrain|StreamTape|MixDrop|DoodStream|BuzzHeavier|CatBox|1Fichier|mnmcloud|GoFile|TeraBox|MegaUp|MNMCloud|GDLink|DriveHub)$/i.test(s)) return true;
   if (/^[\-\s]*(Download|Cloud|Drive|Backup|Mirror|Direct|Main|Alt)\s*[|\-\/]\s*\S+$/i.test(s)) return true;
   if (/^(Cloud|index|Drive|Backup|Mirror|Direct|Main|Alt|Fast|Slow)\s+(Link|Download|DL)$/i.test(s)) return true;
   if (/^(SHOTS?|MEDIAINFO|SCREENSHOTS?|SAMPLE|PREVIEW)$/i.test(s)) return true;
+  // "Links", "Link 1", "Part 1", "Mirror 1" etc. with optional number — purely navigational
+  if (/^(?:Link|Links|Mirror|Mirrors|Part|Parts|Backup|Download|Direct)\s*\d*\s*[-:]?\s*$/i.test(s)) return true;
+  // "Amazon Prime", "Prime Video", "Netflix" etc. alone on a line — not a movie title
+  if (/^(?:Amazon\s*Prime(?:\s*Video)?|Prime\s*Video|Netflix|Disney\s*\+?|Apple\s*TV\s*\+?|JioCinema|JioHotstar|SonyLiv|Zee5|Aha|Hotstar|MX\s*Player|Voot|EtvWin)\s*[-:•|]?\s*$/i.test(s)) return true;
   return false;
 }
 
@@ -861,7 +865,9 @@ const JUNK_PATTERNS = [
   /^(?:RECENTLY|NEWLY|JUST)\s+ADDED\b/i,
 
   // ── OTT platform names as standalone titles ───────────────────────────────
-  /^[#\s]*(Netflix|Amazon|SonyLiv|Zee5|Aha|Hotstar|Disney|SunNXT|Crunchyroll|Funimation|SimplySouth|Hoichoi|ManoramaMax|Voot|Chaupal|Hungama|Lionsgate|Shemaroo|EtvWin|MXPlayer|JioCinema|PrimeVideo|AppleTV)[#\s]*$/i,
+  /^[#\s]*(Netflix|Amazon|Amazon\s*Prime(?:\s*Video)?|Prime\s*Video|SonyLiv|Sony\s*Liv|Zee5|Aha|Hotstar|Disney|Disney\+|Disney\s*Hotstar|SunNXT|Sun\s*NXT|Crunchyroll|Funimation|SimplySouth|Hoichoi|ManoramaMax|Voot|Chaupal|Hungama|Lionsgate|Shemaroo|EtvWin|MXPlayer|JioCinema|JioHotStar|PrimeVideo|AppleTV|Apple\s*TV\+?|Hulu|Peacock|Paramount\+?)[#\s]*$/i,
+  // Platform phrase patterns that contain extra words but still resolve to platforms only
+  /^(Watch\s+on\s+|Stream\s+on\s+|Available\s+on\s+|Now\s+on\s+)?(Netflix|Amazon\s*Prime|Prime\s*Video|Hotstar|Disney\+?|SonyLiv|Zee5|Aha|JioCinema)\b[^a-z]*$/i,
 
   // ── Metadata lines: Audio Tracks, Size, Bitrate, etc. ─────────────────────
   /^audio\s*tracks?\s*:/i,                                    // Audio Tracks : Telugu, Tamil...
@@ -927,6 +933,14 @@ const JUNK_PATTERNS = [
   /^(?:Audio\s+Track|Video\s+Track)\s*:/i,                            // "Audio Track:"
   /^(?:TEL|HIN|TAM|MAL|KAN|ENG|BEN|PUN)[,\s]*(?:TEL|HIN|TAM|MAL|KAN|ENG|BEN|PUN|KOR|JPN)[,\s&|]*$/i, // standalone lang codes
   /^@[A-Za-z0-9_]+\s*-\s*\S+\.mkv/i,                                 // @MULTIVERSE_OFCL - filename.mkv (TG file upload)
+
+  // ── Link label lines that channels paste as text (not titles) ────────────
+  /^(?:GDFlix|HubCloud|TMBCloud|FilePress|DriveNext|FileBee|MNMCloud|DTFlix|PixelDrain|StreamTape|MixDrop|DoodStream|BuzzHeavier|CatBox|GoFile|TeraBox|1Fichier|MegaUp)\s*(?:Link|Backup|Mirror|v\d)?\s*[-:]*\s*$/i,
+  /^(?:Link\s*\d*|Mirror\s*\d*|Backup\s*\d*|Part\s*\d+|Drive\s*Link|Index\s*Link|Cloud\s*Link|Paste\s*Link|Fast\s*Link|Main\s*Link|Alt\s*Link)\s*[-:]*\s*$/i,
+  /^(?:Watch\s+Online|Download\s+Now|Click\s+to\s+Download|Direct\s+Download|Download\s+Link)\s*[-:]*\s*$/i,
+
+  // ── Streaming/OTT platform names with optional suffix but no real title ──
+  /^(?:Amazon\s*Prime(?:\s*Video)?|Prime\s*Video|Netflix\s*Original|Disney\+?\s*(?:Original|Hotstar)?|Apple\s*TV\+?|HBO\s*Max|Peacock\s*TV|Paramount\+?|Hulu\s*Original)\s*[-:•|]*\s*$/i,
 ];
 function isJunkTitle(title) {
   if (!title || title.length < 2) return true;
@@ -946,6 +960,12 @@ function isJunkTitle(title) {
   if (/^[,\s\-_.:|•►▶◆×#]+$/.test(c)) return true;    // punctuation only
   if (/^\d{4}\s*(&|and|ISO|\+|FHD|HFR|BRD|CBR)\b/i.test(c)) return true; // year + tech spec
 
+  // Streaming platform phrase (without title context)
+  if (/^(?:amazon\s*prime(?:\s*video)?|prime\s*video|netflix\s*original|disney\s*\+?|apple\s*tv\s*\+?|jio\s*hotstar|jio\s*cinema|sony\s*liv|zee\s*5)$/i.test(c)) return true;
+
+  // Pure link/provider labels (single word or short phrase that is a provider name)
+  if (/^(?:links?|mirrors?|backups?|downloads?|gdflix|hubcloud|tmbcloud|filepress|gdlink|drivehub|gofile|terabox)$/i.test(c)) return true;
+
   // Pure non-Latin (Indic/CJK) text = language list line, not a title
   if (!/[a-zA-Z0-9]/.test(c) && c.length > 3) return true;
 
@@ -961,6 +981,8 @@ function isJunkTitle(title) {
       'subtitle', 'sub', 'subs', 'source', 'language', 'languages', 'format',
       'note', 'release', 'quality', 'tracks', 'track', 'encoder', 'resolution',
       'codec', 'file', 'files', 'links', 'tg', 'ch', 'channel',
+      'download', 'downloads', 'link', 'mirror', 'backup', 'part',
+      'gdflix', 'hubcloud', 'tmbcloud', 'filepress', 'gdlink',
     ];
     if (META_LABELS.includes(label)) return true;
   }
